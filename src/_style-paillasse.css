@@ -1,0 +1,500 @@
+/* © 2026 Sébastien Reyt — licence GPLv3 (code) : réutilisation et modification libres, en citant l'auteur, tout dérivé restant sous la même licence. https://www.gnu.org/licenses/gpl-3.0.html — textes, figures et pages : CC BY-NC-SA 4.0. */
+   Code écrit par Claude (Anthropic), un assistant d'IA, à partir des choix physiques et pédagogiques de l'auteur. */
+
+/* ===== Paillasse (TP virtuels : _app-paillasse.js + instrument) — salle noire,
+   indépendante du thème clair/sombre de la page. Prend tout le volet « Expérimenter ». */
+.atelier .pane-exp.paillasse-on, .pane-exp.paillasse-on { display:block; overflow:hidden; }
+.atelier .pane-exp.paillasse-on[hidden] { display:none; }
+.pl { position:absolute; inset:0; display:grid; grid-template-columns:minmax(0,1fr) auto; grid-template-rows:minmax(0,1fr) auto;
+  grid-template-areas:"gauche droite" "bas bas"; background:#08090b; color:#c9cfd8; font:13px/1.4 system-ui, sans-serif; }
+.pl [hidden] { display:none !important; }
+.pl.pl-etroit { display:flex; align-items:center; justify-content:center; padding:24px; }
+.pl-msg { max-width:30em; font-size:15px; line-height:1.55; text-align:center; color:#c9cfd8; }
+.pl-gauche { grid-area:gauche; position:relative; min-width:0; min-height:0; }
+.pl-licence { position:absolute; left:8px; bottom:3px; z-index:2; font-size:10px; color:#4a525c; text-decoration:none; }
+.pl-licence:hover { color:#9aa3ae; text-decoration:underline; }
+.pl.pl-banc .pl-licence { display:none; }   /* l'étagère occupe le coin */
+.pl-dessus { position:absolute; inset:0; width:100%; height:100%; display:block; user-select:none; -webkit-user-select:none; touch-action:none; }
+.pl-glisse, .pl-glisse * { cursor:grabbing !important; }
+.pl-lab { font-size:8.5px; fill:#7f8996; }
+.pl-grad { font-size:7.5px; fill:#6b7480; }
+.pl-nom-vis { font-size:9.5px; fill:#c3cad2; font-weight:600; pointer-events:none; }
+.pl-vis { cursor:grab; }
+.pl-vis:hover .pl-vis-corps, .pl-vis.prise .pl-vis-corps { stroke:#e0b84c; stroke-width:.9; }
+.pl-glisse-v { cursor:ns-resize; } .pl-glisse-h { cursor:ew-resize; } .pl-iris { cursor:ew-resize; }
+.pl-boite { position:absolute; right:10px; bottom:10px; max-width:min(400px, 54%); background:rgba(18,21,26,.94);
+  border:1px solid #2a2f37; border-radius:8px; padding:7px 10px 8px; box-shadow:0 6px 20px rgba(0,0,0,.5); }
+.pl-boite-t { margin:0 0 4px; font-size:11px; letter-spacing:.06em; text-transform:uppercase; color:#7f8996; }
+.pl-boite-r { display:flex; flex-wrap:wrap; align-items:center; gap:4px; margin:3px 0; }
+.pl-boite-l { width:52px; flex:none; font-size:11.5px; color:#7f8996; }
+.pl-boite-n { font-size:11.5px; color:#8f99a5; margin-left:4px; }
+.pl-puce { font:inherit; font-size:12px; color:#c9cfd8; background:#1a1e24; border:1px solid #333a44; border-radius:999px;
+  padding:2px 9px; cursor:pointer; }
+.pl-puce:hover:not(:disabled) { border-color:#6e7783; }
+.pl-puce[aria-pressed="true"] { background:#3a3220; border-color:#e0b84c; color:#f3dc9a; }
+.pl-puce:disabled { opacity:.35; cursor:default; }
+.pl-droite { grid-area:droite; display:flex; flex-direction:column; gap:6px; padding:8px 12px 8px 10px; width:calc(var(--pl-s, 420px) + 22px);
+  border-left:1px solid #1b1f25; min-height:0; overflow:hidden; }
+.pl-obs-tete, .pl-obs-pied { display:flex; align-items:center; gap:8px; min-height:28px; flex-wrap:wrap; }
+.pl-obs-t { font-weight:600; color:#d7dde4; flex:1; }
+.pl-obs-b { display:flex; gap:6px; }
+.pl-obs-n { font-size:12px; color:#7f8996; }
+.pl-alerte { font-size:12px; color:#e8a35a; }
+.pl-cv { position:relative; width:var(--pl-s, 420px); height:var(--pl-s, 420px); background:#000; border-radius:8px; overflow:hidden; }
+.pl-cv.pl-cv-oeil { cursor:grab; touch-action:none; }
+.pl-cv.pl-cv-oeil:active { cursor:grabbing; }
+.pl-cv:focus-visible { outline:2px solid #5b8fb9; outline-offset:2px; }
+.pl-cv canvas { position:absolute; inset:0; width:100%; height:100%; display:block; }
+.pl-surc { position:absolute; inset:0; width:100%; height:100%; }
+.pl-regle-n { font-size:7px; fill:#c9d0d6; fill-opacity:.8; pointer-events:none; }
+.pl-acc { flex:1; min-width:80px; accent-color:#e0b84c; }
+.pl-acc-l { font-size:12px; color:#7f8996; }
+.pl-loupe { display:block; width:var(--pl-s, 420px); height:auto; }
+.pl-droite { overflow-y:auto; scrollbar-width:thin; }   /* le pied dépasse sa réserve : la colonne défile, rien n'est masqué */
+.pl-droite > * { flex-shrink:0; }   /* un pied qui passe sur plusieurs lignes ne doit pas écraser le vernier */
+.pl-loupe-n { font-size:12px; fill:#111; font-weight:600; }
+.pl-loupe-d { font-size:10px; fill:#111; }
+.pl-loupe-l { font-size:9.5px; fill:#7f8996; }
+.pl-lecture { display:flex; align-items:center; gap:6px; flex-wrap:wrap; font-size:13px; }
+.pl-lect-in { width:84px; background:#0f1215; color:#d7dde4; border:1px solid #333a44; border-radius:4px; padding:3px 6px; font:inherit; }
+.pl-lect-verdict { color:#a9b2bc; font-size:12.5px; }
+.pl-btn { font:inherit; font-size:12.5px; color:#c9cfd8; background:#1a1e24; border:1px solid #333a44; border-radius:6px; padding:3px 10px; cursor:pointer; }
+.pl-btn:hover { border-color:#6e7783; }
+.pl-btn.confirme { background:#3b2318; border-color:#e8a35a; color:#f5c9a0; }
+.pl-btn-p { font-size:12px; padding:2px 8px; }
+.pl-btn-ico { font-size:15px; padding:1px 8px; }
+.pl-bas { grid-area:bas; display:flex; flex-direction:column; gap:5px; padding:6px 12px; border-top:1px solid #1b1f25; }
+.pl-bas-l { display:flex; align-items:center; gap:12px; }
+.pl-aide { flex:1; margin:0; font-size:11.5px; color:#6e7783; line-height:1.35; }
+.pl-aide b { color:#e0b84c; font-weight:600; }
+.pl-ind2 { color:#f3dc9a; }
+.pl-annonce { color:#9fe0a8; font-weight:600; }
+.pl-actions { display:flex; align-items:center; gap:6px; flex:none; flex-wrap:wrap; justify-content:flex-end; }
+.pl-btn[aria-pressed="true"] { background:#3a3220; border-color:#e0b84c; color:#f3dc9a; }
+.pl-btn-ind { border-color:#5a4b24; }
+.pl-btn-prof { color:#9fb8e0; border-color:#2f3d55; }
+/* étapes détectées : cochées quand l'état est atteint, jamais déclarées */
+.pl-etapes { display:flex; flex-wrap:wrap; align-items:center; gap:3px 4px; }
+.pl-et { display:inline-flex; align-items:center; gap:3px; font-size:11px; color:#7f8996; border:1px solid #262b33;
+  border-radius:999px; padding:1px 7px 1px 3px; cursor:default; white-space:nowrap; }
+.pl-et-m { display:inline-block; width:14px; height:14px; line-height:14px; text-align:center; border-radius:50%;
+  border:1px solid #3a414a; font-size:10px; }
+.pl-et.cible { border-color:#6e7783; color:#c9cfd8; }
+.pl-et.fait { color:#c8e8cc; border-color:#2f5a37; background:#13241a; }
+.pl-et.fait .pl-et-m { background:#3f8a4c; border-color:#3f8a4c; color:#fff; }
+.pl-et.sautee { color:#8f99a5; border-style:dashed; }
+.pl-et.dereglee { color:#f0c89a; border-color:#7a4a1c; }
+.pl-et.dereglee .pl-et-m { background:#c9772a; border-color:#c9772a; color:#1b1208; }
+.pl-et.laser { color:#f2c4bd; border-color:#7a2a24; background:#241413; }
+.pl-et.laser .pl-et-m { background:#d2463a; border-color:#d2463a; color:#fff; }
+.pl-et.soignee .pl-et-m { background:#c9a23a; border-color:#c9a23a; color:#1b1608; }
+.pl-et.vise { border-color:#6fa8dc; box-shadow:0 0 0 1px #6fa8dc inset; }
+button.pl-et { font:inherit; font-size:11px; background:none; cursor:pointer; }
+button.pl-et.fait { background:#13241a; }
+button.pl-et:hover { border-color:#8a939e; }
+.pl-et-app { font-style:normal; }
+.pl-et-sep { font-size:10.5px; letter-spacing:.06em; text-transform:uppercase; color:#545c66; margin:0 0 0 6px; }
+/* Michelson : ligne des conditions sous les réglages (méthode, éclairement, observation) */
+/* panneaux flottants au-dessus du dessin : cahier, mode prof */
+.pl-pan { position:absolute; left:10px; top:10px; z-index:3; max-width:min(560px, 92%); max-height:calc(100% - 20px); overflow:auto;
+  background:rgba(16,19,24,.97); border:1px solid #2f3540; border-radius:8px; box-shadow:0 8px 26px rgba(0,0,0,.6); padding:6px 10px 9px; }
+.pl-pan-t { display:flex; align-items:center; justify-content:space-between; gap:10px; font-size:11px; letter-spacing:.06em;
+  text-transform:uppercase; color:#8f99a5; margin-bottom:5px; }
+.pl-pan-x { font:inherit; font-size:16px; line-height:1; background:none; border:0; color:#8f99a5; cursor:pointer; padding:0 2px; }
+.pl-pan-x:hover { color:#e0e4e8; }
+.pl-cah-tab { border-collapse:collapse; font-size:12px; }
+.pl-cah-tab th { text-align:left; font-weight:500; color:#7f8996; padding:0 4px 3px; font-size:11px; }
+.pl-cah-tab td { padding:1px 2px; }
+.pl-cah-in { background:#0f1215; color:#d7dde4; border:1px solid #2c323b; border-radius:4px; padding:2px 5px; font:inherit; font-size:12px; }
+.pl-cah-lib { width:190px; } .pl-cah-v { width:76px; } .pl-cah-u { width:48px; }
+.pl-cah-x { font:inherit; background:none; border:0; color:#6e7783; cursor:pointer; font-size:14px; padding:0 4px; }
+.pl-cah-x:hover { color:#e8a35a; }
+.pl-cah-pied { display:flex; gap:6px; margin-top:6px; }
+.pl-cah-n { margin:6px 0 0; font-size:11px; color:#6e7783; }
+.pl-prof { max-width:min(620px, 94%); }
+/* z-index > celui de l'étagère flottante (6, Michelson et goniomètre), sinon elle passe dessus */
+.pl-pan-bas-droite { z-index:7; left:auto; top:auto; right:10px; bottom:calc(var(--pl-bas-h, 60px) + 8px); max-height:calc(100% - var(--pl-bas-h, 60px) - 20px); }
+/* goniomètre et Michelson : panneau des manipulations (accordéon, K.manipulations) et bouton dans la rangée du bas */
+.pl-manips { z-index:7; width:min(440px, 92%); }   /* au-dessus de l'étagère flottante (6) */
+/* Michelson : à droite, sur le bras de sortie, sans descendre sur l'étagère (coin bas droit, ~150 px) */
+.pl-mich .pl-pan.pl-manips { left:auto; right:10px; width:min(400px, 92%); max-height:calc(100% - var(--pl-bas-h, 44px) - var(--etag-h, 135px) - 5px); }   /* le parent contient aussi la rangée du bas */
+.pl-mich:has(.bc-etagere-flot.replie) .pl-pan.pl-manips { max-height:calc(100% - var(--pl-bas-h, 44px) - 30px); }   /* étagère repliée : presque toute la hauteur */
+.pl-mp-intro { margin:0 0 6px; font-size:11.5px; line-height:1.35; color:#8f99a5; }
+.pl-mp { border-top:1px solid #232830; }
+.pl-mp-n { display:flex; align-items:center; gap:7px; width:100%; font:inherit; font-size:13px; color:#c9cfd8; background:none; border:0;
+  padding:6px 4px; cursor:pointer; text-align:left; }
+.pl-mp-n:hover { background:#161a20; }
+.pl-mp-nom { flex:1; }
+.pl-mp-chev { color:#6e7783; font-size:11px; }
+.pl-mp-c { display:none; padding:0 6px 8px 27px; }
+.pl-mp.ouvert .pl-mp-c { display:block; }
+.pl-mp.ouvert .pl-mp-n { color:#e6eaef; }
+.pl-mp-h { font-size:10.5px; letter-spacing:.05em; text-transform:uppercase; color:#6fa8dc; margin:4px 0 2px; }
+.pl-mp-t { margin:0; font-size:12px; line-height:1.4; color:#b9c1cb; }
+.pl-mp-e { margin:0; padding-left:18px; font-size:12px; line-height:1.4; color:#b9c1cb; }
+.pl-mp-e li { margin:1px 0; }
+.pl-mp-q { margin:6px 0 0; font-size:11px; font-style:italic; color:#7f8996; }
+.pl-mp.vu .pl-mp-n { color:#c8e8cc; }
+.pl-mp.vu .pl-et-m { background:#3f8a4c; border-color:#3f8a4c; color:#fff; }
+.pl-bm-sep { display:inline-block; width:1px; height:16px; background:#2a3038; margin:0 6px 0 4px; vertical-align:middle; }
+.pl-bmanip { font:inherit; font-size:12px; font-weight:600; color:#e9d7a6; background:#2a2414; border:1px solid #7a6428; border-radius:12px;
+  padding:2px 10px; cursor:pointer; }
+.pl-bmanip:hover, .pl-bmanip[aria-pressed="true"] { background:#3a3118; border-color:#b8953a; }
+.pl-bm-n { font-weight:400; color:#c9b47a; margin-left:4px; }
+/* aides du goniomètre : loupe du réticule (en bas à droite) et gros plan (en haut à droite), panneaux libres */
+.pl-pan.gn-pan-loupe { left:auto; top:auto; right:10px; bottom:10px; }
+.pl-pan.gn-pan-gros { left:auto; right:10px; top:10px; }
+.pl-pan .gn-loupe-ret, .pl-pan .gn-gros-plan { position:static; width:330px; max-width:100%; box-shadow:none; }
+.pl-pan.pl-capteur { left:10px; top:auto; bottom:10px; width:258px; max-width:calc(100% - 20px); }
+.pl-cap-cv { display:block; width:100%; height:170px; border-radius:4px; cursor:default; }
+/* paillasse goniomètre (_app-paillasse-goniometre.js) */
+.gn-tourne { cursor:grab; } .gn-oc { cursor:move; }
+.gn-cv { cursor:crosshair; outline:none; touch-action:none; }
+.gn-cv:focus-visible { box-shadow:0 0 0 1px #4b535d; }
+.gn-mini { width:30px; height:30px; flex:none; }
+.gn-etat { flex:1 1 100%; }
+.gn-acc { display:flex; align-items:center; gap:6px; flex:1 1 100%; }
+.bc-etagere.bc-etagere-flot.gn-etagere { right:auto; left:10px; bottom:22px; }   /* goniomètre : en bas à GAUCHE (la lunette passe à droite), au-dessus de la licence */
+.gn-past:hover circle { stroke:#e0b84c; }
+.gn-zoom { min-width:2.2em; text-align:center; }
+.gn-oeil { display:flex; align-items:center; gap:6px; flex:1 1 100%; }
+.gn-lect-d { width:58px; } .gn-lect-m { width:46px; }
+.gn-vern-n { font-size:9.5px; fill:#14130f; font-weight:600; }
+.gn-vern-d { font-size:9px; fill:#14130f; }
+.gn-vern-grand { position:absolute; inset:0; z-index:6; display:flex; flex-direction:column; align-items:center; justify-content:center;
+  gap:10px; padding:16px; background:rgba(8,10,13,.86); cursor:zoom-out; }
+.gn-vern-grand svg { display:block; width:min(100%, 1150px); height:auto; }
+.gn-vern-grand-l { margin:0; font-size:13px; color:#8a94a1; }
+.gn-vg-n { font-size:17px; fill:#14130f; font-weight:600; }
+.gn-vg-d { font-size:16px; fill:#14130f; }
+.gn-loupe-ret { position:absolute; left:10px; top:10px; width:min(330px, 46%); border:1px solid #2a2f37; border-radius:8px;
+  box-shadow:0 6px 20px rgba(0,0,0,.5); pointer-events:none; }
+.gn-loupe-ret svg { display:block; width:100%; height:auto; }
+.gn-lr-t { font-size:10px; } .gn-lr-r { font-size:10px; fill:#e8e0d0; } .gn-lr-o { font-size:10px; fill:#7fb8ff; }
+.gn-lr-n { font-size:8.5px; fill:#7f8996; }
+.gn-gros-plan { position:absolute; right:10px; top:10px; width:min(330px, 40%); border:1px solid #2a2f37; border-radius:8px;
+  overflow:hidden; background:#0c0e11; box-shadow:0 6px 20px rgba(0,0,0,.5); pointer-events:none; }
+.gn-gros-plan svg { display:block; width:100%; height:auto; }
+.gn-gp-o { font-size:10px; font-weight:600; paint-order:stroke; stroke:#0c0e11; stroke-width:3px; }
+.gn-gp-r { font-size:9px; fill:#aab3be; paint-order:stroke; stroke:#0c0e11; stroke-width:3px; }
+.gn-gp-t { font-size:11px; color:#8a94a1; padding:5px 8px 3px; }
+.gn-gp-c { display:flex; flex-wrap:wrap; align-items:center; gap:4px 5px; padding:2px 8px 7px; pointer-events:auto; }
+.gn-gp-l { font-size:11px; color:#7f8996; margin-right:2px; }
+.gn-gp-p { padding:3px 7px; line-height:0; }
+.gn-gp-d { display:inline-block; width:11px; height:11px; border-radius:50%; }
+.pl-cap-pied { display:flex; flex-wrap:wrap; align-items:center; gap:5px 8px; margin-top:6px; }
+.pl-cap-n { font-size:11px; line-height:1.35; color:#7f8996; }
+.pl-capteur-t { cursor:move; }
+.pl-pan.pl-capteur.pl-cap-grand { width:min(680px, calc(100% - 20px)); }
+.pl-cap-grand .pl-cap-cv { height:280px; }
+/* Fenêtre « Capteur » du banc : ancrée sous l'écran (dans la colonne de droite, à sa largeur) ou flottante sur toute la paillasse */
+.pl-pan-b { font-size:11px; letter-spacing:0; text-transform:none; margin-left:auto; padding:1px 6px; border:1px solid #333a44; border-radius:4px; }
+.pl-pan.pl-capteur.pl-dock { position:static; width:100%; max-width:none; max-height:none; box-sizing:border-box; box-shadow:none; overflow:visible; }
+.pl-dock .pl-pan-t { cursor:default !important; }
+.pl-dock .bc-grand { height:150px; }
+.pl-pan.pl-capteur.pl-flot { position:absolute; left:10px; top:auto; bottom:10px; width:min(680px, calc(100% - 20px)); height:340px; min-width:300px; min-height:200px;
+  max-width:calc(100% - 20px); resize:both; overflow:hidden; z-index:5; }
+.pl-pan.pl-capteur.pl-flot:not([hidden]) { display:flex; flex-direction:column; }
+.pl-flot .pl-pan-c { flex:1 1 0; min-height:0; display:flex; flex-direction:column; }
+.pl-flot .bc-grand { flex:1 1 0; height:0; min-height:80px; }
+.pl-cap-cv { cursor:crosshair; }
+.bc-grand { display:block; width:100%; height:240px; background:#0d1013; border-radius:4px; cursor:crosshair; }
+.pl-prof-etat { width:100%; box-sizing:border-box; height:90px; margin-top:5px; background:#0f1215; color:#d7dde4; border:1px solid #2c323b;
+  border-radius:4px; font:11px/1.3 ui-monospace, monospace; }
+.pl-prof-msg { font-size:11.5px; color:#9fc7a6; margin-left:4px; }
+.pl-prof-l { display:flex; gap:8px; font-size:12px; line-height:1.45; }
+.pl-prof-k { flex:none; width:150px; color:#7f8996; }
+.pl-prof-x { color:#d7dde4; font-variant-numeric:tabular-nums; }
+.pl-prof-t { margin:8px 0 4px; font-size:11.5px; color:#8f99a5; }
+.pl-prof-qual, .pl-prof-qd { margin-top:6px; font-size:12px; }
+.pl-prof-qual > summary, .pl-prof-qd > summary { cursor:pointer; color:#e0b84c; font-size:12px; }
+.pl-prof-qd { margin-left:10px; }
+.pl-prof-qg, .pl-prof-qd { display:block; }
+.pl-prof-qr { display:flex; align-items:center; gap:8px; margin:3px 0; }
+.pl-prof-sel { flex:1; min-width:0; background:#0f1215; color:#d7dde4; border:1px solid #2c323b; border-radius:4px; font-size:12px; padding:2px 4px; }
+.pl-prof-qs { margin-top:6px; font-size:11px; color:#8f99a5; font-variant-numeric:tabular-nums; }
+.pl-prof-cf { display:flex; flex-wrap:wrap; gap:5px; margin-top:4px; }
+.pl-graine { font-size:11.5px; color:#5d6670; }
+.pl-graine-b { font:inherit; background:none; border:0; color:#5d6670; cursor:pointer; padding:2px 4px; }
+.pl-graine-b:hover { color:#a9b2bc; }
+.pl-graine-in { width:64px; background:#0f1215; color:#d7dde4; border:1px solid #333a44; border-radius:4px; padding:2px 5px; font:inherit; }
+/* bandeau du haut des paillasses (K.bandeau de la coque), sur trois
+   lignes fines : commandes, aides en bascules, ligne des gestes ; la rangée du bas (étapes, indice) reste en bas */
+.pl.pl-a-haut { grid-template-rows:auto minmax(0,1fr) auto; grid-template-areas:"haut haut" "gauche droite" "bas bas"; }
+.pl-haut { grid-area:haut; display:flex; flex-direction:column; align-items:stretch; gap:0; min-width:0; padding:2px 12px 0;
+  border-bottom:1px solid #1b1f25; background:#0c0f13; }
+.pl-defs { position:absolute; width:0; height:0; overflow:hidden; }
+/* Michelson : en bas, « Un indice », son texte sur deux lignes au plus,
+   « Nouveau dérèglement » ; en projection, la ligne des gestes disparaît */
+.pl-a-haut .pl-bas-l { gap:10px; min-height:28px; }
+.pl-a-haut .pl-aide { min-width:0; font-size:12.5px; color:#9aa4b1; overflow:hidden; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; }
+.pl-a-haut .pl-aide b { color:#f3dc9a; }
+.pl-obs-tete .bc-dm-b:disabled { opacity:.4; cursor:default; }
+/* Menus déroulants de la tête de l'observation : jamais sur deux lignes (un libellé long, « Barrette CCD ▾ », ferait passer
+   tous les boutons sur deux lignes, donc grandir la tête et rétrécir l'image) */
+.pl-obs-tete .pl-btn, .pl-obs-tete .bc-dm-b { white-space:nowrap; flex-shrink:0; }
+/* Capteurs du banc : le graphe est dans la fenêtre « Capteur » ; en dessous de l'image il ne ferait que la rétrécir */
+.pl-banc .pl-obs-pied .bc-courbe { display:none; }
+.pl-regle, .pl-regle * { cursor:ns-resize !important; }
+/* Michelson, éléments : le dessin dans une scène (boîte, étagère), le
+   bandeau de l'élément choisi au pied ; pastilles réglables (molette, glisser vertical), filets, cavaliers vus de dessus */
+.pl-mich .pl-gauche { display:flex; flex-direction:column; }
+.pl-mi-scene { position:relative; flex:1 1 0; min-height:0; }
+.pl-mich .pl-mi-bandeau { flex:none; height:44px; }
+/* bandeau de la lanterne (lampe, condenseur, tirage) : tient à 1366 px */
+.pl-mich .pl-mi-bandeau { column-gap:9px; } .pl-mich .pl-mi-bandeau .bc-reg input[type=range] { width:76px; }
+.pl-mich .bc-grad.pl-grad-b { font-size:8px; }
+.pl-mich .bc-el.hors { opacity:.35; }
+.pl-past { cursor:pointer; } .pl-past.regl { cursor:ns-resize; }
+.pl-past .anneau { fill:none; stroke:transparent; stroke-width:2; }
+.pl-past.sel .anneau { stroke:#e0b84c; }
+.pl-past:hover .anneau { stroke:#6e7783; } .pl-past.sel:hover .anneau { stroke:#f3dc9a; }
+.pl-past-nom { font-size:9px; fill:#8f99a5; pointer-events:none; }
+.pl-past-nom.sel { fill:#f3dc9a; }
+.pl-filet { fill:none; stroke:#4a535f; stroke-width:.8; stroke-dasharray:2 2; pointer-events:none; }
+.pl-filet.sel { stroke:#e0b84c; stroke-dasharray:none; }
+/* paillasse banc d'optique (_app-paillasse-banc.js) : ni étapes ni indice (la rangée du bas reste vide) ; banc dessiné
+   en pixels (viewBox repris à chaque redimensionnement), bandeau et étagère sous le banc */
+.pl-banc .pl-bas { display:none; }
+.bc-l1, .bc-l2, .bc-l3 { display:flex; align-items:center; gap:6px; white-space:nowrap; min-width:0; }
+.bc-l1 { min-height:32px; flex-wrap:wrap; }
+.bc-l2 { min-height:27px; gap:3px; border-top:1px solid #141920; flex-wrap:wrap; }
+.bc-l3 { height:22px; font-size:12px; color:#9aa4b1; border-top:1px solid #141920; overflow:hidden; text-overflow:ellipsis; display:block; line-height:22px; }
+.bc-l3 b { color:#e3e8ee; font-weight:600; }
+.bc-l3 .k { color:#f3dc9a; }
+.bc-l2-lab { font-size:11px; letter-spacing:.05em; text-transform:uppercase; color:#566070; margin-right:4px; }
+.bc-aide { font:inherit; font-size:12px; display:inline-flex; align-items:center; gap:5px; background:none; border:1px solid transparent; border-radius:6px; padding:1px 7px; color:#7f8996; cursor:pointer; }
+.bc-aide svg { width:18px; height:14px; }
+.bc-aide:hover { border-color:#2c333d; color:#c9cfd8; }
+.bc-aide[aria-pressed="true"] { background:#3a3220; color:#f3dc9a; border-color:#5a4b24; }
+.bc-aide.bc-sans-objet { color:#e8a35a; }
+.bc-aide kbd { font:inherit; font-size:10px; color:#566070; border:1px solid #2c333d; border-radius:3px; padding:0 3px; margin-left:2px; }
+.bc-aide:hover kbd, .bc-aide[aria-pressed="true"] kbd { color:#e0b84c; border-color:#5a4b24; }
+/* menus déroulants (Réglages, Mesurer) : une seule mécanique */
+.bc-dm { position:absolute; z-index:40; min-width:190px; background:#12161b; border:1px solid #333b46; border-radius:8px; box-shadow:0 10px 30px rgba(0,0,0,.6); padding:4px; font-size:12.5px; white-space:nowrap; }
+.bc-dm-t { font-size:10.5px; letter-spacing:.06em; text-transform:uppercase; color:#e0b84c; padding:5px 10px 2px; }
+.bc-dm-i { display:flex; width:100%; align-items:center; gap:8px; font:inherit; text-align:left; background:none; border:0; border-radius:5px; padding:4px 10px; color:#c9cfd8; cursor:pointer; }
+.bc-dm-i:hover { background:#1f262f; } .bc-dm-i:disabled { opacity:.45; cursor:default; } .bc-dm-i:disabled:hover { background:none; }
+.bc-dm-i::before { content:""; width:10px; } .bc-dm-i.coche::before { content:"✓"; color:#e0b84c; }
+/* menu du clic droit : sous-menus ▸, geste rappelé à droite */
+.bc-ctx { min-width:170px; }
+.bc-dm-k { margin-left:auto; padding-left:18px; color:#6f7987; font-size:11px; }
+.bc-dm-i.ouvert { background:#1f262f; }
+.bc-dm-s { height:1px; background:#262d36; margin:4px 6px; }
+/* pastilles des récepteurs, au-dessus de l'image */
+.bc-recs { display:inline-flex; border:1px solid #2c333d; border-radius:7px; overflow:hidden; }
+.bc-recs button { font:inherit; font-size:11.5px; background:#12161b; border:0; padding:2px 8px; color:#7f8996; cursor:pointer; }
+.bc-recs button + button { border-left:1px solid #2c333d; }
+.bc-recs button[aria-pressed="true"] { background:#3a3220; color:#f3dc9a; }
+/* pièce escamotée : relevée hors du faisceau, grisée */
+.pl-banc svg .bc-esc { opacity:.4; }
+.pl-banc svg .bc-esc-l { fill:#b8a36a; }
+/* panneau « ? » des gestes et raccourcis */
+.bc-voile { position:absolute; inset:0; z-index:60; background:rgba(0,0,0,.55); display:flex; align-items:center; justify-content:center; }
+.bc-rac { width:min(1100px, 94%); max-height:86%; overflow:auto; background:#0f1317; border:1px solid #333b46; border-radius:12px; padding:12px 18px 16px; box-shadow:0 20px 60px rgba(0,0,0,.7); }
+.bc-rac-t { display:flex; align-items:center; font-size:15px; color:#e3e8ee; margin-bottom:6px; } .bc-rac-t b { flex:1; font-weight:600; }
+.bc-rac-retour { display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin:4px 0 10px; padding:8px 12px; background:#2a2412; border:1px solid #7a6428; border-radius:8px; font-size:12.5px; color:#f3dc9a; }
+.bc-rac-retour span { flex:1; min-width:200px; }
+.pl-btn.pl-btn-retour { background:#e0b84c; border-color:#e0b84c; color:#1a1405; font-weight:600; font-size:12px; padding:2px 10px; }
+.pl-btn.pl-btn-retour:hover { background:#f0cb66; }
+.bc-rac-c { display:grid; grid-template-columns:repeat(3, minmax(0,1fr)); gap:16px; }
+.bc-rac h3 { margin:6px 0 4px; font-size:11.5px; letter-spacing:.06em; text-transform:uppercase; color:#e0b84c; font-weight:600; }
+.bc-rac table { border-collapse:collapse; width:100%; font-size:12px; color:#c9cfd8; }
+.bc-rac td { padding:3px 4px; vertical-align:top; border-top:1px solid #1b2128; }
+.bc-rac td:first-child { color:#f3dc9a; white-space:nowrap; width:1%; padding-right:10px; }
+/* Ctrl / Maj+clic ne sélectionnent pas les graduations ni les noms (le navigateur étendrait une sélection de texte) */
+.pl.pl-banc { -webkit-user-select:none; user-select:none; }
+.pl.pl-banc input, .pl.pl-banc textarea { -webkit-user-select:text; user-select:text; }
+.pl-banc .pl-gauche { display:flex; flex-direction:column; }
+.pl-banc .pl-dessus.bc-dessus { position:relative; inset:auto; flex:1 1 0; height:auto; min-height:0; outline:none; }
+.pl-banc .pl-boite.bc-bas { position:static; max-width:none; flex:none; padding:0; border:0; border-radius:0; box-shadow:none; background:none; }
+.bc-pousse { flex:1; }
+.bc-groupe { display:inline-flex; align-items:center; gap:4px; }
+.bc-groupe-l { font-size:11px; letter-spacing:.05em; text-transform:uppercase; color:#566070; }
+.bc-seg { display:inline-flex; border:1px solid #2c333d; border-radius:7px; overflow:hidden; }
+.bc-seg button { font:inherit; font-size:12.5px; background:#12161b; border:0; padding:3px 8px; cursor:pointer; color:#7f8996; white-space:nowrap; }
+.bc-seg button + button { border-left:1px solid #2c333d; }
+.bc-seg button[aria-pressed="true"] { background:#3a3220; color:#f3dc9a; }
+.pl-btn.bc-discret { background:none; border-color:transparent; color:#7f8996; }
+.pl-btn.bc-discret:hover, .pl-btn.bc-discret[aria-pressed="true"] { color:#c9cfd8; border-color:#2c333d; }
+.bc-menu { position:relative; }
+.bc-menu-l { position:absolute; left:0; top:calc(100% + 5px); z-index:20; width:340px; background:#12161b; border:1px solid #333b46;
+  border-radius:9px; padding:5px; box-shadow:0 12px 30px rgba(0,0,0,.6); white-space:normal; }
+.bc-menu-l button { display:block; width:100%; text-align:left; font:inherit; color:#c9cfd8; background:none; border:0; border-radius:6px; padding:6px 10px; cursor:pointer; }
+.bc-menu-l button:hover { background:#1c222a; }
+.bc-menu-l b { font-weight:600; }
+.bc-menu-l { width:min(760px, 90vw); overflow-y:auto; padding:8px 8px 0; }
+.bc-menu-cols { display:grid; grid-template-columns:repeat(auto-fill, minmax(170px, 1fr)); gap:4px 10px; }
+.bc-menu-th { min-width:0; }
+.bc-menu-cols { grid-auto-flow:dense; }
+.bc-menu-th-2 { grid-column:span 2; column-count:2; column-gap:10px; }
+.bc-menu-th-2 .bc-menu-g { column-span:all; }
+.bc-menu-th-2 button { break-inside:avoid; }
+@media (max-width:520px) { .bc-menu-th-2 { grid-column:auto; column-count:1; } }
+.bc-menu-l .bc-menu-g { margin:4px 10px 3px; font-size:11px; letter-spacing:.06em; text-transform:uppercase; color:#e0b84c; }
+.bc-menu-l .bc-menu-th button { padding:4px 10px; font-size:13px; }
+.bc-menu-l .bc-menu-d { position:sticky; bottom:0; margin:6px -8px 0; padding:7px 14px 9px; min-height:2.9em; font-size:12px; line-height:1.4;
+  color:#9aa4b0; background:#0f1317; border-top:1px solid #262d36; white-space:normal; }
+.pl-prof-g { flex-basis:100%; font-size:11px; color:#e0b84c; margin-top:4px; }
+.bc-courbe { display:block; flex-basis:100%; width:100%; height:130px; margin-top:4px; background:#0c0f13; border:1px solid #2a313a; border-radius:6px; }
+.bc-courbe text { font-size:9px; fill:#8f99a5; }
+.bc-histo { display:block; flex-basis:100%; width:100%; height:110px; margin-top:4px; border:1px solid #2a313a; border-radius:6px; }
+.bc-menu-l.bc-menu-haut { top:auto; box-shadow:0 -12px 30px rgba(0,0,0,.6); display:flex; flex-direction:column; overflow:hidden; max-width:none; }
+.bc-menu-l.bc-menu-haut[hidden] { display:none; }
+.bc-menu-haut .bc-menu-bacs { flex:none; }
+.bc-menu-haut .bc-menu-cols { flex:1 1 auto; min-height:0; overflow-y:auto; align-content:start; }
+/* Hauteur FIXE (6 lignes, la plus longue description à 780 px) : une description qui grandissait au survol rétrécissait
+   la liste au-dessus, et le montage visé passait dessous (« Astigmatisme » inaccessible depuis « Aberration sphérique »). */
+.bc-menu-haut .bc-menu-d { flex:none; position:static; box-sizing:border-box; height:calc(6 * 1.4em + 16px); overflow-y:auto; }
+.bc-menu-l .bc-menu-t { flex:none; margin:2px 6px 8px; font-size:12px; color:#9aa4b0; }
+.bc-mats { flex:1 1 auto; min-height:0; overflow-y:auto; display:grid; grid-template-columns:repeat(auto-fill, minmax(330px, 1fr)); gap:8px; align-content:start; padding-bottom:8px; }
+.bc-menu-l button.bc-mat { display:flex; gap:12px; align-items:flex-start; padding:8px; border:1px solid #242b34; border-radius:9px; background:#0d1014; }
+.bc-menu-l button.bc-mat:hover { background:#141920; border-color:#6e7783; }
+.bc-menu-l button.bc-mat.ici { border-color:#e0b84c; background:#1a1710; cursor:default; }
+.bc-mat-im { flex:none; width:104px; height:104px; border-radius:6px; overflow:hidden; background:#000; border:1px solid #2a313a; }
+.bc-mat-im img { display:block; width:100%; height:100%; }
+.bc-mat-tx { display:flex; flex-direction:column; gap:3px; min-width:0; white-space:normal; }
+.bc-mat-tx b { font-size:13.5px; color:#f3dc9a; }
+.bc-mat-tx i { font-style:normal; font-size:11px; color:#e0b84c; }
+.bc-mat-tx span { font-size:12px; line-height:1.4; color:#9aa4b0; }
+.bc-menu-bacs { display:flex; flex-wrap:wrap; gap:2px; margin:0 0 6px; border-bottom:1px solid #262d36; }
+.bc-menu-l .bc-menu-bacs button { display:inline-block; width:auto; border-radius:0; border-bottom:2px solid transparent; padding:5px 11px; font-size:12.5px; color:#7f8996; }
+.bc-menu-l .bc-menu-bacs button:hover { background:none; color:#c9cfd8; }
+.bc-menu-l .bc-menu-bacs button[aria-selected="true"] { color:#f3dc9a; border-bottom-color:#e0b84c; }
+.bc-seule { margin-left:6px; font-size:10px; padding:0 5px; border:1px solid #5a4a2a; border-radius:8px; color:#e0b84c; white-space:nowrap; vertical-align:1px; }
+.bc-menu-ds { display:block; margin-top:2px; color:#e0b84c; }
+/* Note du montage sous l'observation (memesPieces) : nom en or, description en gris. */
+.bc-note-montage { flex-basis:100%; margin-top:8px; padding:7px 10px; border-left:2px solid #5a4a2a; background:#101419; font-size:12px; line-height:1.45; color:#9aa4b0; }
+.bc-note-montage[hidden] { display:none; }
+.bc-note-montage b { color:#e0b84c; font-weight:600; margin-right:4px; }
+.bc-menu-l small { display:block; color:#7f8996; font-size:11.5px; line-height:1.35; }
+/* banc */
+.bc-grad { font-size:9.5px; fill:#6b7480; }
+.bc-el { cursor:grab; }
+.bc-el.hors { opacity:.35; }
+.bc-el.cible { filter:drop-shadow(0 0 5px #f3dc9a) brightness(1.3); }   /* pièce qu'un lâcher remplacerait */
+.bc-mini.regl { cursor:ns-resize; }
+.bc-etiq { font-size:11px; fill:#8791a0; pointer-events:none; }
+.bc-etiq.sel { fill:#f3dc9a; font-weight:600; }
+.bc-lab { font-size:12px; fill:#e3e7ec; font-style:italic; paint-order:stroke; stroke:#08090b; stroke-width:3px; }
+.bc-note { font-size:11.5px; fill:#566070; }
+.bc-note.bc-alerte { fill:#e8a35a; }
+.bc-poignee { fill:#e0b84c; stroke:#08090b; stroke-width:1.5; cursor:ns-resize; }
+/* bandeau de la pièce choisie */
+/* Hauteur FIXE d'une ligne : un bandeau qui passe sur deux lignes change la hauteur du banc, redessiné à chaque
+   sélection. Trop long : il défile horizontalement (barre fine), jamais de retour à la ligne. */
+.bc-bandeau { height:50px; box-sizing:border-box; display:flex; align-items:center; flex-wrap:nowrap; gap:6px 11px; padding:4px 12px; background:#0c0f13;
+  border-top:1px solid #1d232b; white-space:nowrap; overflow-x:auto; overflow-y:hidden; scrollbar-width:thin; scrollbar-color:#2c333d transparent; }
+.bc-bandeau > * { flex:none; }
+.bc-vide { color:#566070; }
+.bc-bd-nom { font-weight:600; color:#e3e8ee; display:flex; align-items:center; gap:8px; flex:none; }
+.bc-bd-nom svg { width:26px; height:26px; flex:none; }
+.bc-bd-pos { display:inline-flex; align-items:center; gap:4px; color:#f3dc9a; font-variant-numeric:tabular-nums; }
+.bc-bd-pos button { font:inherit; background:#161a20; border:1px solid #2c333d; border-radius:5px; width:22px; height:22px; padding:0; cursor:pointer; color:#7f8996; }
+.bc-bd-pos b { min-width:62px; text-align:center; font-weight:600; }
+.bc-bd-pos b.bc-bd-n { cursor:text; border-radius:4px; } .bc-bd-pos b.bc-bd-n:hover { background:#1f262f; }
+.bc-bd-tape { width:62px; font:inherit; font-weight:600; text-align:center; color:#f3dc9a; background:#0d1116; border:1px solid #e0b84c; border-radius:4px; padding:1px 2px; outline:none; }
+.bc-bd-multi i { font-style:normal; color:#9aa4b1; margin-left:6px; }
+.bc-reg { display:inline-flex; align-items:center; gap:7px; color:#7f8996; }
+.bc-reg input[type=range] { width:110px; accent-color:#e0b84c; }
+.bc-reg output { color:#c9cfd8; min-width:48px; font-variant-numeric:tabular-nums; }
+/* étagère */
+.bc-etagere { background:#11151a; border-top:1px solid #1d232b; }
+/* rangée des tiroirs : Montages, Nouveau banc, matériel, puis les onglets */
+.bc-rangee { display:flex; align-items:flex-end; gap:6px; padding:5px 10px 0; min-width:0; }
+.bc-rangee-g { display:flex; align-items:center; gap:4px; flex:none; padding:0 10px 4px 0; border-right:1px solid #262d36; white-space:nowrap; }
+.bc-materiel-b { font:inherit; font-size:12.5px; background:none; border:1px solid #2c333d; border-radius:6px; color:#c9cfd8; padding:3px 9px; cursor:pointer; white-space:nowrap; }
+.bc-materiel-b:hover { border-color:#6e7783; }
+.bc-materiel-b[aria-pressed="true"] { background:#3a3220; color:#f3dc9a; }
+.bc-materiel-l { font-size:12.5px; color:#9aa4b0; padding:0 4px; }
+.bc-onglets { display:flex; gap:2px; flex:1; min-width:0; overflow-x:auto; scrollbar-width:none; }
+.bc-onglets button { font:inherit; font-size:12.5px; background:none; border:0; border-bottom:2px solid transparent; padding:4px 8px 5px; cursor:pointer; color:#7f8996; white-space:nowrap; }
+.bc-onglets button[aria-selected="true"] { color:#f3dc9a; border-bottom-color:#e0b84c; }
+.bc-onglets i { font-style:normal; color:#566070; font-size:11px; margin-left:4px; }
+.bc-cartes { display:flex; gap:6px; padding:8px 10px 9px; overflow-x:auto; min-height:92px; scrollbar-width:thin; scrollbar-color:#2c333d transparent; }
+.bc-carte { flex:none; width:70px; font:inherit; color:inherit; background:#0d1014; border:1px solid #242b34; border-radius:9px; padding:6px 3px 5px; cursor:grab;
+  display:flex; flex-direction:column; align-items:center; gap:3px; touch-action:none; user-select:none; }
+.bc-carte:hover:not(:disabled) { border-color:#6e7783; background:#141920; }
+.bc-carte svg { width:38px; height:38px; pointer-events:none; }
+.bc-carte span { font-size:11px; line-height:1.15; text-align:center; color:#c9cfd8; pointer-events:none; }
+.bc-carte:disabled { opacity:.32; cursor:default; }
+/* étagère flottante et escamotable (K.etagere, flottante : Michelson, goniomètre), dans le coin bas droit du dessin */
+.bc-etagere.bc-etagere-flot { position:absolute; right:10px; bottom:10px; z-index:6; max-width:min(560px, calc(100% - 20px));
+  border:1px solid #2a313a; border-radius:10px; background:rgba(17,21,26,.96); box-shadow:0 8px 24px rgba(0,0,0,.55); }
+/* Taille FIXE, quel que soit l'onglet (nombre de cartes, une ou deux lignes de légende) : l'étagère reste à la même
+   place, et le panneau des Manipulations sait ce qu'il lui reste (--etag-h : sa hauteur, bordures comprises). */
+.bc-etagere.bc-etagere-flot { width:min(400px, calc(100% - 20px)); box-sizing:border-box; }
+.bc-etagere-flot .bc-cartes { min-height:0; height:99px; box-sizing:border-box; }
+.bc-et-plier { flex:none; align-self:center; font:inherit; font-size:12px; background:none; border:0; color:#7f8996; cursor:pointer; padding:2px 6px; }
+.bc-et-plier:hover { color:#c9cfd8; }
+.bc-et-ouvrir { display:none; }
+.bc-etagere-flot.replie { border:0; background:none; box-shadow:none; }
+.bc-etagere-flot.replie .bc-rangee, .bc-etagere-flot.replie .bc-cartes { display:none; }
+.bc-etagere-flot.replie .bc-et-ouvrir { display:inline-block; }
+.bc-carte.posee { border-color:#e0b84c; background:#1a1710; }
+.bc-fantome { position:fixed; z-index:50; pointer-events:none; width:44px; height:44px; margin:-22px 0 0 -22px; filter:drop-shadow(0 4px 10px rgba(0,0,0,.7)); }
+.bc-fantome svg { width:100%; height:100%; }
+/* observation */
+.bc-sel { background:#0f1215; color:#d7dde4; border:1px solid #333a44; border-radius:4px; padding:2px 5px; font:inherit; font-size:12px; }
+.bc-cur { display:flex; align-items:center; gap:6px; }
+.bc-cur-l { color:#8f99a5; font-size:12px; flex:none; }
+.bc-cv { cursor:grab; outline:none; touch-action:none; }
+.bc-cv:active { cursor:grabbing; }
+.bc-quad { mix-blend-mode:multiply; }
+.bc-danger { position:absolute; left:8px; right:8px; top:8px; z-index:3; padding:7px 10px; border-radius:7px; background:rgba(150,22,22,.92); color:#fff; font-size:13px; font-weight:600; line-height:1.35; text-align:center; pointer-events:none; }
+.bc-msg { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; padding:24px; text-align:center;
+  font-size:13.5px; line-height:1.5; color:#8f99a5; pointer-events:none; }
+.bc-pied { flex:1 1 100%; }
+/* Scène (zoom, vue de face), réglette de platine, menu Voir, bloc de l'œil sous l'observation */
+.pl-banc .bc-scene { position:relative; flex:1 1 0; min-height:0; overflow:hidden; }
+.pl-banc .bc-scene .pl-dessus.bc-dessus { position:absolute; inset:0; width:100%; height:100%; }
+.bc-scene.zoome .bc-dessus { cursor:grab; }
+.bc-zoom { position:absolute; left:10px; top:26px; display:flex; gap:4px; align-items:center; }
+.bc-zoom .pl-btn { padding:2px 8px; font-size:12px; background:#12161b; }
+.bc-zoom .pl-btn[aria-pressed="true"] { background:#3a3220; color:#f3dc9a; border-color:#e0b84c; }
+.bc-zoom .pl-btn:disabled { opacity:.35; cursor:default; }
+.bc-zoom-k { font-size:11px; color:#566070; min-width:34px; text-align:center; font-variant-numeric:tabular-nums; }
+.bc-face { position:absolute; right:10px; top:8px; width:190px; background:rgba(12,15,19,.94); border:1px solid #2a313a; border-radius:9px;
+  box-shadow:0 6px 18px rgba(0,0,0,.5); overflow:hidden; }
+.bc-face[hidden] { display:none; }
+.bc-face-t { display:flex; align-items:center; gap:6px; padding:4px 6px 3px 9px; font-size:11.5px; color:#aeb7c2; border-bottom:1px solid #1f262e; }
+.bc-face-t b { color:#e3e8ee; font-weight:600; flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.bc-face-t button { font:inherit; background:none; border:0; color:#7f8996; cursor:pointer; padding:0 3px; font-size:14px; line-height:1; }
+.bc-face-t span { white-space:nowrap; }
+.bc-face-t .bc-face-pin { display:inline-flex; align-items:center; padding:2px 3px; border-radius:4px; transform:rotate(30deg); }
+.bc-face-t .bc-face-pin[aria-pressed="true"] { color:#e8c45a; background:#2c2614; transform:none; }
+.bc-face svg { display:block; width:190px; height:190px; }
+.bc-face.bc-face-oeil { width:280px; }
+.bc-face.bc-face-oeil svg { width:280px; height:190px; }
+.bc-face.bc-face-oeil .bc-face-p { color:#8a94a2; }
+.bc-face .bc-face-pin svg { width:13px; height:13px; }
+.bc-face-p { padding:3px 9px 6px; font-size:11px; color:#566070; line-height:1.3; }
+.bc-platine { display:inline-flex; align-items:center; gap:6px; color:#7f8996; }
+.bc-platine .pl-btn { width:22px; height:22px; padding:0; }
+.bc-platine svg { width:150px; height:30px; cursor:ew-resize; touch-action:none; }
+.bc-platine output { color:#f3dc9a; min-width:58px; font-variant-numeric:tabular-nums; }
+.pl-btn.bc-ico { padding:3px 7px; display:inline-flex; align-items:center; }
+.pl-btn.bc-ico svg { width:16px; height:16px; }
+.pl-banc .pl-droite { overflow-y:auto; }
+.bc-bloc { flex-basis:100%; background:#0c0f13; border:1px solid #2a313a; border-radius:8px; padding:7px 10px; }
+.bc-bloc-t { display:flex; align-items:center; gap:8px; font-size:12px; color:#aeb7c2; margin-bottom:5px; }
+.bc-bloc-t svg { width:22px; height:22px; }
+.bc-bloc-t b { color:#e3e8ee; font-weight:600; }
+.bc-bloc-l { display:flex; align-items:center; flex-wrap:wrap; gap:6px 12px; font-size:12px; }
+.bc-photo-v { font:600 15px/1 ui-monospace, monospace; color:#7fd6a0; min-width:6em; }
+.bc-photo-b .bc-bloc-l { color:#8f99a5; font-size:11.5px; }
+.bc-spec { flex-basis:100%; display:flex; flex-direction:column; gap:4px; }
+.bc-spec-n { color:#8f99a5; font-size:11.5px; }
+.atelier:fullscreen { width:100%; height:100%; border-radius:0; border:0; }
+/* Cadrer (banc et image) */
+.bc-scene.bc-cadrer .bc-dessus, .bc-cv.bc-cadrer { cursor:crosshair; }
+.bc-cadre-r { position:absolute; border:1px dashed #e0b84c; background:rgba(224,184,76,.08); pointer-events:none; }
+.bc-poigneeB { fill:#f0f3f6; stroke:#08090b; stroke-width:1.5; cursor:ns-resize; }
+
+/* Fenêtre Capteur : réglages du capteur sous la courbe ; pas de × au banc (retirer le capteur la ferme) ; les petits graphes cachés y restent cachés */
+.pl-capteur .pl-pan-x:not(.pl-pan-b) { display:none; }
+/* Michelson : le × ferme la fenêtre et retire le capteur de l'écran (surBascule) */
+.pl-mich .pl-capteur .pl-pan-x:not(.pl-pan-b) { display:inline-block; }
+.pl-capteur .bc-courbe { display:none; }
+.pl-cap-ctl { display:flex; flex-direction:column; gap:6px; margin-top:6px; flex:none; }
+.pl-flot .pl-pan-c { overflow:auto; }

@@ -1,0 +1,84 @@
+<!doctype html>
+<!-- Créé par Claude — page générée, ne pas éditer -->
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="index, follow">
+<title>Simulation de l&#x27;interféromètre de Michelson</title>
+<link rel="canonical" href="https://optique.cpge-michelet.fr/michelson/">
+<link rel="icon" href="../favicon.svg" type="image/svg+xml">
+<link rel="icon" href="../favicon-32.png" sizes="32x32" type="image/png">
+<link rel="apple-touch-icon" href="../apple-touch-icon.png">
+<meta name="color-scheme" content="dark">
+<meta name="theme-color" content="#08090b">
+<meta name="description" content="Simulation de l&#x27;interféromètre de Michelson à régler comme en TP : compensatrice, franges, anneaux, contact optique, lumière blanche.">
+<meta property="og:type" content="website">
+<meta property="og:locale" content="fr_FR">
+<meta property="og:title" content="Simulation de l&#x27;interféromètre de Michelson">
+<meta property="og:description" content="Simulation de l&#x27;interféromètre de Michelson à régler comme en TP : compensatrice, franges, anneaux, contact optique, lumière blanche.">
+<meta property="og:url" content="https://optique.cpge-michelet.fr/michelson/">
+<meta property="og:image" content="https://optique.cpge-michelet.fr/img/apercu-michelson.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Simulation de l&#x27;interféromètre de Michelson">
+<meta name="twitter:card" content="summary_large_image">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"WebApplication","name":"Simulation de l'interféromètre de Michelson","url":"https://optique.cpge-michelet.fr/michelson/","description":"Simulation de l'interféromètre de Michelson à régler comme en TP : compensatrice, franges, anneaux, contact optique, lumière blanche.","applicationCategory":"EducationalApplication","inLanguage":"fr","browserRequirements":"Requires JavaScript","offers":{"@type":"Offer","price":"0","priceCurrency":"EUR"}}</script>
+<link rel="stylesheet" href="../commun/paillasse.css?v=dbd4883737">
+<style>
+  *, *::before, *::after { box-sizing:border-box; }
+  a { color:inherit; text-decoration:none; }
+  svg { display:block; }
+  @media (prefers-reduced-motion: reduce) { * { transition:none !important; } }
+  html, body { margin:0; height:100%; background:#08090b; overflow:hidden; }
+  .op-barre { position:fixed; top:0; left:0; right:0; height:32px; z-index:10; display:flex; align-items:center; gap:14px;
+    padding:0 14px; background:#0c0f13; border-bottom:1px solid #1b1f25; font:13px/1 system-ui, sans-serif; color:#8a939f; }
+  .op-barre a { color:#c9cfd8; text-decoration:none; }
+  .op-barre a:hover { color:#e0b84c; }
+  .op-barre b { color:#eef1f5; font-weight:600; }
+  .op-app { position:fixed; top:33px; left:0; right:0; bottom:0; }
+  .op-app .pl-licence { display:none; }
+  .op-barre { white-space:nowrap; overflow:hidden; }
+  .op-barre b { overflow:hidden; text-overflow:ellipsis; }
+  .op-app { background:#08090b; }
+  /* « À propos » repliable : texte de contexte lisible par les robots, discret pour le visiteur.
+     Panneau en position:fixed car la barre a overflow:hidden (il serait clippé sinon). */
+  .op-barre .op-apropos { margin-left:auto; }
+  .op-apropos summary { cursor:pointer; list-style:none; user-select:none; white-space:nowrap; color:#6e7783; font-size:12px; }
+  .op-apropos summary::-webkit-details-marker { display:none; }
+  .op-apropos[open] summary { color:#e0b84c; }
+  .op-apropos-panneau { position:fixed; top:33px; right:10px; width:360px; max-width:calc(100vw - 20px); z-index:9;
+    background:#0c0f13; border:1px solid #1b1f25; border-radius:8px; padding:13px 16px 15px;
+    font:13.5px/1.55 system-ui, sans-serif; color:#8a939f; text-align:left; white-space:normal; }
+  .op-apropos-panneau a { color:#e0b84c; }
+  .op-apropos-panneau a:hover { color:#f0d28a; }
+  .op-apropos-panneau p { margin:0 0 9px; }
+  .op-apropos-panneau p:last-child { margin-bottom:0; }
+  .op-app .atelier-scene { display:none; }
+  @media (max-width:700px) { .op-barre .op-lic { display:none; } }
+  .op-barre .op-lic { margin-left:14px; color:#6e7783; font-size:12px; }
+</style>
+</head>
+<body class="est-prof" data-app="michelson">
+<header class="op-barre"><a href="../">&larr; Accueil</a><b>Interféromètre de Michelson</b><details class="op-apropos"><summary>&Agrave; propos de la simulation</summary><div class="op-apropos-panneau"><p>Simulation en ligne de l'interféromètre de Michelson des travaux pratiques : rien n'est réglé à l'avance. On tourne les vis, on translate le chariot, et l'œil simulé rend compte des franges d'égale épaisseur, des anneaux d'égale inclinaison et du contact optique en lumière blanche, avec la raie du sodium ou une source étendue.</p><p>Les figures sont calculées à chaque instant, pas pré-enregistrées — voir le <a href="../modele/">modèle physique</a>. Gestes et raccourcis : <a href="../prise-en-main/">prise en main</a>.</p></div></details><a class="op-lic" href="https://creativecommons.org/licenses/by-nc-sa/4.0/deed.fr">&copy; S. Reyt &middot; CC BY-NC-SA 4.0</a></header>
+<section class="pane-exp paillasse-on app-signature op-app"><div class="atelier-scene"></div></section>
+<script src="../commun/app-michelson-coeur.js?v=b2822f7ccb"></script>
+<script src="../commun/app-paillasse.js?v=1d776353c8"></script>
+<script src="../commun/app-paillasse-michelson.js?v=51db130ecb"></script>
+<script src="../commun/app-goniometre-coeur.js?v=b4b10ea6dd"></script>
+<script src="../commun/app-paillasse-goniometre.js?v=f0571e9f3f"></script>
+<script src="../commun/app-banc-coeur.js?v=8128c3a97f"></script>
+<script src="../commun/app-paillasse-banc.js?v=ea34dcddd6"></script>
+<script>
+(function () {
+  var meta = {"app": "paillasse", "instrument": "michelson", "niveau": 1};
+  var esc = function (s) { return String(s).replace(/[&<>"']/g, function (c) { return "&#" + c.charCodeAt(0) + ";"; }); };
+  var scene = document.querySelector(".atelier-scene");
+  try { window.VITRINE_APPS.paillasse.monter({ scene: scene, meta: meta, esc: esc }); }
+  catch (e) { scene.textContent = "Erreur au chargement de l'instrument : " + (e.message || e); }
+})();
+</script>
+<script src="../commun/compteur.js?v=4b4f1e1c0b"></script>
+<script src="../commun/retour.js?v=a3d95a5a48"></script>
+</body>
+</html>

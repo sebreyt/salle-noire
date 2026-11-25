@@ -1,0 +1,146 @@
+<!doctype html>
+<!-- Créé par Claude — page d'accueil publique des instruments d'optique (optique.cpge-michelet.fr) -->
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="index, follow">
+<title>Salle noire — simulations d'optique : Michelson, spectrogoniomètre, banc d'optique</title>
+<style>
+  :root { --fond:#08090b; --carte:#0f1216; --bord:#1d222a; --texte:#c9cfd8; --doux:#8a939f; --or:#e0b84c; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--fond); color:var(--texte); font:16px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  a { color:var(--or); }
+  .page { max-width:1180px; margin:0 auto; padding:56px 24px 40px; }
+  header { max-width:52em; margin:0 auto; }
+  header h1 { margin:0 0 6px; font-size:34px; font-weight:650; color:#eef1f5; letter-spacing:-.01em; }
+  header .sous { margin:0; font-size:18px; color:var(--doux); text-align:justify; hyphens:auto; }
+  header .etat { display:inline-block; margin:14px 0 0; padding:4px 12px; border:1px solid #3a3320; border-radius:999px; background:#16130b; color:#d9c08a; font-size:13.5px; }
+  .intro { max-width:52em; margin:28px auto 40px; }
+  .intro p { margin:0 0 12px; text-align:justify; hyphens:auto; }
+  .apps { display:grid; grid-template-columns:repeat(3, minmax(0,1fr)); gap:22px; }
+  .app { display:flex; flex-direction:column; background:var(--carte); border:1px solid var(--bord); border-radius:10px; overflow:hidden;
+         text-decoration:none; color:inherit; transition:border-color .15s, transform .15s; }
+  .app:hover { border-color:#3a414c; transform:translateY(-2px); }
+  .app img { display:block; width:100%; aspect-ratio:1366/798; object-fit:cover; border-bottom:1px solid var(--bord); }
+  .app .corps { padding:16px 18px 18px; display:flex; flex-direction:column; flex:1; }
+  .app h2 { margin:0 0 2px; font-size:20px; color:#eef1f5; font-weight:620; }
+  .app .tp { margin:0 0 10px; font-size:13.5px; color:var(--doux); }
+  .app p.quoi { margin:0 0 16px; font-size:15px; flex:1; }
+  .app .ouvrir { align-self:flex-start; padding:7px 16px; border:1px solid var(--or); border-radius:6px; color:var(--or); font-weight:600; font-size:14.5px; }
+  .app:hover .ouvrir { background:var(--or); color:#14110a; }
+  .pratique { display:grid; grid-template-columns:repeat(3, minmax(0,1fr)); gap:22px; margin-top:44px; font-size:14.5px; }
+  .pratique h3 { margin:0 0 10px; font-size:13px; text-transform:uppercase; letter-spacing:.08em; color:var(--doux); font-weight:600; }
+  .pratique p { margin:0 0 10px; }
+  .pratique p:last-child { margin-bottom:0; }
+  footer { margin-top:48px; padding-top:18px; border-top:1px solid var(--bord); font-size:13.5px; color:var(--doux); }
+  footer p { margin:0 0 4px; }
+  @media (max-width:900px) {
+    .apps, .pratique { grid-template-columns:1fr; }
+    .page { padding:36px 16px 32px; }
+    header h1 { font-size:28px; }
+    header .etat { border-radius:10px; padding:6px 12px; }
+  }
+</style>
+<link rel="canonical" href="https://optique.cpge-michelet.fr/">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="icon" href="favicon-32.png" sizes="32x32" type="image/png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="color-scheme" content="dark">
+<meta name="theme-color" content="#08090b">
+<meta name="description" content="Simulations en ligne du banc d&#x27;optique, du Michelson et du goniomètre de TP de classe préparatoire, à régler soi-même dans le navigateur. Sans compte, rien à installer.">
+<meta property="og:type" content="website">
+<meta property="og:locale" content="fr_FR">
+<meta property="og:title" content="Salle noire — simulations d&#x27;optique : Michelson, spectrogoniomètre, banc d&#x27;optique">
+<meta property="og:description" content="Simulations en ligne du banc d&#x27;optique, du Michelson et du goniomètre de TP de classe préparatoire, à régler soi-même dans le navigateur. Sans compte, rien à installer.">
+<meta property="og:url" content="https://optique.cpge-michelet.fr/">
+<meta property="og:image" content="https://optique.cpge-michelet.fr/img/apercu.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Salle noire — simulations d&#x27;optique : Michelson, spectrogoniomètre, banc d&#x27;optique">
+<meta name="twitter:card" content="summary_large_image">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"WebApplication","name":"Salle noire — simulations d'optique : Michelson, spectrogoniomètre, banc d'optique","url":"https://optique.cpge-michelet.fr/","description":"Simulations en ligne du banc d'optique, du Michelson et du goniomètre de TP de classe préparatoire, à régler soi-même dans le navigateur. Sans compte, rien à installer.","applicationCategory":"EducationalApplication","inLanguage":"fr","browserRequirements":"Requires JavaScript","offers":{"@type":"Offer","price":"0","priceCurrency":"EUR"}}</script>
+</head>
+<body data-app="accueil">
+<div class="page">
+  <header>
+    <h1>Salle noire</h1>
+    <p class="sous">Banc d'optique, interféromètre de Michelson et spectrogoniomètre : trois instruments de TP à régler soi-même, dans le navigateur.</p>
+    <p class="etat">Version de travail : les instruments s'affinent encore au fil des séances, et certains détails peuvent changer d'une visite à l'autre.</p>
+  </header>
+
+  <section class="intro">
+    <p>Ces instruments reproduisent, dans l'obscurité d'une salle d'optique, le banc d'optique, le Michelson et le
+      goniomètre des travaux pratiques de classe préparatoire. Rien n'y est réglé à l'avance : on tourne les vis à la souris, on déplace
+      lampes, lentilles et écran, et l'on observe ce que donnerait l'instrument réel.</p>
+    <p>Ce qu'on voit est calculé à chaque instant et non pré-enregistré : figures d'interférence de la source
+      étendue, rayons tracés à travers les lentilles, aberrations et diffraction, luminosité réelle, œil qui accommode.
+      Elles servent à préparer une séance, à reprendre un réglage après coup, ou à montrer au tableau ce que la salle
+      ne permet pas.</p>
+  </section>
+
+  <section class="apps">
+    <a class="app" href="banc-optique/">
+      <img src="img/banc.webp?v=bd3c50d955" alt="Banc d'optique : lanterne, objet, lentille et écran sur le banc" loading="lazy">
+      <div class="corps">
+        <h2>Banc d'optique</h2>
+        <p class="tp">Optique géométrique et ondulatoire</p>
+        <p class="quoi">Poser une lanterne, un objet, des lentilles et un écran ; chercher l'image, voir le faisceau
+          et les rayons de construction ; passer aux fentes d'Young, à la diffraction et au filtrage spatial.</p>
+        <span class="ouvrir">Ouvrir</span>
+      </div>
+    </a>
+    <a class="app" href="michelson/">
+      <img src="img/michelson.webp?v=8ada640fc7" alt="Interféromètre de Michelson : vue de dessus de l'interféromètre et anneaux sur l'écran" loading="lazy">
+      <div class="corps">
+        <h2>Interféromètre de Michelson</h2>
+        <p class="tp">TP Michelson · ondes lumineuses</p>
+        <p class="quoi">Régler la compensatrice, passer des deux taches aux franges puis aux anneaux, chercher le
+          contact optique, observer en lumière blanche ; mesurer un doublet, une lamelle, une longueur de cohérence.</p>
+        <span class="ouvrir">Ouvrir</span>
+      </div>
+    </a>
+    <a class="app" href="goniometre/">
+      <img src="img/goniometre.webp?v=d270be6dec" alt="Spectrogoniomètre : vue de dessus et champ de la lunette avec le réticule" loading="lazy">
+      <div class="corps">
+        <h2>Spectrogoniomètre</h2>
+        <p class="tp">TP réseau et prisme</p>
+        <p class="quoi">Régler l'oculaire à sa vue, la lunette par autocollimation, puis le collimateur ; tourner
+          le réseau ou le prisme, lire le vernier, mesurer un minimum de déviation et identifier une lampe inconnue.</p>
+        <span class="ouvrir">Ouvrir</span>
+      </div>
+    </a>
+  </section>
+
+  <section class="pratique">
+    <div>
+      <h3>Utiliser</h3>
+      <p>Un ordinateur avec une souris et un navigateur récent (Firefox, Chrome, Edge, Safari). Rien à installer,
+        aucun compte. Les tablettes et téléphones ne sont pas pris en charge.</p>
+      <p>Chaque instrument garde son état dans votre navigateur : on le retrouve comme on l'a laissé. Le bouton
+        « Prof » propose des configurations types et dévoile les valeurs cachées du dérèglement.</p>
+    </div>
+    <div>
+      <h3>Documentation</h3>
+      <p><a href="prise-en-main/">Prise en main</a> : gestes, aides et raccourcis de chaque instrument.</p>
+      <p><a href="modele/">Modèle physique</a> : le modèle optique des instruments, ses approximations et ses
+        sources.</p>
+    </div>
+    <div>
+      <h3>Un bug, une idée ?</h3>
+      <p>Un comportement étrange, une suggestion : <a href="#" data-retour="site">écrire un message</a>.</p>
+      <p>Depuis un instrument, le lien est en bas du panneau « ? » : il permet de joindre l'état actuel de
+        l'instrument au message, pour retrouver exactement le réglage qui pose problème.</p>
+    </div>
+  </section>
+
+  <footer>
+    <p>Sébastien Reyt, professeur de physique-chimie en CPGE MP au lycée Michelet.</p>
+    <p>Licence <a href="https://creativecommons.org/licenses/by-nc-sa/4.0/deed.fr">CC BY-NC-SA 4.0</a> :
+      réutilisation et modification libres, sans usage commercial, en citant l'auteur et sous la même licence.</p>
+  </footer>
+</div>
+<script src="commun/compteur.js?v=4b4f1e1c0b"></script>
+<script src="commun/retour.js?v=a3d95a5a48"></script>
+</body>
+</html>

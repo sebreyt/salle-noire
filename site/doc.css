@@ -1,0 +1,94 @@
+/* Créé par Claude — style des pages de documentation du site public (coulisses, prise en main) : même salle noire
+   que l'accueil (index.html). */
+:root { --fond:#08090b; --carte:#0f1216; --bord:#1d222a; --texte:#c9cfd8; --doux:#8a939f; --clair:#eef1f5; --or:#e0b84c; }
+* { box-sizing:border-box; }
+html { scroll-behavior:smooth; scroll-padding-top:52px; }
+body { margin:0; background:var(--fond); color:var(--texte); font:16.5px/1.62 system-ui, -apple-system, "Segoe UI", sans-serif; }
+a { color:var(--or); }
+.barre { position:sticky; top:0; z-index:5; height:40px; display:flex; align-items:center; gap:16px; padding:0 18px;
+  background:#0c0f13ee; border-bottom:1px solid #1b1f25; font-size:14px; color:var(--doux); backdrop-filter:blur(6px); }
+.barre a { color:var(--texte); text-decoration:none; }
+.barre a:hover { color:var(--or); }
+.barre { white-space:nowrap; overflow:hidden; }
+.barre .titre { overflow:hidden; text-overflow:ellipsis; }
+.barre .lic { margin-left:auto; color:#6e7783; font-size:12.5px; }
+.barre .vers-sommaire { display:none; }
+.cadre { max-width:1180px; margin:0 auto; padding:0 24px; display:grid; grid-template-columns:230px minmax(0,1fr); gap:48px; }
+nav.sommaire { position:sticky; top:64px; align-self:start; padding-top:44px; font-size:14px; max-height:calc(100vh - 70px); overflow:auto; }
+nav.sommaire summary { display:block; list-style:none; pointer-events:none; margin:0 0 8px; font-size:12px; text-transform:uppercase; letter-spacing:.08em; color:var(--doux); font-weight:600; }
+nav.sommaire summary::-webkit-details-marker { display:none; }
+nav.sommaire ol { list-style:none; margin:0; padding:0; }
+nav.sommaire li { margin:0 0 4px; }
+nav.sommaire li li { margin-left:14px; font-size:13.5px; }
+nav.sommaire a { color:var(--texte); text-decoration:none; }
+nav.sommaire a:hover { color:var(--or); }
+main { padding:44px 0 60px; min-width:0; max-width:50em; }
+h1 { margin:0 0 8px; font-size:34px; font-weight:650; color:var(--clair); letter-spacing:-.01em; }
+.chapeau { margin:0 0 34px; font-size:18px; color:var(--doux); }
+h2 { margin:52px 0 14px; padding-top:18px; border-top:1px solid var(--bord); font-size:25px; font-weight:620; color:var(--clair); }
+h3 { margin:34px 0 10px; font-size:19px; font-weight:620; color:var(--clair); }
+h4 { margin:22px 0 6px; font-size:16px; font-weight:620; color:var(--clair); }
+p { margin:0 0 13px; }
+ul, ol { margin:0 0 13px; padding-left:1.3em; }
+li { margin:0 0 5px; }
+strong { color:var(--clair); font-weight:620; }
+figure { margin:22px 0 24px; }
+figure img { display:block; max-width:100%; height:auto; border:1px solid var(--bord); border-radius:6px; background:#000; }
+figcaption { margin-top:8px; font-size:14px; color:var(--doux); }
+.paire { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+.paire figcaption { margin-top:4px; }
+.paire + figcaption { margin-top:2px; }
+table { width:100%; border-collapse:collapse; margin:10px 0 18px; font-size:14.5px; }
+th, td { padding:7px 10px; border-bottom:1px solid var(--bord); text-align:left; vertical-align:top; }
+th { color:var(--doux); font-weight:600; font-size:13px; text-transform:uppercase; letter-spacing:.05em; }
+.encart { margin:18px 0 20px; padding:12px 16px; background:var(--carte); border:1px solid var(--bord); border-left:3px solid var(--or); border-radius:6px; font-size:15px; }
+.encart p:last-child { margin-bottom:0; }
+.chaine { display:flex; flex-wrap:wrap; align-items:stretch; gap:6px; margin:14px 0 20px; padding:0; list-style:none; font-size:13.5px; }
+.chaine li { flex:1 1 92px; margin:0; padding:8px 10px; background:var(--carte); border:1px solid var(--bord); border-radius:6px; position:relative; }
+.chaine li b { display:block; color:var(--clair); font-weight:620; font-size:14px; }
+.chaine li span { color:var(--doux); }
+.katex-display { overflow-x:auto; overflow-y:hidden; padding:2px 0; }
+.katex { font-size:1.08em; }
+.refs li { font-size:14.5px; margin-bottom:8px; }
+.prepa { color:var(--doux); font-style:italic; }
+footer { margin-top:56px; padding-top:18px; border-top:1px solid var(--bord); font-size:13.5px; color:var(--doux); }
+footer p { margin:0 0 4px; }
+@media (max-width:900px) {
+  .cadre { grid-template-columns:1fr; gap:0; padding:0 16px; }
+  nav.sommaire { position:static; max-height:none; padding-top:20px; }
+  nav.sommaire details { background:var(--carte); border:1px solid var(--bord); border-radius:8px; padding:0 14px; }
+  nav.sommaire summary { pointer-events:auto; cursor:pointer; margin:0; padding:11px 0; font-size:13px; }
+  nav.sommaire summary::after { content:"▾"; float:right; font-size:14px; }
+  nav.sommaire details[open] summary::after { content:"▴"; }
+  nav.sommaire details[open] { padding-bottom:10px; }
+  nav.sommaire li { margin:0; }
+  nav.sommaire a { display:block; padding:5px 0; }
+  .barre { padding:0 16px; gap:14px; }
+  .barre .vers-sommaire { display:inline; margin-left:auto; color:var(--or); }
+  .barre .lic { display:none; }
+  table { display:block; overflow-x:auto; font-size:14px; }
+  th, td { padding:6px 8px; }
+  .paire { grid-template-columns:1fr; }
+  h1 { font-size:28px; }
+  main { padding-top:20px; }
+}
+/* Légende numérotée d'une capture annotée (les numéros répondent aux repères posés sur l'image). */
+ol.legende { margin:-12px 0 20px; padding-left:1.6em; font-size:15px; }
+ol.legende li { margin-bottom:3px; }
+/* Emplacement d'une capture pas encore faite (data-capture = nom de la capture). */
+.a-capturer .espace { display:flex; align-items:center; justify-content:center; min-height:180px; padding:16px;
+  border:1px dashed #3a414c; border-radius:6px; color:var(--doux); font-size:14px; text-align:center; }
+/* Capture annotée : repères numérotés posés sur l'image (positions en %, img/prise-en-main/reperes.json).
+   Le conteneur porte l'aspect-ratio des captures (toutes 1366×798) : sa hauteur ne dépend PAS de
+   l'état de chargement de l'image, les repères en % sont donc toujours dans le cadre (bug mobile). */
+.annotee { position:relative; aspect-ratio:1366/798; }
+.annotee img { width:100%; height:100%; }
+.annotee .repere svg { display:block; width:.62em; height:auto; } /* chiffre TRACÉ en contour de fonte
+   (DejaVu Sans Bold, rempli) : pas de texte — le pipeline glyphe d'iOS tombe en panne dans cette page
+   longue et rendait les pastilles vides sur iPhone. Dimension en em : suit la taille du cercle. */
+.annotee .repere { position:absolute; transform:translate(-50%,-50%); width:22px; height:22px; border-radius:50%;
+  display:flex; align-items:center; justify-content:center; padding:0; overflow:visible; box-sizing:border-box;
+  background:var(--or); color:#14110a; font:700 13px/1 system-ui, sans-serif; text-align:center;
+  box-shadow:0 0 0 2px #08090b, 0 1px 4px #000a; pointer-events:none; }
+/* Mobile : cercle plus petit, chiffre gardé lisible (le texte ne dépend ni de line-height ni de la taille minimale du navigateur) */
+@media (max-width:600px) { .annotee .repere { width:16px; height:16px; font-size:10px; box-shadow:0 0 0 1.5px #08090b, 0 1px 3px #000a; } }
