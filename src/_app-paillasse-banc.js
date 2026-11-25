@@ -768,7 +768,7 @@
   // Descendre ne détruit rien : ce que le profil impose (optique) est appliqué au calcul et à l'affichage,
   // l'état garde ses valeurs (decentrable / inclinable : `neutre`).
   var PROFILS = {
-    1: { n: 1, optique: "parfaite", luminosite: null, lumDefaut: "visible", interOptique: false, reglages: true, mesures: false,
+    1: { n: 1, optique: "parfaite", luminosite: null, lumDefaut: "reelle", interOptique: false, reglages: true, mesures: false,
       observer: ["ecran", "oeil", "viseur", "lunette"], decentrable: false, inclinable: false, positions: true },
     2: { n: 2, optique: null, luminosite: null, interOptique: true, reglages: true, mesures: true, observer: null, decentrable: false, inclinable: false, positions: true },
     3: { n: 3, optique: null, luminosite: null, interOptique: true, reglages: true, mesures: true, observer: null, decentrable: true, inclinable: true, positions: true }

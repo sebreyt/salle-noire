@@ -904,8 +904,8 @@
         modifie();
       }, function (p) { return { p: p }; });
     }
-    // ----- molette : sur la plate-forme ou la lunette, 1′ par cran (Maj : 0,1′, Ctrl+Maj : 0,01′, Ctrl : 10′) ; sur l'oculaire -----
-    function pasRot(k, ev) { return k * (ev.shiftKey ? ((ev.ctrlKey || ev.metaKey) ? 0.01 : 0.1) : ev.ctrlKey ? 10 : 1) / 60 * DEG; }
+    // ----- molette : sur la plate-forme ou la lunette, 10′ par cran (Maj : 1′, Ctrl+Maj : 0,1′, Ctrl : 100′) ; sur l'oculaire -----
+    function pasRot(k, ev) { return k * (ev.shiftKey ? ((ev.ctrlKey || ev.metaKey) ? 0.1 : 1) : ev.ctrlKey ? 100 : 10) / 60 * DEG; }
     K.zoneMolette(function (p) {
       for (var k in VIS) { var q = VIS[k].o.pos ? VIS[k].o.pos() : VIS[k].o; if (Math.hypot(p.x - q.x, p.y - q.y) < 13) return null; }
       if (Math.hypot(p.x, p.y) < 60) return function (k, ev) { tournerPlat(pasRot(k, ev)); };
@@ -1569,7 +1569,7 @@
     // ----- ligne des gestes : ce que font la souris et le clavier sur ce que survole le pointeur -----
     var PT = null;      // dernier point du pointeur sur le dessin : plate-forme, lunette, oculaire (sans élément propre)
     D.addEventListener("mousemove", function (ev) { PT = K.ptSvg(ev); });
-    var ROT = "glisser : la tourner (Maj : dix fois plus lent · Ctrl+Maj : cent fois) · molette : 1′ par cran (Maj 0,1′ · Ctrl+Maj 0,01′ · Ctrl 10′)";
+    var ROT = "glisser : la tourner (Maj : dix fois plus lent · Ctrl+Maj : cent fois) · molette : 10′ par cran (Maj 1′ · Ctrl+Maj 0,1′ · Ctrl 100′)";
     var TXT_VIS = {
       tL: "<b>Tirage de la lunette</b> — faire rouler la molette (glisser ou molette ; Maj : fin) : le réticule avance ou recule dans le tube",
       tC: "<b>Tirage du collimateur</b> — faire rouler la molette (glisser ou molette ; Maj : fin) : la fente avance ou recule",
@@ -1609,7 +1609,7 @@
     } });
     K.lecture.setAttribute("data-a3", "<b>Lecture du vernier</b> — taper degrés et minutes, puis « Vérifier ma lecture » : jamais la valeur, seulement l'écart · « S'entraîner » : une autre position à lire");
     var GESTES = {
-      "Goniomètre": [["glisser la lunette, la plate-forme", "la tourner (Maj : dix fois plus lent · Ctrl+Maj : cent fois)"], ["molette dessus", "1′ par cran (Maj 0,1′ · Ctrl+Maj 0,01′ · Ctrl 10′)"],
+      "Goniomètre": [["glisser la lunette, la plate-forme", "la tourner (Maj : dix fois plus lent · Ctrl+Maj : cent fois)"], ["molette dessus", "10′ par cran (Maj 1′ · Ctrl+Maj 0,1′ · Ctrl 100′)"],
         ["molettes de tirage, de fente", "les faire rouler (glisser ou molette ; Maj : fin)"], ["oculaire", "glisser le long de la lunette, ou molette dessus (Maj : fin · Ctrl+Maj : ultrafin · Ctrl : gros)"],
         ["clic sur la lampe (ou sa pastille)", "le menu des lampes ; Éteindre / Allumer"], ["clic sur la petite lampe de la lunette", "réticule éclairé ↔ lampe éteinte et lame relevée"],
         ["Faisceau, Loupe du réticule, Gros plan", "les trois aides : la lumière de la fente à l'œil ; où se forme l'image dans la lunette ; la plate-forme de près (panneaux déplaçables par leur titre)"]],
