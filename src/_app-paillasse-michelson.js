@@ -1898,6 +1898,8 @@
     }
     function modeClic(ev) { return ev && (ev.ctrlKey || ev.metaKey) ? "ajout" : ev && ev.shiftKey ? "plage" : ""; }
     function changerLampe(k) {
+      // la pression choisie (basse) est retenue en passant d'une lampe mercure à l'autre ; hors lampes mercure, elle dort
+      if (st.pression === "basse") k = { hg: "hgb", hgc: "hgcb" }[k] || k;
       st.lampe = k;          // même position : celle de la lampe (st.ent.lampe), dépoli et iris restent posés (ignorés avec le laser)
       if (condLanterne(st)) reglerLanterne(st, lanterne(st).tirage);   // son condenseur doit tenir devant elle
       if (LAMPES[k].type === "point" && (st.sel === "depoli" || st.sel === "iris")) st.sel = "lampe";
@@ -2345,7 +2347,9 @@
             "<b>Pression : basse</b> — la décharge d'une vapeur rarefaite, la lampe spectrale des salles de TP : raie fine, presque limitée par l'effet Doppler (2 millièmes de nm), d'où ℓc ≈ 15 cm : les anneaux gardent leur contraste sur toute la course de C₃, le brouillage reste hors d'atteinte"] : [
             "<b>Pression : haute</b> — l'arc dans une ampoule claire, à une trentaine de bar : chaque raie y est élargie par les collisions (∆λ ≈ 1 nm sur la verte) ; sans le filtre, les franges superposées des raies ensemble ne tiennent qu'au voisinage immédiat du contact optique",
             "<b>Pression : basse</b> — la lampe spectrale : raies fines, presque limitées par l'effet Doppler ; loin du contact, chacune garde ses franges, d'interfrange propre : les teintes se décalent d'une raie à l'autre, des irisations bien au-delà du voisinage du contact, comme sur la paillasse"];
-          K.groupe(BD, "Pression", [[baseL, "haute", a3P[0]], [basseL, "basse", a3P[1]]], function () { return st.lampe; }, changerLampe);
+          K.groupe(BD, "Pression", [["haute", "haute", a3P[0]], ["basse", "basse", a3P[1]]],
+            function () { return st.pression === "basse" ? "basse" : "haute"; },
+            function (v) { st.pression = v; changerLampe(baseL); });   // la pression est retenue : elle vaut pour les deux lampes mercure
         }
         if (lampe(st).type === "point") K.seg(BD, [["nu", "faisceau nu", "Sans objectif : le faisceau nu, de moins d'un millimètre (deux taches sur l'écran)."]].concat([10, 20, 40].map(function (g) {
           return [g, "×" + g, "Objectif de microscope ×" + g + " vissé sur le laser : le faisceau s'ouvre en un cône " + (g === 10 ? "étroit : une petite tache, peu d'anneaux" : g === 20 ? "moyen" : "large : il couvre toujours les miroirs, tous les anneaux") + "."]; })),

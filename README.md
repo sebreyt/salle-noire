@@ -13,7 +13,7 @@ navigateur — rien n'est pré-réglé, les figures se calculent à chaque insta
 Conçus pour les travaux pratiques de physique en classe préparatoire (CPGE MP/MPSI),
 utilisables librement en cours, en TD ou à la maison.
 
-**Version en ligne : <https://optique.cpge-michelet.fr>** (site non indexé, sans compte).
+**Version en ligne : <https://optique.cpge-michelet.fr>** (sans compte, rien à installer).
 
 ## Essayer localement
 
@@ -75,4 +75,6 @@ cohérente avec lui.
 
 ## Auteur
 
-Sébastien Reyt — professeur de physique-chimie en CPGE MP (lycée Michelet, Paris).
+Sébastien Reyt — professeur de physique-chimie en CPGE MP (lycée Michelet, Vanves).
+Le code de ces instruments a été écrit par Claude (Anthropic), un assistant d'IA, à partir
+des choix physiques et pédagogiques de l'auteur.

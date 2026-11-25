@@ -1,6 +1,6 @@
 # Licence du contenu pédagogique
 
-© 2026 Sébastien Reyt (CPGE MP, lycée Michelet, Paris).
+© 2026 Sébastien Reyt (CPGE MP, lycée Michelet, Vanves).
 
 Ce dépôt applique **deux licences**, selon la nature de ce qui est réutilisé :
 

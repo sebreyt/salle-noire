@@ -1,8 +1,6 @@
 #!/usr/bin/env python3
 # Créé par Claude
-"""© 2026 Sébastien Reyt — licence GPLv3 (voir ../LICENSE).
-
-Diapos du banc d'optique (lot 6d) : génère _app-banc-diapos.js (jamais édité à la main).
+"""Diapos du banc d'optique (lot 6d) : génère _app-banc-diapos.js (jamais édité à la main).
 
 Quatre images carrées de N × N pixels, TRANSMISSION EN INTENSITÉ codée sur un octet (0 opaque, 255 transparent),
 ligne 0 en HAUT de la diapo (y > 0 du banc), colonne 0 à gauche (x < 0) ; côté de la diapo : TAILLE mm. Le cœur JS,
