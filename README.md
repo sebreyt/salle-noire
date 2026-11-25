@@ -10,7 +10,8 @@ navigateur — rien n'est pré-réglé, les figures se calculent à chaque insta
 - **Banc d'optique** — lentilles, images, rayons de construction, fentes d'Young,
   diffraction, filtrage.
 
-Conçus pour les travaux pratiques de physique en classe préparatoire (CPGE MP/MPSI),
+Conçus pour les travaux pratiques d'optique en classe préparatoire comme au lycée —
+et pour la préparation aux concours d'enseignement (agrégation, CAPES) ;
 utilisables librement en cours, en TD ou à la maison.
 
 **Version en ligne : <https://optique.cpge-michelet.fr>** (sans compte, rien à installer).
