@@ -1,0 +1,123 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 940" width="800" height="940" role="img" aria-labelledby="t d" font-family="system-ui, sans-serif" font-size="14">
+<title id="t">Tirage des rayons : depuis la lampe, ou depuis le trou à rebours</title>
+<desc id="d">Le même montage (lanterne éclairant un trou de 0,1 mm au foyer d'une lentille de 200 mm, seconde lentille,
+écran), vue de dessus, échelle verticale élargie ×7. Rayons et comptages tirés du moteur du banc, graine 1, 20 000 tirages.
+En haut, tirage direct depuis la lampe : 1 rayon sur 20 000 passe le trou et atteint l'écran.
+En bas, tirage à rebours depuis le trou : 2665 rayons sur 20 000 (13,3 %) atteignent l'écran ;
+les autres ratent le filament en remontant (pointillés, croix) et sont perdus. Le poids de chaque rayon corrige son tirage :
+l'éclairement estimé est le même, seule la part des rayons utiles change.</desc>
+<rect width="800" height="940" fill="#0f1216"/>
+<line x1="218" y1="16.5" x2="244" y2="16.5" stroke="#e0b84c" stroke-width="1.9"/>
+<text x="251" y="21" fill="#c9cfd8" font-size="14">rayon utile : il atteint l'écran</text>
+<line x1="464" y1="16.5" x2="490" y2="16.5" stroke="#8a939f" stroke-width="1.4"/>
+<text x="497" y="21" fill="#c9cfd8" font-size="14">rayon perdu</text>
+<text x="36" y="48" fill="#c9cfd8" font-weight="600" font-size="16">Tirage direct, depuis la lampe</text>
+<text x="36" y="68" fill="#8a939f" font-size="14">on part du filament : presque tous les rayons s’arrêtent sur la plaque du trou</text>
+<text x="764" y="48" fill="#e0b84c" font-size="14" text-anchor="end">1 utile sur 20 000</text>
+<line x1="36" y1="230.0" x2="764" y2="230.0" stroke="#8a939f" stroke-opacity=".4" stroke-dasharray="3 6" stroke-width="1"/>
+<line x1="127.5" y1="324.4" x2="127.5" y2="135.6" stroke="#39414d" stroke-width="7" stroke-linecap="round"/>
+<line x1="215.1" y1="252.7" x2="215.1" y2="207.3" stroke="#39414d" stroke-width="7" stroke-linecap="round"/>
+<line x1="367.6" y1="324.4" x2="367.6" y2="135.6" stroke="#7fb4ff" stroke-width="4" stroke-linecap="round"/>
+<line x1="581.0" y1="324.4" x2="581.0" y2="135.6" stroke="#7fb4ff" stroke-width="4" stroke-linecap="round"/>
+<line x1="733.5" y1="343.3" x2="733.5" y2="116.7" stroke="#8a939f" stroke-width="5" stroke-linecap="round"/>
+<polyline points="68.3,231.5 127.5,231.0 127.5,231.0 215.1,228.3" fill="none" stroke="#8a939f" stroke-opacity="0.85" stroke-width="1.4" />
+<polyline points="68.3,230.6 127.5,285.4 127.5,285.4 215.1,260.4" fill="none" stroke="#8a939f" stroke-opacity="0.85" stroke-width="1.4" />
+<polyline points="68.3,233.0 127.5,261.7 127.5,261.7 215.1,243.5" fill="none" stroke="#8a939f" stroke-opacity="0.85" stroke-width="1.4" />
+<polyline points="68.3,234.2 127.5,227.9 127.5,227.9 215.1,222.7" fill="none" stroke="#8a939f" stroke-opacity="0.85" stroke-width="1.4" />
+<polyline points="68.3,233.5 127.5,279.9 127.5,279.9 215.1,253.0" fill="none" stroke="#8a939f" stroke-opacity="0.85" stroke-width="1.4" />
+<polyline points="68.3,232.5 127.5,183.1 127.5,183.1 215.1,199.8" fill="none" stroke="#8a939f" stroke-opacity="0.85" stroke-width="1.4" />
+<polyline points="68.3,229.7 127.5,203.4 127.5,203.4 215.1,215.4" fill="none" stroke="#8a939f" stroke-opacity="0.85" stroke-width="1.4" />
+<polyline points="68.3,234.5 127.5,255.5 127.5,255.5 215.1,237.7" fill="none" stroke="#8a939f" stroke-opacity="0.85" stroke-width="1.4" />
+<polyline points="68.3,237.0 127.5,206.6 127.5,206.6 215.1,206.4" fill="none" stroke="#8a939f" stroke-opacity="0.85" stroke-width="1.4" />
+<polyline points="68.3,228.6 127.5,136.8 127.5,136.8 215.1,179.4" fill="none" stroke="#8a939f" stroke-opacity="0.85" stroke-width="1.4" />
+<polyline points="68.3,230.3 127.5,305.0 127.5,305.0 215.1,271.9" fill="none" stroke="#8a939f" stroke-opacity="0.85" stroke-width="1.4" />
+<polyline points="68.3,231.4 127.5,163.7 127.5,163.7 215.1,190.5" fill="none" stroke="#8a939f" stroke-opacity="0.85" stroke-width="1.4" />
+<polyline points="68.3,230.6 127.5,294.1 127.5,294.1 215.1,265.3" fill="none" stroke="#8a939f" stroke-opacity="0.85" stroke-width="1.4" />
+<polyline points="68.3,225.0 127.5,302.9 127.5,302.9 215.1,278.6" fill="none" stroke="#8a939f" stroke-opacity="0.85" stroke-width="1.4" />
+<polyline points="68.3,230.3 127.5,152.0 127.5,152.0 215.1,185.5" fill="none" stroke="#8a939f" stroke-opacity="0.85" stroke-width="1.4" />
+<polyline points="68.3,236.4 127.5,279.0 127.5,279.0 215.1,248.2" fill="none" stroke="#8a939f" stroke-opacity="0.85" stroke-width="1.4" />
+<polyline points="68.3,228.1 127.5,225.2 215.1,230.1 367.6,238.5 581.0,238.5 733.5,229.9" fill="none" stroke="#e0b84c" stroke-opacity="0.85" stroke-width="1.9" />
+<text x="127.5" y="386" fill="#c9cfd8" font-size="13" text-anchor="middle">lanterne–condenseur</text>
+<text x="215.1" y="403" fill="#c9cfd8" font-size="13" text-anchor="middle">trou Ø 0,1 mm</text>
+<text x="367.6" y="386" fill="#c9cfd8" font-size="13" text-anchor="middle">lentille 200</text>
+<text x="581.0" y="386" fill="#c9cfd8" font-size="13" text-anchor="middle">lentille 200</text>
+<text x="733.5" y="386" fill="#c9cfd8" font-size="13" text-anchor="middle">écran</text>
+<text x="36" y="428" fill="#c9cfd8" font-weight="600" font-size="16">Tirage à rebours, depuis le trou</text>
+<text x="36" y="448" fill="#8a939f" font-size="14">on part du trou, puis on remonte jusqu’au filament :</text>
+<text x="36" y="466" fill="#8a939f" font-size="14">87 % le ratent (×), 13 % atteignent l’écran</text>
+<text x="764" y="428" fill="#e0b84c" font-size="14" text-anchor="end">2 665 utiles sur 20 000 · 13,3 %</text>
+<line x1="36" y1="628.0" x2="764" y2="628.0" stroke="#8a939f" stroke-opacity=".4" stroke-dasharray="3 6" stroke-width="1"/>
+<line x1="127.5" y1="722.4" x2="127.5" y2="533.6" stroke="#39414d" stroke-width="7" stroke-linecap="round"/>
+<line x1="215.1" y1="650.7" x2="215.1" y2="605.3" stroke="#39414d" stroke-width="7" stroke-linecap="round"/>
+<line x1="367.6" y1="722.4" x2="367.6" y2="533.6" stroke="#7fb4ff" stroke-width="4" stroke-linecap="round"/>
+<line x1="581.0" y1="722.4" x2="581.0" y2="533.6" stroke="#7fb4ff" stroke-width="4" stroke-linecap="round"/>
+<line x1="733.5" y1="741.3" x2="733.5" y2="514.7" stroke="#8a939f" stroke-width="5" stroke-linecap="round"/>
+<polyline points="215.1,628.0 127.5,602.5 68.3,618.3" fill="none" stroke="#8a939f" stroke-opacity="0.85" stroke-width="1.4" />
+<path d="M63.3 613.3l10 10M63.3 623.3l10 -10" stroke="#8a939f" stroke-width="1.6"/>
+<polyline points="215.1,628.1 127.5,613.5 68.3,622.4" fill="none" stroke="#8a939f" stroke-opacity="0.85" stroke-width="1.4" />
+<path d="M63.3 617.4l10 10M63.3 627.4l10 -10" stroke="#8a939f" stroke-width="1.6"/>
+<polyline points="215.1,628.1 127.5,605.2 68.3,619.2" fill="none" stroke="#8a939f" stroke-opacity="0.85" stroke-width="1.4" />
+<path d="M63.3 614.2l10 10M63.3 624.2l10 -10" stroke="#8a939f" stroke-width="1.6"/>
+<polyline points="215.1,628.1 127.5,649.7 68.3,636.2" fill="none" stroke="#8a939f" stroke-opacity="0.85" stroke-width="1.4" />
+<path d="M63.3 631.2l10 10M63.3 641.2l10 -10" stroke="#8a939f" stroke-width="1.6"/>
+<polyline points="215.1,628.0 127.5,640.2 68.3,632.7" fill="none" stroke="#8a939f" stroke-opacity="0.85" stroke-width="1.4" />
+<path d="M63.3 627.7l10 10M63.3 637.7l10 -10" stroke="#8a939f" stroke-width="1.6"/>
+<polyline points="215.1,628.1 127.5,616.4 68.3,623.5" fill="none" stroke="#8a939f" stroke-opacity="0.85" stroke-width="1.4" />
+<path d="M63.3 618.5l10 10M63.3 628.5l10 -10" stroke="#8a939f" stroke-width="1.6"/>
+<polyline points="215.1,628.0 127.5,629.0 68.3,628.4" fill="none" stroke="#8a939f" stroke-opacity="0.85" stroke-width="1.4" />
+<path d="M63.3 623.4l10 10M63.3 633.4l10 -10" stroke="#8a939f" stroke-width="1.6"/>
+<polyline points="215.1,628.2 127.5,639.0 68.3,632.1" fill="none" stroke="#8a939f" stroke-opacity="0.85" stroke-width="1.4" />
+<path d="M63.3 627.1l10 10M63.3 637.1l10 -10" stroke="#8a939f" stroke-width="1.6"/>
+<polyline points="215.1,627.9 127.5,641.4 68.3,633.2" fill="none" stroke="#8a939f" stroke-opacity="0.85" stroke-width="1.4" />
+<path d="M63.3 628.2l10 10M63.3 638.2l10 -10" stroke="#8a939f" stroke-width="1.6"/>
+<polyline points="215.1,627.9 127.5,635.1 68.3,630.8" fill="none" stroke="#8a939f" stroke-opacity="0.85" stroke-width="1.4" />
+<path d="M63.3 625.8l10 10M63.3 635.8l10 -10" stroke="#8a939f" stroke-width="1.6"/>
+<polyline points="215.1,628.0 127.5,647.6 68.3,635.5" fill="none" stroke="#8a939f" stroke-opacity="0.85" stroke-width="1.4" />
+<path d="M63.3 630.5l10 10M63.3 640.5l10 -10" stroke="#8a939f" stroke-width="1.6"/>
+<polyline points="215.1,628.1 127.5,601.0 68.3,617.6" fill="none" stroke="#8a939f" stroke-opacity="0.85" stroke-width="1.4" />
+<path d="M63.3 612.6l10 10M63.3 622.6l10 -10" stroke="#8a939f" stroke-width="1.6"/>
+<polyline points="215.1,628.0 127.5,670.8 68.3,644.4" fill="none" stroke="#8a939f" stroke-opacity="0.85" stroke-width="1.4" />
+<path d="M63.3 639.4l10 10M63.3 649.4l10 -10" stroke="#8a939f" stroke-width="1.6"/>
+<polyline points="215.1,628.0 127.5,593.5 68.3,614.8" fill="none" stroke="#8a939f" stroke-opacity="0.85" stroke-width="1.4" />
+<path d="M63.3 609.8l10 10M63.3 619.8l10 -10" stroke="#8a939f" stroke-width="1.6"/>
+<polyline points="215.1,627.9 127.5,624.2 68.3,626.6" fill="none" stroke="#8a939f" stroke-opacity="0.85" stroke-width="1.4" />
+<path d="M63.3 621.6l10 10M63.3 631.6l10 -10" stroke="#8a939f" stroke-width="1.6"/>
+<polyline points="215.1,628.0 127.5,658.5 68.3,639.6" fill="none" stroke="#8a939f" stroke-opacity="0.85" stroke-width="1.4" />
+<path d="M63.3 634.6l10 10M63.3 644.6l10 -10" stroke="#8a939f" stroke-width="1.6"/>
+<polyline points="215.1,628.1 127.5,626.9 68.3,627.5" fill="none" stroke="#8a939f" stroke-opacity="0.85" stroke-width="1.4" />
+<path d="M63.3 622.5l10 10M63.3 632.5l10 -10" stroke="#8a939f" stroke-width="1.6"/>
+<polyline points="215.1,628.0 127.5,656.3 68.3,638.8" fill="none" stroke="#8a939f" stroke-opacity="0.85" stroke-width="1.4" />
+<path d="M63.3 633.8l10 10M63.3 643.8l10 -10" stroke="#8a939f" stroke-width="1.6"/>
+<polyline points="215.1,628.0 127.5,598.5 68.3,616.8" fill="none" stroke="#8a939f" stroke-opacity="0.85" stroke-width="1.4" />
+<path d="M63.3 611.8l10 10M63.3 621.8l10 -10" stroke="#8a939f" stroke-width="1.6"/>
+<polyline points="215.1,627.9 127.5,618.4 68.3,624.4" fill="none" stroke="#8a939f" stroke-opacity="0.85" stroke-width="1.4" />
+<path d="M63.3 619.4l10 10M63.3 629.4l10 -10" stroke="#8a939f" stroke-width="1.6"/>
+<polyline points="215.1,627.9 127.5,608.1 68.3,620.4" fill="none" stroke="#8a939f" stroke-opacity="0.85" stroke-width="1.4" />
+<path d="M63.3 615.4l10 10M63.3 625.4l10 -10" stroke="#8a939f" stroke-width="1.6"/>
+<polyline points="215.1,628.0 127.5,589.6 68.3,613.3" fill="none" stroke="#8a939f" stroke-opacity="0.85" stroke-width="1.4" />
+<path d="M63.3 608.3l10 10M63.3 618.3l10 -10" stroke="#8a939f" stroke-width="1.6"/>
+<polyline points="215.1,628.1 127.5,636.9 68.3,631.3" fill="none" stroke="#8a939f" stroke-opacity="0.85" stroke-width="1.4" />
+<path d="M63.3 626.3l10 10M63.3 636.3l10 -10" stroke="#8a939f" stroke-width="1.6"/>
+<polyline points="215.1,627.9 127.5,643.8 68.3,634.1" fill="none" stroke="#8a939f" stroke-opacity="0.85" stroke-width="1.4" />
+<path d="M63.3 629.1l10 10M63.3 639.1l10 -10" stroke="#8a939f" stroke-width="1.6"/>
+<polyline points="215.1,628.1 127.5,622.0 68.3,625.6" fill="none" stroke="#8a939f" stroke-opacity="0.85" stroke-width="1.4" />
+<path d="M63.3 620.6l10 10M63.3 630.6l10 -10" stroke="#8a939f" stroke-width="1.6"/>
+<polyline points="215.1,628.0 127.5,632.3 68.3,629.6" fill="none" stroke="#8a939f" stroke-opacity="0.85" stroke-width="1.4" />
+<path d="M63.3 624.6l10 10M63.3 634.6l10 -10" stroke="#8a939f" stroke-width="1.6"/>
+<polyline points="215.1,628.0 127.5,663.9 68.3,641.7" fill="none" stroke="#8a939f" stroke-opacity="0.85" stroke-width="1.4" />
+<path d="M63.3 636.7l10 10M63.3 646.7l10 -10" stroke="#8a939f" stroke-width="1.6"/>
+<polyline points="68.3,627.8 127.5,627.6 215.1,628.0 215.1,628.0 367.6,628.8 581.0,628.8 733.5,628.0" fill="none" stroke="#e0b84c" stroke-opacity="0.85" stroke-width="1.9" />
+<polyline points="68.3,624.9 127.5,620.1 215.1,628.1 215.1,628.1 367.6,642.0 581.0,641.9 733.5,627.9" fill="none" stroke="#e0b84c" stroke-opacity="0.85" stroke-width="1.9" />
+<polyline points="68.3,620.7 127.5,608.5 215.1,627.8 215.1,627.8 367.6,661.4 581.0,661.6 733.5,628.2" fill="none" stroke="#e0b84c" stroke-opacity="0.85" stroke-width="1.9" />
+<polyline points="68.3,632.2 127.5,638.8 215.1,627.9 215.1,627.9 367.6,608.9 581.0,609.1 733.5,628.1" fill="none" stroke="#e0b84c" stroke-opacity="0.85" stroke-width="1.9" />
+<text x="127.5" y="784" fill="#c9cfd8" font-size="13" text-anchor="middle">lanterne–condenseur</text>
+<text x="215.1" y="801" fill="#c9cfd8" font-size="13" text-anchor="middle">trou Ø 0,1 mm</text>
+<text x="367.6" y="784" fill="#c9cfd8" font-size="13" text-anchor="middle">lentille 200</text>
+<text x="581.0" y="784" fill="#c9cfd8" font-size="13" text-anchor="middle">lentille 200</text>
+<text x="733.5" y="784" fill="#c9cfd8" font-size="13" text-anchor="middle">écran</text>
+<text x="400.0" y="830" fill="#c9cfd8" font-size="14" text-anchor="middle">Le poids de chaque rayon compense le mode de tirage :</text>
+<text x="400.0" y="849" fill="#c9cfd8" font-size="14" text-anchor="middle">l'image obtenue est la même, seule la part des rayons utiles change.</text>
+<text x="400.0" y="868" fill="#c9cfd8" font-size="14" text-anchor="middle">Flux reçu par l’écran, direct ÷ à rebours : 0,95 ± 0,14 (sur 4 000 000 rayons tirés de la lampe)</text>
+<text x="400.0" y="906" fill="#8a939f" font-size="14" text-anchor="middle">vue de dessus, hauteurs agrandies ×7</text>
+<text x="400.0" y="925" fill="#8a939f" font-size="14" text-anchor="middle">20 000 rayons tirés par panneau</text>
+</svg>

@@ -33,12 +33,30 @@ le serveur de la version en ligne) sont inopérants en local.
 
 | Dossier | Contenu |
 |---|---|
-| `site/` | Site complet autonome, servable tel quel (publication issue des sources) |
-| `src/` | Sources JavaScript des instruments (coque commune `_app-paillasse.js`, moteurs `*-coeur.js`, un fichier par instrument), CSS, et le générateur des diapos du banc |
+| `src/` | Sources des instruments : coque commune (`_app-paillasse.js`), moteurs (`*-coeur.js`), un fichier par instrument, `_style-paillasse.css`, et `app_banc_diapos.py` (régénère les diapos du banc, télécharge lui-même les deux images de domaine public) |
+| `pages/` | Sources des pages servies : accueil, « Modèle physique », « Prise en main », style, vignettes et captures (`img/`), figures SVG (`schemas/`), KaTeX |
+| `site/` | Sortie complète du build — servable tel quel |
+| `outils/construire_site.py` | Reconstruit `site/` à partir de `src/` + `pages/` |
+| `tests/` | Référence Python des trois moteurs + tests de concordance JS ↔ Python, avec leurs points de contrôle (`app_*_controles.json`) |
 
-Les fichiers de `site/commun/` sont les copies publiées de `src/` (sans le tiret bas) ;
-`site/index.html`, `site/modele/` et `site/prise-en-main/` sont les pages d'accueil et de
-documentation.
+Régénérer le site :
+
+```bash
+python3 outils/construire_site.py
+```
+
+Le build vérifie que les commentaires des fichiers servis ne contiennent aucun chemin
+personnel ni pointeur interne (règles `INTERDITS` du script) — ce contrôle requiert `node`
+et acorn (`npm i acorn --no-save`) ; sans eux il est sauté, avec un message.
+
+Vérifier la physique (chaque test rejoue les points de contrôle avec le moteur JS sous `node`
+et les compare à la référence Python, puis rejoue les vérifications physiques de celle-ci) :
+
+```bash
+python3 tests/app_michelson_concordance_test.py      # ~1400 vérifications
+python3 tests/app_goniometre_concordance_test.py     # ~1000
+python3 tests/app_banc_concordance_test.py           # ~3300
+```
 
 ## Licences
 

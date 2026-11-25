@@ -1,0 +1,573 @@
+<!doctype html>
+<!-- Créé par Claude — page « Modèle physique » du site public des instruments d'optique (servie à /modele/) -->
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="index, follow">
+<title>Modèle physique</title>
+<link rel="stylesheet" href="../katex/katex.min.css">
+<link rel="stylesheet" href="../doc.css">
+</head>
+<body data-app="modele">
+<header class="barre"><a href="../">&larr; Accueil</a><span class="titre">Modèle physique</span><a class="vers-sommaire" href="#sommaire">Sommaire</a><span class="lic">&copy; S. Reyt &middot; CC BY-NC-SA 4.0</span></header>
+<div class="cadre">
+<nav class="sommaire" id="sommaire"><details open>
+  <summary>Sommaire</summary>
+  <ol>
+    <li><a href="#principe">Principe</a></li>
+    <li><a href="#commun">Commun aux trois instruments</a>
+      <ol>
+        <li><a href="#sources">Sources</a></li>
+        <li><a href="#couleur">Couleur</a></li>
+        <li><a href="#oeil">Luminosité réelle et œil</a></li>
+        <li><a href="#optiques">Optique parfaite, optique réelle</a></li>
+      </ol></li>
+    <li><a href="#michelson">Interféromètre de Michelson</a>
+      <ol>
+        <li><a href="#mi-delta">Différence de marche</a></li>
+        <li><a href="#mi-eclairement">Éclairement</a></li>
+        <li><a href="#mi-pupilles">Champ et localisation</a></li>
+        <li><a href="#mi-lames">Lames de verre</a></li>
+        <li><a href="#mi-observation">Observation et capteurs</a></li>
+        <li><a href="#mi-indices">Réglages et indices</a></li>
+      </ol></li>
+    <li><a href="#goniometre">Spectrogoniomètre</a></li>
+    <li><a href="#banc">Banc d'optique</a>
+      <ol>
+        <li><a href="#bc-elements">Éléments et moteurs</a></li>
+        <li><a href="#bc-rayons">Tracé de rayons</a></li>
+        <li><a href="#bc-onde">Moteur ondulatoire</a></li>
+        <li><a href="#bc-detecteurs">Détecteurs</a></li>
+      </ol></li>
+    <li><a href="#construction">Construction du logiciel</a></li>
+    <li><a href="#limites">Limites connues</a></li>
+    <li><a href="#references">Références</a></li>
+  </ol>
+</details></nav>
+<main>
+<h1>Modèle physique</h1>
+<p class="chapeau">Le modèle optique des trois instruments, ses approximations et ses sources.</p>
+
+<h2 id="principe">Principe</h2>
+<p><strong>Images calculées.</strong> Aucune image n'est enregistrée à l'avance : ce qui est observé est calculé à
+  partir de la position et du réglage de chaque pièce, y compris pour un montage non prévu.</p>
+<p><strong>Dérèglement initial.</strong> Le Michelson et le goniomètre partent d'un état déréglé, tiré au hasard à
+  partir d'une graine, donc reproductible. Le calcul n'effectue aucun réglage ; les étapes cochées sont déduites de
+  l'image obtenue.</p>
+<p><strong>Calcul par passes.</strong> Au Michelson et au banc, l'image est un aperçu de moindre qualité pendant une
+  manipulation. À l'arrêt, elle est affinée par passes successives : un nombre fixé au Michelson, jusqu'à ce que le
+  bruit mesuré passe sous un seuil au banc. Chaque passe couvre toute la source et tout le spectre : l'image affichée
+  n'est jamais une somme partielle.</p>
+<figure>
+  <img src="../img/modele/anim-passes.webp" alt="Image de la lettre F sur l'écran du banc, affinée passe après passe : aperçu bruité d'abord, puis de plus en plus net jusqu'à l'image finale" width="480" style="max-width:100%; height:auto" loading="lazy">
+  <figcaption>Chaque image de cette animation est un rendu complet du moteur (banc en optique réelle, montage
+    « image » de la lettre F, 60 passes fixées, luminosité « toujours visible ») : l'aperçu bruité du geste, puis
+    l'image affinée passe après passe à l'arrêt, tenue ensuite sur l'image finale.</figcaption>
+</figure>
+<p><strong>Carte graphique.</strong> Au Michelson et au banc, les calculs pixel par pixel ou rayon par rayon sont
+  exécutés par la carte graphique (WebGL2) ; le processeur prépare en double précision les coefficients qui l'exigent.
+  Le champ du goniomètre, fait de profils analytiques, est calculé sur le processeur.</p>
+
+<h2 id="commun">Commun aux trois instruments</h2>
+
+<h3 id="sources">Sources</h3>
+<p>Chaque source est décrite par son spectre et par la luminance de sa partie émettrice, prise à une valeur typique
+  du matériel de TP.</p>
+<table>
+  <thead><tr><th>Source</th><th>Spectre</th><th>Luminance</th></tr></thead>
+  <tbody>
+    <tr><td>Lanterne halogène</td><td>corps noir à 3200 K</td><td>2,5·10⁷ cd/m²</td></tr>
+    <tr><td>Lampe au sodium</td><td>doublet D₁, D₂</td><td>10⁵ cd/m²</td></tr>
+    <tr><td>Lampe à vapeur de mercure</td><td>raies du NIST ; raie verte seule avec le filtre</td><td>2·10⁶ cd/m²</td></tr>
+    <tr><td>Cadmium, lampe inconnue</td><td>raies du NIST</td><td>10⁵ cd/m²</td></tr>
+    <tr><td>Laser hélium-néon</td><td>632,8 nm</td><td>1 mW</td></tr>
+  </tbody>
+</table>
+<p>Les raies ont une largeur finie, qui règle le brouillage des franges. Une raie est intégrée exactement sur son
+  profil ; au Michelson, un spectre continu est découpé en bandes étroites, chacune intégrée exactement ; ailleurs, il
+  est échantillonné en longueurs d'onde tirées à chaque passe. Les sources habituelles sont tracées ci-dessous, chaque raie à sa teinte calculée par le moteur.</p>
+<figure>
+  <img src="../schemas/spectres.svg" alt="Les cinq sources du calcul : spectre de chacune (raies à leur teinte calculée, lanterne en corps noir) et luminance en cd/m² ; en bas, contraste des franges selon la différence de marche pour le sodium et le mercure filtré" width="780" style="max-width:100%; height:auto" loading="lazy">
+  <figcaption>Les cinq sources, telles qu’elles entrent dans le calcul : à gauche le spectre (chaque raie à la teinte
+    donnée par la conversion couleur du moteur, la lanterne remplie de sa couleur de corps noir 3200 K entre 400 et
+    700 nm), à droite la luminance de la partie émettrice (échelle logarithmique ; le laser en puissance de faisceau,
+    1 mW = 0,16 lm). En bas, le contraste des franges en fonction de la différence de marche, calculé par le moteur sur
+    les mêmes éléments spectraux : le doublet du sodium bat tous les 0,58 mm (ℓ = λ²/Δλ) et ne s’éteint vraiment que
+    vers 29 mm, ses raies étant très fines ; la raie verte filtrée du mercure, plus large (1 nm), éteint les franges
+    dès 0,3 mm.</figcaption>
+</figure>
+
+
+<h3 id="couleur">Couleur</h3>
+<p>Le calcul donne pour chaque pixel les composantes \(X, Y, Z\) de la lumière reçue (\(Y\) en lux), avec les
+  fonctions colorimétriques CIE 1931 (ajustement analytique de Wyman, Sloan et Shirley, corrigé aux extrémités du
+  spectre), puis les convertit en sRGB. Une raie spectrale, plus saturée que ce qu'un moniteur peut afficher, est
+  ramenée dans le gamut par ajout de blanc, ce qui conserve sa teinte.</p>
+<figure>
+  <img width="480" height="480" src="../img/modele/young-blanc.webp" alt="Franges de Young en lumière blanche : frange centrale blanche, franges irisées de part et d'autre" loading="lazy" style="max-width:360px">
+  <figcaption>Fentes de Young en lumière blanche : somme des systèmes de franges de chaque longueur d'onde, frange
+    centrale blanche puis teintes de l'échelle de Newton.</figcaption>
+</figure>
+
+<h3 id="oeil">Luminosité réelle et œil</h3>
+<p>Une figure faible doit paraître faible et une source intense éblouir. Le même modèle de l'œil s'applique à toutes
+  les vues observées à l'œil : écran du banc, œil derrière un instrument, vue à l'œil du Michelson, oculaire du
+  goniomètre.</p>
+<ol class="chaine">
+  <li><b>Source</b><span>luminance en cd/m²</span></li>
+  <li><b>Optique</b><span>éclairement en lux, sur l'écran ou la rétine</span></li>
+  <li><b>Pupille</b><span>diamètre stationnaire</span></li>
+  <li><b>Adaptation</b><span>niveau du champ regardé</span></li>
+  <li><b>Vision de nuit</b><span>bâtonnets, perte des couleurs</span></li>
+  <li><b>Halo</b><span>diffusion dans l'œil</span></li>
+  <li><b>Moniteur</b><span>luminance affichée</span></li>
+</ol>
+
+<h4>Ce que reçoit l'œil</h4>
+<p>L'écran blanc est un diffuseur lambertien de facteur de réflexion \(\rho = 0{,}8\) : sa luminance vaut
+  \(L = \rho E / \pi\) et ne dépend pas de la distance d'observation. Quand l'œil regarde dans un instrument, le calcul
+  donne directement l'éclairement de la rétine, converti en trolands puis en luminance équivalente. Un œil placé
+  derrière une lunette dont la pupille de sortie est plus petite que la sienne reçoit la même lumière quel que soit son
+  iris ; au banc, cela vient seul, parce que la pupille de l'œil y est un diaphragme du tracé de rayons comme les
+  autres.</p>
+
+<h4>Pupille</h4>
+<p>Le diamètre de la pupille suit la formule unifiée de Watson et Yellott, à l'état stationnaire (âge pris à 18 ans) :</p>
+\[ D_{SD} = 7{,}75 - 5{,}75\,\frac{k}{k+2}, \qquad k = \Bigl(\frac{F\,M}{846}\Bigr)^{0{,}41},
+   \qquad D = D_{SD} + (\text{âge} - 28{,}58)\,(0{,}021\,32 - 0{,}009\,562\,D_{SD}), \]
+<p>où \(F = \int L\,\mathrm{d}\Omega\) (cd/m² × degré²) porte sur tout le champ, salle comprise, et \(M\) vaut 1
+  pour les deux yeux devant l'écran, 0,1 pour un seul œil à l'oculaire. Le diamètre est borné entre 2 et 8,5 mm.</p>
+
+<h4>Adaptation de la rétine</h4>
+<p>La salle, très sombre (0,02 lx), n'ajoute rien à l'image mais entre dans le niveau d'adaptation \(L_a\) :
+  moyenne logarithmique des luminances sur tout le champ regardé, pondérée par le carré de la luminance. Ce niveau
+  fixe le seuil de visibilité, d'après les courbes de Ferwerda pour les cônes et les bâtonnets.</p>
+
+<h4>Vision de nuit</h4>
+<p>Aux faibles luminances, les bâtonnets remplacent les cônes et les couleurs disparaissent. La part des bâtonnets
+  vaut \(\sigma(L) = 0{,}04 / (0{,}04 + L)\) (L en cd/m², d'après Hunt) ; la luminance scotopique est calculée à
+  partir du spectre et de \(V'(\lambda)\) (CIE 1951). Aux niveaux intermédiaires, la perte de saturation suit l'effet
+  Hunt du modèle CIECAM02.</p>
+
+<h4>Halo</h4>
+<p>La diffusion de la lumière dans l'œil entoure les sources intenses d'un halo, selon l'équation générale de
+  l'éblouissement de la CIE (CIE 146:2002), \(\theta\) en degrés :</p>
+\[ \Psi(\theta) = \frac{10}{\theta^3} + \Bigl(\frac{5}{\theta^2} + \frac{0{,}1\,p}{\theta}\Bigr)\Bigl[1 + \Bigl(\frac{A}{62{,}5}\Bigr)^4\Bigr] + 2{,}5\cdot10^{-3}\,p \quad (\text{sr}^{-1}), \]
+<p>avec \(A\) l'âge et \(p = 0{,}5\) (yeux marron).</p>
+
+<h4>Vers le moniteur</h4>
+<p>Le facteur de Ward ramène les luminances de la scène sur celles du moniteur (\(L_{d\max}\) = 150 cd/m²) en
+  conservant le contraste au seuil : un détail juste visible dans la salle l'est aussi à l'écran.</p>
+\[ L_{\text{aff}} = m\,L, \qquad m = \left[\frac{1{,}219 + (L_{d\max}/2)^{0{,}4}}{1{,}219 + L_a^{0{,}4}}\right]^{2{,}5}. \]
+<p>Un détail au-dessus du seuil reste affiché, même faiblement ; les luminances éblouissantes sont écrêtées. Le modèle
+  a été vérifié sur les franges de Young éclairées par une lampe au sodium, qui se devinent de près en salle noire :
+  il les rend visibles, faibles et presque sans couleur.</p>
+<figure>
+  <img src="../schemas/vision-reponse.svg" alt="Réponse de l'œil simulé pour trois niveaux d'adaptation : seuil de vision, compression vers le blanc ; en bas, les faibles lueurs autour d'un point éblouissant, avec et sans correction" width="700" style="max-width:100%; height:auto" loading="lazy">
+  <figcaption>La réponse de l’œil simulé, tracée par le moteur pour trois éclairements de la salle auxquels l’œil
+    s’est habitué (salle noire, pièce peu éclairée, pièce éclairée) : sous le seuil de vision, rien n’est affiché ;
+    au-dessus, la compression vers le blanc conserve le contraste au seuil mais écrase les détails (près du blanc,
+    un écart de 1 % dans la scène n’en fait plus que 0,42 % à l’écran). En bas, en salle noire : la correction des
+    faibles lueurs remonte les reflets autour d’une tache vive — une lueur à 0,3 % du pic passe de 0,57 % à 3,4 % du
+    blanc à l’écran, sans elle elle disparaîtrait.</figcaption>
+</figure>
+
+<figure>
+  <div class="paire">
+    <img width="480" height="480" src="../img/modele/young-na-reelle.webp" alt="Franges de Young au sodium en luminosité réelle : faibles et presque grises" loading="lazy">
+    <img width="480" height="480" src="../img/modele/young-na-visible.webp" alt="Les mêmes franges en luminosité « toujours visible » : vives et jaunes" loading="lazy">
+  </div>
+  <figcaption>Young au sodium sur l'écran du banc, avec l'œil simulé (à gauche) et sans (à droite).</figcaption>
+</figure>
+<p>L'interrupteur <strong>Œil simulé : avec / sans</strong> des trois instruments n'agit que sur cette
+  dernière étape : « sans », l'image est exposée sur le champ regardé, sans seuils, vision de nuit ni
+  halo. Les capteurs (photodiode, barrette CCD, appareil photo, spectromètre) ne passent pas par l'œil : ils ont
+  leur propre modèle, décrit avec chaque instrument.</p>
+<div class="encart"><p>Non modélisés : le temps d'adaptation de la pupille et de la rétine (seul l'état stationnaire
+  est calculé), la distance d'observation et, sauf au goniomètre, l'acuité.</p></div>
+
+<h3 id="optiques">Optique parfaite, optique réelle</h3>
+<p>Le banc d'optique propose deux optiques.</p>
+<ul>
+  <li><strong>Optique parfaite</strong> : lentilles idéales, stigmatiques pour tous les plans
+    (\(\tan\theta' = \tan\theta - h/f'\)) ; les montures ne diffractent pas.</li>
+  <li><strong>Optique réelle</strong> : chaque lentille est formée de deux dioptres sphériques en verre BK7 (loi de
+    Cauchy ajustée sur la formule de Sellmeier du fabricant). Les rayons sont réfractés exactement, longueur d'onde par
+    longueur d'onde : les aberrations géométriques et chromatiques en découlent. La diffraction par le diaphragme
+    d'ouverture est ajoutée au tracé.</li>
+</ul>
+<figure>
+  <img width="1440" height="900" src="../img/modele/stigmatisme.webp" alt="Banc d'optique en optique réelle : trou source, lentille plan-convexe, iris et capteur ; les rayons ne convergent pas en un point et la tache sur le capteur a un bord bleu" loading="lazy">
+  <figcaption>Optique réelle, trou source et lentille plan-convexe : les rayons ne convergent pas en un point
+    (aberration sphérique) et la tache sur le capteur a un bord bleu (aberration chromatique).</figcaption>
+</figure>
+
+<h2 id="michelson">Interféromètre de Michelson</h2>
+
+<h3 id="mi-delta">Différence de marche</h3>
+<p>L'interféromètre est décrit par son schéma replié : \(M_1\) dans le plan \(z = 0\), l'image \(M_2^*\) de \(M_2\) par
+  la séparatrice dans le plan \(z = e + \alpha_x x + \alpha_y y\). L'épaisseur \(e\) vient de la vis \(C_3\) du chariot,
+  l'inclinaison \((\alpha_x, \alpha_y)\) des vis \(C_1, C_2\) de \(M_2\) et \(A_1, A_2\) de \(M_1\).</p>
+<p>Pour un point source, chaque bras est suivi par sa matrice de transfert paraxiale, lentilles d'entrée et de sortie
+  comprises. Dans l'approximation de Fresnel, la différence de marche au point \((X, Y)\) du détecteur est un polynôme
+  du second degré :</p>
+\[ \delta(X, Y) = c_0 + c_x X + c_y Y + c_{xx} X^2 + c_{xy} XY + c_{yy} Y^2. \]
+<p>Les coefficients sont calculés en double précision ; la carte graphique n'évalue que la partie variable. Sur les
+  montages usuels, l'écart à un tracé exact, non paraxial, reste inférieur à un trentième de longueur d'onde.</p>
+<figure>
+  <img src="../schemas/ddm-ordre2.svg" alt="Schéma replié : chaque bras renvoie une image de la source, le chemin jusqu'à P est une parabole ; courbe δ/λ du moteur contre le calcul exact ; cartes de cos²(πδ/λ) : anneaux en lame d'air, franges droites en coin d'air" width="780" style="max-width:100%; height:auto" loading="lazy">
+  <figcaption>Chaque bras renvoie une image de la source ; près de l’axe, le chemin jusqu’au point P de l’écran est une
+    parabole, et δ, différence de deux paraboles, est un polynôme d’ordre 2 en (X, Y) — le moteur ne calcule que ses
+    six coefficients. Au milieu : la parabole du moteur (jaune) contre le calcul exact (pointillés), lame d’air de
+    2 mm, écran à 1 m — écart au plus 0,011 λ à 6 cm de l’axe, et l’on retrouve δ = 2e cos i. En bas : cos²(πδ/λ)
+    évalué sur ces six coefficients sur tout un écran de 12 cm × 12 cm — anneaux en lame d’air (e = 2 mm), franges
+    droites en coin d’air (e = 20 µm, α = 0,2 mrad, le terme en X domine).</figcaption>
+</figure>
+
+<h3 id="mi-eclairement">Éclairement</h3>
+<p>La source est le dernier diffuseur du banc d'entrée : le dépoli limité par l'iris, ou la forme réelle de la lampe
+  nue (ampoule droite d'une lampe spectrale, filament spiralé de la lanterne), faite de points incohérents entre eux. Pour
+  chaque pixel, des points sont tirés là seulement où leur lumière peut l'atteindre à travers toutes les pupilles,
+  souvent un petit disque de la source vu par la pupille de l'œil, et à nouveau à chaque passe ; les deux ondes qui
+  interfèrent viennent du même point. Le laser est un point source.</p>
+\[ I(X, Y) = \sum_S \sum_\lambda w_\lambda \Bigl[I_1 + I_2 + 2\sqrt{I_1 I_2}\,A\cos\frac{2\pi\delta}{\lambda}\Bigr],
+   \qquad A = \exp\Bigl(-\frac{2\pi^2\sigma^2\,\lVert\nabla\delta\rVert^2}{\lambda^2}\Bigr). \]
+<p>\(I_1\) et \(I_2\) sont les éclairements géométriques des deux bras, par conservation de l'étendue. \(A\) est la
+  moyenne du cosinus sur un pixel gaussien d'écart-type \(\sigma\) : des franges plus fines que le pixel donnent un
+  éclairement uniforme, sans moiré.</p>
+<figure>
+  <img src="../schemas/moyenne-pixel.svg" alt="Franges de plus en plus fines (de 8 pixels à 0,6 pixel) : valeur au centre du pixel avec moiré, calcul du moteur sans moiré, référence exacte ; contraste conservé en fonction de la taille d'une frange" width="780" style="max-width:100%; height:auto" loading="lazy">
+  <figcaption>Quand les franges deviennent plus fines que le pixel (interfrange de 8 pixels à 0,6 pixel, de gauche à
+    droite, λ = 589 nm) : la valeur prise au centre du pixel invente de fausses franges (moiré, en haut) ; le moteur
+    moyenne le cosinus sur le pixel gaussien, ce qui réduit le contraste d’un facteur \(A = \exp(-2\pi^2\sigma^2/i^2)\)
+    (au milieu) — sous un interfrange de 2 pixels il garde 29,1 % du contraste, la référence exacte (moyenne pondérée
+    sur 64 sous-échantillons, en bas) 28,2 %.</figcaption>
+</figure>
+<p>Une raie est intégrée exactement sur son profil gaussien : le contraste suit l'enveloppe de cohérence, sans bruit.
+  Le sodium est un doublet (588,995 et 589,592 nm, rapport d'intensité 1,2, largeur 0,012 nm) ; la raie verte du
+  mercure filtrée a une largeur de 1 nm. La lumière blanche est découpée en seize bandes de nombre d'onde, intégrées
+  chacune exactement sous une densité spectrale affine : le blanc d'ordre supérieur sort uniforme, sans irisations.</p>
+<figure>
+  <img src="../schemas/blanc-bandes.svg" alt="Lumière blanche selon la différence de marche : calcul du moteur (16 bandes intégrées exactement), ancien tirage au hasard de 16 couleurs, référence 512 bandes ; écart à la référence en dessous" width="780" style="max-width:100%; height:auto" loading="lazy">
+  <figcaption>En lumière blanche (lanterne halogène, δ de 0 à 40 µm) : le moteur découpe le spectre en 16 bandes de
+    nombre d’onde, chacune intégrée exactement sous une densité spectrale affine — le blanc d’ordre supérieur sort
+    uniforme, à 0,99 % près de la référence à 512 bandes. L’ancien calcul, qui tirait 16 longueurs d’onde au hasard,
+    laissait de légères irisations dans ce blanc (jusqu’à 14,2 % d’écart).</figcaption>
+</figure>
+<p>Pendant que le chariot avance, \(\delta\) varie au cours d'une image : le terme d'interférence est moyenné sur ce
+  balayage. Au-delà d'une frange par image, les franges se brouillent au lieu de paraître défiler à l'envers.</p>
+<figure>
+  <img src="../img/modele/anim-chariot.webp" alt="Anneaux du sodium sur l'écran : ils défilent nets puis se brouillent quand le chariot accélère" width="440" style="max-width:100%; height:auto" loading="lazy">
+  <figcaption>Anneaux du sodium sur l’écran au foyer de la lentille de 1 m, lame d’air de 0,85 mm, luminosité «
+    toujours visible » : le chariot avance de plus en plus vite (de 0,02 à 3 µm par image). Tant qu’il balaie moins
+    d’une frange par image, les anneaux défilent nets ; au-delà, ils se brouillent — le vrai flou de pose du moteur,
+    \(\mathrm{sinc}(\pi\,\text{pose}/\lambda)\) appliqué au terme d’interférence.</figcaption>
+</figure>
+
+<h3 id="mi-pupilles">Champ, localisation, images de la source</h3>
+<p>Les bords des miroirs, des lentilles et de l'iris, et la pupille de l'œil, arrêtent les rayons : l'onde d'un bras
+  ne compte en un point du détecteur que si son rayon les traverse tous. Chacun découpe un disque dans le plan du
+  détecteur ; leur intersection donne le contour du champ. En faisceau parallèle sur les miroirs, seul le centre des
+  anneaux est éclairé. La figure ci-dessous dit, pour un point P de l'observateur, quelle partie de la source l'éclaire
+  — et ce que le moteur fait de cette découpe.</p>
+<figure>
+  <img src="../schemas/pupilles.svg" alt="Pour un point P : zone de la source qui l'éclaire, à l'écran au foyer de la lentille (disque de l'iris) et à l'œil accommodé sur les miroirs (pupille de l'œil) ; en bas, fermer l'iris : contraste et lumière selon le détecteur" width="760" style="max-width:100%; height:auto" loading="lazy">
+  <figcaption>Quelle partie de la source éclaire un point P (bras du Michelson déplié, lampe au sodium, dépoli Ø 32 mm
+    à 38 cm des miroirs, lame d’air de 3 mm, lentille de 200 mm) ? En haut : à l’écran au foyer de la lentille, la zone
+    est le disque de l’iris (Ø 20 mm — P reçoit des rayons parallèles) ; à l’œil accommodé sur les miroirs, seule compte
+    la lumière qui entre dans la pupille (zone Ø 9,7 mm). En bas, en fermant l’iris (Ø 20 → 3 → 1 mm) : sur l’écran,
+    tous les points de la zone donnent le même δ en P, fermer ne fait qu’assombrir (contraste 100 %, lumière 100 % →
+    0,25 %) ; pour l’œil, δ varie dans la zone, le contraste monte de 23 % à 100 % quand l’iris se ferme, au prix de la
+    lumière (100 % → 6,6 %). Toutes les valeurs sont calculées par le moteur, pas illustratives : l’aire de la zone
+    fixe le flux reçu en P, son diamètre le brouillage des franges.</figcaption>
+</figure>
+<figure>
+  <img src="../img/modele/anim-iris.webp" alt="Œil derrière la lentille de 20 cm au foyer : en fermant l'iris, le disque s'assombrit et les anneaux apparaissent" width="440" style="max-width:100%; height:auto" loading="lazy">
+  <figcaption>La même idée en mouvement : œil derrière la lentille de 20 cm, au foyer (« à l’infini »), lame d’air
+    de 5,8 mm, luminosité réelle. L’iris se ferme (Ø 12 → 1,5 mm) : le disque s’assombrit et les anneaux apparaissent
+    sous Ø ≈ 3 mm — la source, de plus en plus ponctuelle, rend les franges cohérentes. Chaque image est un rendu
+    complet du moteur.</figcaption>
+</figure>
+
+<p>La localisation des franges n'est pas imposée : elle résulte de la somme sur la source étendue. Hors du plan de
+  localisation, les systèmes de franges des différents points source se brouillent ; à l'œil, la profondeur de champ
+  dépend du diamètre de la pupille.</p>
+<p>Quand le détecteur est conjugué de la source (les deux taches de l'autocollimation, l'image de la lampe), la
+  lumière de chaque point se concentre. L'éclairement y vaut le flux reçu divisé par l'aire de la tache, dont le rayon
+  ne descend pas sous celui de la tache de diffraction.</p>
+
+<h3 id="mi-lames">Lames de verre</h3>
+<p>La séparatrice et la compensatrice sont deux lames de verre BK7 de même épaisseur (6 mm). Chaque traversée ajoute
+  le chemin \(t\,(n\cos r - \cos\theta)\), qui dépend de la direction du rayon et de \(n(\lambda)\) ; il est
+  développé au second ordre autour de l'axe. Elle décale aussi le rayon latéralement, d'environ 2 mm à 45° : vus à
+  travers la séparatrice, les miroirs paraissent déplacés.</p>
+<ul>
+  <li><strong>Compensatrice parallèle</strong> : les chemins dans le verre se compensent exactement.</li>
+  <li><strong>Compensatrice tournée</strong> (vis \(B_1, B_2\)) : le contact optique se décale, les anneaux deviennent
+    elliptiques, et la dispersion dégrade la frange achromatique en lumière blanche.</li>
+</ul>
+<p>Une réflexion sur une face de la compensatrice renvoie vers \(M_1\) une petite part du faisceau, déviée du double
+  de l'angle entre les deux lames : une image fantôme, sommée en intensité, qui se confond avec l'image principale
+  quand la compensatrice est parallèle. La séparatrice partage la lumière en deux parts égales : chaque bras reçoit le
+  quart du flux incident.</p>
+<figure>
+  <div class="paire">
+    <img width="464" height="464" src="../img/modele/mich-ellipses.webp" alt="Anneaux du sodium elliptiques et doublés par l'image fantôme, compensatrice tournée" loading="lazy">
+    <img width="464" height="464" src="../img/modele/mich-anneaux.webp" alt="Anneaux du sodium circulaires, compensatrice parallèle à la séparatrice" loading="lazy">
+  </div>
+  <figcaption>Anneaux du sodium près du contact optique, au foyer de la lentille de 1 m : compensatrice tournée (à
+    gauche : anneaux elliptiques, image fantôme décalée), puis parallèle à la séparatrice (à droite). Luminosité
+    « toujours visible ».</figcaption>
+</figure>
+<p>Une lamelle couvre-objet (verre D 263 M, épaisseur tirée au hasard) posée sur une partie d'un miroir est traversée
+  deux fois. Chaque point source donne alors deux systèmes de franges, sans et avec la lamelle, séparés par l'image de
+  son bord.</p>
+<p>Le retard dû au verre est calculé longueur d'onde par longueur d'onde. En lumière blanche, derrière une lamelle ou
+  une compensatrice tournée, la frange achromatique se place donc là où le retard de groupe s'annule : à l'indice de
+  groupe \(n_g = n - \lambda\,\mathrm{d}n/\mathrm{d}\lambda\), et non à l'indice \(n\).</p>
+<figure>
+  <img width="464" height="464" src="../img/modele/mich-blanc.webp" alt="Coin d'air en lumière blanche : frange blanche entourée de franges sombres, puis franges colorées" loading="lazy" style="max-width:360px">
+  <figcaption>Coin d'air en lumière blanche, lanterne à condenseur, miroirs conjugués de l'écran : frange achromatique,
+    puis teintes de l'échelle de Newton. Luminosité réelle.</figcaption>
+</figure>
+
+<h3 id="mi-observation">Observation et capteurs</h3>
+<p>L'œil est une lentille de vergence réglable (accommodation de 25 cm à l'infini), une pupille et une rétine à
+  17 mm ; il se déplace le long du banc de sortie et latéralement. Une feuille posée sur un miroir arrête son bras ;
+  l'éclairement de la feuille elle-même est calculé en optique géométrique, sans interférence.</p>
+<p>La barrette, la photodiode et le spectromètre fibré posés sur l'écran sont calculés sur le processeur à partir des
+  mêmes données que l'image ; la photodiode a la sensibilité spectrale de l'œil. La barrette et le spectromètre
+  existent en version parfaite et en version réelle : barrette de 2048 pixels de 14 µm, spectromètre de 1,5 nm de
+  résolution, qui ne sépare pas le doublet du sodium. Le spectromètre intègre chaque raie analytiquement : la version
+  parfaite résout les cannelures à l'intérieur d'une raie.</p>
+
+<h3 id="mi-indices">Réglages et indices</h3>
+<p>Les réglages se jugent sur l'état de l'appareil : rotation de la compensatrice, inclinaison relative des miroirs,
+  épaisseur de la lame d'air, chacune contre un seuil. Le montage n'y entre pas.</p>
+<p>Les indices, eux, jugent le montage par ce qu'il produit. À la demande, le moteur mesure la figure du réglage visé
+  sur une copie de l'état. Pour les images de la source (compensatrice, parallélisme grossier), l'optique
+  géométrique dit si le plan observé est celui de la source et sous quel angle elle est vue. Pour les franges, la
+  mesure porte sur leur contraste et sur la part éclairée du champ, les miroirs supposés parallèles : le montage n'est
+  pas jugé sur un défaut de l'appareil. En luminosité réelle, une figure que l'œil ne verrait pas ne compte pas.</p>
+<p>Si la figure ne suffit pas, chaque geste de montage possible est appliqué à une autre copie et mesuré de même,
+  puis les gestes deux à deux si aucun n'améliore seul. Le geste retenu est le plus simple de ceux qui rendent la
+  figure jugeable, à défaut celui qui l'améliore le plus. Le geste sur l'appareil se lit de la même façon, sur des
+  variantes de l'état : miroirs rendus parallèles, lame d'air ramenée au contact, chariot déplacé d'une demi-période
+  du contraste du doublet du sodium. Seuls l'organe et le sens du geste sont donnés, jamais une valeur.</p>
+
+<h2 id="goniometre">Spectrogoniomètre</h2>
+<p><strong>Optique paraxiale en vergences.</strong> La chaîne est suivie de la fente à l'œil : collimateur, objet posé
+  sur la plate-forme (réseau, miroir plan ou prisme), objectif de la lunette, plan du réticule, oculaire. Pour chaque
+  objet vu (réticule, image retour de l'autocollimation, image de la fente pour chaque raie et chaque ordre), le calcul
+  donne sa direction apparente et la vergence de la lumière qui arrive à l'œil, dans le plan de dispersion et le long
+  de la fente.</p>
+<p><strong>Réseau.</strong> Les directions suivent \(a(\sin\theta - \sin i) = p\lambda\), pour \(|p| \le 3\), avec une
+  efficacité fixée par ordre. Dans le plan de dispersion, le réseau multiplie la vergence du faisceau par
+  \((\cos i/\cos\theta)^2\) et la largeur angulaire de l'image de la fente par \(\cos i/\cos\theta\) ; le long des
+  traits, rien ne change. Ces facteurs ont été vérifiés contre un tracé de rayons exact. Avec un collimateur déréglé,
+  l'ordre 0 peut être net et l'ordre 2 flou ; au minimum de déviation, le facteur vaut 1 et la raie redevient
+  nette.</p>
+<figure>
+  <div class="paire">
+    <img width="392" height="392" src="../img/modele/gonio-ordre0.webp" alt="Champ de la lunette agrandi : ordre 0 du mercure, trait fin et net" loading="lazy">
+    <img width="392" height="392" src="../img/modele/gonio-ordre2.webp" alt="Champ de la lunette agrandi : raie verte du mercure à l'ordre 2, élargie et floue" loading="lazy">
+  </div>
+  <figcaption>Collimateur déréglé, lunette au point sur l'ordre 0, réseau en incidence normale : ordre 0 (à gauche) et
+    raie verte du mercure à l'ordre 2 (à droite). Champ agrandi quatre fois, luminosité « toujours visible ».</figcaption>
+</figure>
+<p><strong>Prisme.</strong> Prisme équilatéral en flint (loi de Cauchy) : chaque longueur d'onde est déviée par
+  réfraction exacte sur ses faces.</p>
+<p><strong>Lunette et œil.</strong> L'œil est placé au cercle oculaire. Sa pupille utile est l'intersection de sa
+  pupille avec le cercle oculaire : son diamètre fixe le flou, son centre la parallaxe. La parallaxe vaut le décalage
+  de l'œil multiplié par l'écart de vergence entre deux objets : elle s'annule quand le réticule et l'image visée sont
+  dans le même plan, quel que soit l'œil. Quatre yeux sont proposés (normal, myope, hypermétrope, presbyte), chacun
+  avec sa plage d'accommodation : l'œil accommode sur l'objet désigné s'il est dans sa plage, et se repose sur son
+  punctum remotum sinon.</p>
+<p><strong>Image du champ.</strong> Chaque objet a un profil analytique : son image géométrique (fente, fils et repère
+  du réticule, diaphragme de champ) convoluée par le disque de défocalisation, la diffraction par la largeur utile du
+  faisceau et l'acuité de l'œil. Aucun tirage n'intervient. Les raies des lampes spectrales viennent des tables du
+  NIST ; la lampe halogène, filtrée ou non, est représentée par un peigne de longueurs d'onde assez serré pour que les
+  images de la fente se recouvrent.</p>
+<div class="encart"><p>Non modélisés : l'horizontalité de la plate-forme (supposée réglée), la courbure des raies par
+  diffraction conique, la réflexion sur le réseau.</p></div>
+
+<h2 id="banc">Banc d'optique</h2>
+
+<h3 id="bc-elements">Éléments et choix du moteur</h3>
+<p>Chaque pièce posée sur le banc est décrite par des primitives : dioptre sphérique ou conique, lentille idéale,
+  masque (fente, trou, lettre, diapositive), diffuseur lambertien, réseau, miroir plan, polariseur ou lame (matrice de
+  Jones), filtre, objet de phase, détecteur. Chaque primitive a une ouverture utile, tenue dans une monture : la
+  lumière qui tombe sur la monture est arrêtée, celle qui passe à côté continue. Un miroir replie le banc : la lumière
+  repasse les éléments en sens inverse.</p>
+<p>Deux moteurs calculent l'image, choisis d'après le montage. Le moteur ondulatoire sert dès qu'un élément diffractant
+  éclairé précède le détecteur (fentes, trous, réseau, objet de phase, filtre de Fourier, ou diaphragme assez petit
+  pour diffracter), et toujours avec le laser. Le tracé de rayons sert dans les autres cas.</p>
+
+<h3 id="bc-rayons">Tracé de rayons</h3>
+<p>Chaque rayon est tiré au hasard : longueur d'onde, point de la source, direction visée dans l'ouverture du premier
+  élément. Son poids est l'étendue du tirage multipliée par la luminance de la source : la somme des poids reçus par
+  un pixel, divisée par son aire, donne l'éclairement. Le rayon est ensuite suivi exactement : réfraction aux
+  dioptres, direction tirée par un dépoli, ordre tiré par un réseau.</p>
+<figure>
+  <img src="../schemas/etendue-poids.svg" alt="Tirer un rayon, c'est choisir un point de la source et une direction : étendue dG du pinceau, poids L·G/N ; en bas, étendues comparées du faisceau utile, du tirage à rebours et du tirage direct" width="780" style="max-width:100%; height:auto" loading="lazy">
+  <figcaption>Le poids d’un rayon : le pinceau autour de lui a une étendue \(dG = dS_1\cos\theta_1\cdot
+    dS_2\cos\theta_2/r^2\), et N rayons tirés dans un faisceau d’étendue G portent chacun \(L\,G/N\) (L : luminance de
+    la source). En bas, les étendues mesurées par le vrai moteur sur le montage de la figure suivante : le faisceau
+    utile vaut ×1, le tirage à rebours en tire ×7,5, le tirage direct ×72 000 — le poids compense ce que le tirage
+    gaspille : 1 rayon utile sur 72 000 en direct (chacun 9 600 fois plus lourd) contre 13 % à rebours donnent le même
+    flux sur l’écran (0,95 ± 0,1, prolongé sur 4 millions de rayons).</figcaption>
+</figure>
+<p>Derrière un trou ou une fente source, les rayons partent de l'objet éclairé et sont remontés jusqu'à la lampe : le
+  flux est le même, les rayons utiles bien plus nombreux. Une passe préalable apprend quelles directions mènent au
+  détecteur ; les tirages suivants s'y concentrent, et chaque rayon est repondéré en conséquence, ce qui ne biaise pas
+  l'image — c'est ce que montrent les deux figures ci-dessous, tirage pour tirage.</p>
+<figure>
+  <img src="../schemas/tirage-rebours.svg" alt="Le même banc deux fois : en haut, tirage direct depuis la lampe, presque tous les rayons s'arrêtent sur la plaque du trou ; en bas, tirage à rebours depuis le trou, la plupart des rayons atteignent l'écran" width="800" style="max-width:100%; height:auto" loading="lazy">
+  <figcaption>Le même montage tiré dans les deux sens — lanterne éclairant un trou de 0,1 mm au foyer d’une lentille
+    de 200 mm, seconde lentille, écran — rayons et comptages du moteur (graine 1, 20 000 rayons par panneau, vue de
+    dessus). En haut, tiré depuis le filament : 1 rayon sur 20 000 passe le trou et atteint l’écran. En bas, tiré
+    depuis le trou et remonté jusqu’au filament : 2 665 rayons utiles (13,3 % ; les autres ratent le filament). Le
+    poids de chaque rayon corrige le mode de tirage : l’image obtenue est la même, seule la part de rayons utiles —
+    donc le bruit — change (flux reçu direct ÷ à rebours : 0,95 ± 0,14).</figcaption>
+</figure>
+
+<p>Un rayon porte un vecteur de Jones dès qu'un élément polarisant est sur le trajet. La lumière naturelle n'en a pas :
+  le premier polariseur la polarise selon son axe et en transmet la moitié ; une lame la laisse naturelle.</p>
+
+<h3 id="bc-onde">Moteur ondulatoire</h3>
+<p>Le champ scalaire est propagé d'un plan diffractant au suivant, à travers les lentilles et les espaces qui les
+  séparent, par l'intégrale de Collins, axe par axe. La courbure de l'onde est portée à part, jamais échantillonnée.
+  Entre deux plans conjugués, la propagation est une copie à l'échelle ; en champ lointain, une transformée de
+  Fourier ; en champ proche, le spectre angulaire.</p>
+<p>La source étendue et la lumière blanche sont des sommes incohérentes sur des points source et des longueurs
+  d'onde. Avec un seul plan diffractant, un point source ne fait que décaler la figure : une propagation par longueur
+  d'onde suffit, relue pour chaque point source. Le laser est un faisceau gaussien ; un réseau donne une copie décalée
+  du champ par ordre.</p>
+<figure>
+  <div class="paire">
+    <img width="480" height="480" src="../img/modele/fond-noir.webp" alt="Fond noir : tous les bords d'une lettre gravée dans le verre apparaissent en clair sur un fond noir" loading="lazy">
+    <img width="480" height="480" src="../img/modele/strioscopie.webp" alt="Strioscopie : seuls les bords verticaux de la lettre gravée apparaissent en clair" loading="lazy">
+  </div>
+  <figcaption>Montage 4f, lettre gravée dans le verre (objet de phase). À gauche, une pastille au plan focal arrête la
+    lumière non diffractée : tous les bords apparaissent sur un fond noir. À droite, un couteau vertical : seuls les
+    bords verticaux ressortent. Luminosité « toujours visible ».</figcaption>
+</figure>
+
+<h3 id="bc-detecteurs">Détecteurs</h3>
+<p>Un seul détecteur est actif : le premier écran ou capteur rencontré, sinon l'œil. L'œil en bout de banc accommode
+  dans la plage de l'œil choisi (normal, myope, hypermétrope, presbyte), et sa pupille est un diaphragme du tracé comme
+  les autres.</p>
+<ul>
+  <li><strong>Appareil photo</strong> : capteur à pixels de 5 µm, temps de pose et sensibilité ISO ; saturation, bruit
+    de photons et de lecture, voile de l'objectif.</li>
+  <li><strong>Photodiode</strong> : flux reçu × réponse spectrale du silicium, converti en tension par un calibre ;
+    l'amplificateur sature.</li>
+  <li><strong>Barrette CCD</strong> : tension de chaque pixel, temps d'intégration, saturation.</li>
+  <li><strong>Spectromètre fibré</strong> : il trie par longueur d'onde la lumière qui entre dans sa fibre ; version
+    parfaite, ou réelle (comptes, réponse du silicium, bruit d'obscurité).</li>
+</ul>
+
+<h2 id="construction">Construction du logiciel</h2>
+<p><strong>Navigateur seul.</strong> Les trois instruments sont écrits en JavaScript, sans bibliothèque, et calculent
+  tout dans le navigateur. Aucun compte n'est demandé ; l'état d'un instrument est sauvegardé dans le navigateur, et
+  le site ne compte que des visites anonymes.</p>
+<p><strong>Moteur séparé de l'interface.</strong> Chaque instrument a un moteur sans interface, qui reçoit une
+  description du montage et rend une image ou des mesures. L'interface (dessin, gestes, étapes) ne fait que traduire
+  l'état des pièces en cette description.</p>
+<p><strong>Référence indépendante.</strong> Chaque moteur a une référence écrite en Python, en double précision, qui
+  reproduit le calcul opération par opération. Des tests rejouent des cas de contrôle des deux côtés : écart inférieur
+  à 10⁻⁹ sur les rayons et les coefficients, à 10⁻⁶ sur les images ondulatoires. Le hasard est tiré d'une graine, si
+  bien que le processeur, la carte graphique et Python tracent les mêmes rayons ; d'autres tests comparent les shaders
+  de la carte graphique au calcul du processeur.</p>
+<p><strong>Vérifications physiques.</strong> La référence contient aussi un calcul exact, non paraxial (géométrie des
+  miroirs du Michelson, tracé de rayons sur le réseau du goniomètre), et des contrôles chiffrés contre les formules
+  usuelles : rayons des anneaux, interfrange du coin d'air, période du contraste du doublet du sodium, déviation
+  minimale du réseau, autocollimation, flux conservé entre les deux moteurs du banc.</p>
+
+<h2 id="limites">Limites connues</h2>
+<h4>Michelson</h4>
+<ul>
+  <li>Séparatrice qui partage la lumière en deux moitiés égales, sans absorption ni dépendance à la polarisation ;
+    une seule image fantôme est prise en compte.</li>
+  <li>Différence de marche dans l'approximation de Fresnel, chemins dans le verre développés au second ordre.</li>
+  <li>Ni vibrations, ni dérive thermique : une figure réglée ne bouge pas.</li>
+</ul>
+<h4>Goniomètre</h4>
+<ul>
+  <li>Optique paraxiale ; plate-forme supposée horizontale, sans vis de blocage ni de fin mouvement.</li>
+  <li>Efficacité des ordres du réseau fixée par ordre, indépendante de la longueur d'onde.</li>
+</ul>
+<h4>Banc d'optique</h4>
+<ul>
+  <li>Moteur ondulatoire scalaire et paraxial : les polariseurs et les filtres n'y agissent que sur l'intensité.</li>
+  <li>Deux réseaux successifs, ou un plan diffractant derrière un réseau, sont rendus par le tracé de rayons, sans
+    interférences.</li>
+  <li>Les tavelures (speckle) d'un laser sur un dépoli ne sont pas encore rendues correctement.</li>
+  <li>Une seule nature de verre (BK7) pour les lentilles réelles.</li>
+</ul>
+<h4>Œil</h4>
+<ul>
+  <li>Adaptation stationnaire seulement : ni temps de réponse de la pupille, ni adaptation progressive à
+    l'obscurité.</li>
+  <li>Ni distance d'observation de l'écran, ni acuité hors du goniomètre ; le moniteur est supposé de luminance
+    maximale 150 cd/m².</li>
+</ul>
+
+<h2 id="references">Références</h2>
+<h4>Œil et perception</h4>
+<ul class="refs">
+  <li>A. B. Watson, J. I. Yellott (2012), « A unified formula for light-adapted pupil size », <em>Journal of
+    Vision</em> 12(10):12. Coefficients relus dans le paquet R
+    <a href="https://rdrr.io/cran/CVD/man/lightAdaptedPupilSize.WatsonAndYellott.html">CVD</a> et dans
+    R. Mantiuk et al. (2015), <a href="https://www.cl.cam.ac.uk/~rkm38/pdfs/mantiuk15hdrvdp_age.pdf">HDR-VDP, effet
+    de l'âge</a>.</li>
+  <li>J. Ferwerda, S. Pattanaik, P. Shirley, D. Greenberg (1996),
+    <a href="https://en-cg-web.coecis.cornell.edu/pubs/1996/FPSG96.html">« A model of visual adaptation for realistic
+    image synthesis »</a>, SIGGRAPH.</li>
+  <li>G. Ward (1994), « A contrast-based scalefactor for luminance display », <em>Graphics Gems IV</em> ; formule et
+    seuils de Blackwell relus dans la thèse de K. Matković (1997),
+    <a href="https://www.cg.tuwien.ac.at/research/publications/1997/Matkovic-thesis/Matkovic-thesis-pdf.pdf"><em>Tone
+    mapping techniques and color image difference in global illumination</em></a>.</li>
+  <li>G. Krawczyk (2007), <a href="https://people.mpi-inf.mpg.de/alumni/d4/2014/krawczyk/phd/krawczyk07phd_final.pdf"><em>Perception-inspired
+    tone mapping</em></a>, thèse (vision de nuit d'après Hunt, teinte scotopique).</li>
+  <li>S. Pattanaik et al. (2000), <a href="https://en-cg-web.coecis.cornell.edu/pubs/2000/PTYG00.html">« Time-dependent
+    visual adaptation for fast realistic image display »</a>, SIGGRAPH (pour mémoire : le temps d'adaptation n'est pas
+    modélisé).</li>
+  <li>A. Kirk, J. O'Brien (2011), <a href="https://www2.eecs.berkeley.edu/Pubs/TechRpts/2011/EECS-2011-91.html">« Perceptually
+    based tone mapping for low-light conditions »</a>.</li>
+  <li>CIE 146:2002, <a href="https://cie.co.at/publications/cie-collection-glare-2002">équation générale de
+    l'éblouissement</a> ; forme reprise par S. Bará, C. Bao-Varela (2023),
+    <a href="https://arxiv.org/pdf/2212.09103">arXiv:2212.09103</a>.</li>
+  <li>CIECAM02 : <a href="https://en.wikipedia.org/wiki/CIECAM02">facteur d'adaptation \(F_L\), effet Hunt</a>.</li>
+  <li>Réflexe pupillaire : <a href="https://pmc.ncbi.nlm.nih.gov/articles/PMC5872002">latences et constantes de
+    temps</a> ; adaptation à l'obscurité : <a href="https://webvision.med.utah.edu/?p=163">Webvision</a>.</li>
+</ul>
+<h4>Colorimétrie, sources et capteurs</h4>
+<ul class="refs">
+  <li>C. Wyman, P.-P. Sloan, P. Shirley (2013), « Simple analytic approximations to the CIE XYZ color matching
+    functions », <em>Journal of Computer Graphics Techniques</em> 2(2).</li>
+  <li>CIE : fonctions colorimétriques 1931, efficacité lumineuse scotopique \(V'(\lambda)\) de 1951.</li>
+  <li>NIST, <em>Atomic Spectra Database</em> : longueurs d'onde et intensités relatives des raies.</li>
+  <li>Schott, fiche du verre N-BK7 (formule de Sellmeier).</li>
+  <li>Sony ILX511, <a href="https://www.spectralproducts.com/pdf/SonyILX511.pdf">fiche de la barrette CCD</a>.</li>
+  <li>ISO 12232 (sensibilité des appareils photo) et ISO 18844 (lumière parasite des objectifs) : ordres de grandeur
+    de l'appareil photo du banc.</li>
+</ul>
+
+<footer>
+  <p>Sébastien Reyt, professeur de physique-chimie en CPGE MP au lycée Michelet.</p>
+  <p>Licence <a href="https://creativecommons.org/licenses/by-nc-sa/4.0/deed.fr">CC BY-NC-SA 4.0</a> :
+    réutilisation et modification libres, sans usage commercial, en citant l'auteur et sous la même licence.</p>
+  <p>Le code de ces instruments a été écrit par Claude (Anthropic), un assistant d'IA, à partir des choix
+    physiques et pédagogiques de l'auteur.</p>
+</footer>
+</main>
+</div>
+<script src="../sommaire.js"></script>
+<script src="../commun/compteur.js"></script>
+<script src="../commun/retour.js"></script>
+<script defer src="../katex/katex.min.js"></script>
+<script defer src="../katex/auto-render.min.js" onload="renderMathInElement(document.body, {delimiters: [{left: '\\[', right: '\\]', display: true}, {left: '\\(', right: '\\)', display: false}]})"></script>
+</body>
+</html>
