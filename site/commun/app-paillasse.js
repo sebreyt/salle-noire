@@ -414,7 +414,11 @@
     // o = { x, y, long, diam, axe: "x" | "y" (axe du cylindre), nom, lx, ly (position du nom), tours() (angle
     //       affiché, en tours), tourner(dtours), pasMolette: [normal, Maj, Ctrl+Maj?] en tours (absent : Maj ÷ 10 ; Ctrl : normal × 10),
     //       accel (gain maximal d'un glisser rapide : la vis tourne plus vite que le doigt, comme une vis qu'on lance ;
-    //       absent = 1), fin: false (Maj sans effet : vis grossière, on affine avec une autre ; Ctrl, très gros : un tour par cran, reste actif à la molette),
+    //       absent = 1) et gainMin (gain d'un glisser très lent, < 1 : la vis tourne MOINS que le doigt ; absent = 1).
+    //       Loi de vitesse : gain = gainMin + (1 − gainMin)·v², plafonné à accel, avec v = (px/ms)/0,6 — prise directe
+    //       (gain 1) à 0,6 px/ms, la vitesse d'une main posée. Sans accel ni gainMin : gain 1 à toute vitesse. Une vis
+    //       lente (gainMin < 1) avance par pas plus fins que le pixel : c'est un régime de plus, indépendant de Maj.
+    //       fin: false (Maj sans effet : vis grossière, on affine avec une autre ; Ctrl, très gros : un tour par cran, reste actif à la molette),
     //       pos() → {x, y} et rot() (degrés, sens du SVG) : vis portée par un organe qui tourne (lunette du
     //       goniomètre) ; elle est alors dessinée tournée, roule dans sa direction tournée, et la molette la trouve
     //       à sa position du moment ; le nom reste horizontal, décalé de (lx, ly) tourné }
@@ -475,7 +479,12 @@
         var dx = ev.clientX - prise.x, dy = ev.clientY - prise.y, ra = (o.rot ? o.rot() : 0) * Math.PI / 180;
         var d = o.axe === "y" ? dx * Math.cos(ra) + dy * Math.sin(ra) : dx * Math.sin(ra) - dy * Math.cos(ra);
         var dt = ev.timeStamp - prise.t, gain = 1;
-        if (o.accel && dt > 0) { var v = Math.abs(d) / dt / 0.6; gain = Math.min(o.accel, 1 + v * v); }   // v en px/ms
+        // loi de vitesse (accel / gainMin) : à 0,6 px/ms la vis est en prise directe sur le doigt ; plus lente, elle
+        // tourne moins (gainMin < 1 : on descend sous le pixel) ; plus vive, elle s'emballe (jusqu'à accel).
+        if ((o.accel || o.gainMin) && dt > 0) {
+          var v = Math.abs(d) / dt / 0.6, g0 = o.gainMin || 1;                 // v en px/ms
+          gain = Math.min(o.accel || 1, g0 + (1 - g0) * v * v);
+        }
         prise = { x: ev.clientX, y: ev.clientY, t: ev.timeStamp };
         var fin = o.fin === false || !ev.shiftKey ? 1 : (ev.ctrlKey || ev.metaKey) ? 0.01 : 0.1;      // Maj ÷ 10, Ctrl+Maj ÷ 100
         if (d) tourner(d / (2 * Math.PI * rayonPx()) * fin * gain);
@@ -500,7 +509,7 @@
     // sur la racine. (1) Défilement ACCUMULÉ : un pas = un cran de souris (deltaMode lu d'abord : Firefox donne des
     // lignes pour une souris, 3 par cran ; en pixels, PX_CRAN par cran) ; les fractions du pavé tactile s'additionnent
     // (avant : un pas entier par événement, le pavé tournait tout dix fois trop vite). (2) Cible FIGÉE au premier
-    // événement, gardée tant que les événements se suivent à moins de 1 s, quoi qu'il passe sous le pointeur — la fige
+    // événement, gardée tant que les événements se suivent à moins de 0,7 s, quoi qu'il passe sous le pointeur — la fige
     // ne sert qu'aux cibles qui BOUGENT sous le pointeur (pièce qui avance à la molette, barrette qui tourne, oculaire
     // qui coulisse). Un gestionnaire marqué `fige: false` (cibles sédentaires : zooms d'image, de graphe, de champ) est
     // re-résolu à CHAQUE événement : le zoom ne vaut que tant que le pointeur survole sa zone, jamais au-delà.
@@ -511,8 +520,11 @@
     // Résolution de la cible, dans l'ordre : pastilles réglables (`K.pastilles`), cibles de l'instrument (`K.cibleMolette(f)`, f(élément, ev) → gestionnaire
     // ou null), puis sur le dessin les zones (`K.zoneMolette(f)`, f(point SVG) → gestionnaire ou null, prioritaires sur
     // les vis), puis la vis la plus proche, puis un curseur (input range) hors des panneaux. Rien : l'événement passe
-    // (les écouteurs propres d'un élément le reçoivent), sauf sur le dessin où la page ne défile jamais.
-    var CIBLES = [], PX_CRAN = 100, MOL = { h: null, t: 0, acc: 0 };
+    // (les écouteurs propres d'un élément le reçoivent), sauf sur le dessin où la page ne défile jamais — et une rafale
+    // qui ne trouve RIEN ne fige RIEN : sans ça, un coup de molette dans le vide gelait la cible « rien » pendant le gel
+    // et la pièce suivante (la lunette) ne répondait qu'après l'attente. Un clic termine aussi la rafale.
+    var CIBLES = [], PX_CRAN = 100, GEL = 700, MOL = { h: null, t: 0, acc: 0 };   // GEL : délai qui garde la cible entre deux crans
+    function oublierMolette() { MOL.h = null; MOL.t = 0; MOL.acc = 0; }   // fin de rafale : la molette suivante repart de ce qui est sous le pointeur
     function zoneMolette(f) { ZONES.push(f); }
     function cibleMolette(f) { CIBLES.push(f); }
     function pasMolette(ev) { var m = ev.deltaMode, d = ev.deltaY; return -(m === 1 ? d / 3 : m === 2 ? d : d / PX_CRAN); }
@@ -548,17 +560,22 @@
       return null;
     }
     function surMolette(ev) {
-      var t0 = ev.timeStamp || Date.now(), neuf = !MOL.h || t0 - MOL.t > 1000 || t0 < MOL.t;
+      var t0 = ev.timeStamp || Date.now(), neuf = !MOL.h || t0 - MOL.t > GEL || t0 < MOL.t;
       if (neuf) { MOL.h = trouverMolette(ev); MOL.acc = 0; }
       else if (MOL.h.fige === false) {      // cible sédentaire (zoom) : re-résolue à chaque événement — hors de sa zone, elle tombe
         var h2 = trouverMolette(ev);
         if (h2 !== MOL.h) { MOL.h = h2; MOL.acc = 0; }
       }
+      var h = MOL.h;
+      if (!h || h === RIEN) {               // rien à tourner : pas de gel (sur le dessin, l'événement ne fait que ne pas défiler)
+        oublierMolette();
+        if (h && ev.target && dessus.contains(ev.target)) ev.preventDefault();
+        return;
+      }
       MOL.t = t0;
-      var h = MOL.h; if (!h) { MOL.h = null; return; }
       ev.preventDefault(); ev.stopPropagation();
       var p = pasMolette(ev);
-      if (!p || h === RIEN) return;
+      if (!p) return;
       if (h.continu) { h.continu(p, ev); return; }
       MOL.acc += p;
       var k = MOL.acc > 0 ? Math.floor(MOL.acc + 1e-9) : Math.ceil(MOL.acc - 1e-9);
@@ -566,6 +583,7 @@
       if (k) h(k, ev);
     }
     R.addEventListener("wheel", surMolette, { passive: false, capture: true });
+    R.addEventListener("pointerdown", oublierMolette, { capture: true });   // un clic (pièce, vis, bouton, glisser) termine la rafale
 
     // ----- glisser le long d'un banc : f(point SVG, ev) ; un seul glisser à la fois, suivi sur la fenêtre (le dessin
     // de l'élément peut être reconstruit pendant le geste sans perdre le pointeur) -----
@@ -992,6 +1010,14 @@
         b.setAttribute("data-etape", d.id);
         el("span", "pl-et-m", b); el("span", "pl-et-n", b, (d.app ? "" : (i + 1) + ". ") + d.nom);
         puces[d.id] = b;
+      });
+      // Légende des deux niveaux, à côté des puces (les deux instruments en ont) : sans elle, le vert se lit « c'est
+      // réglé » alors qu'il ne dit que « le critère est atteint » ; le soigné, lui, est en or.
+      var lg = el("span", "pl-et-leg", rangEt);
+      [["fait", "✓", "correct", "Vert : l'étape est atteinte, le critère du réglage est rempli."],
+        ["soignee", "★", "soigné", "Or : l'étape est atteinte et soignée, le réglage fin au-delà du critère."]].forEach(function (l) {
+        var it = el("span", "pl-et-leg-i " + l[0], lg); it.title = l[3];
+        el("span", "pl-et-m", it, l[1]); el("span", "", it).textContent = l[2];
       });
       return { maj: function (faits, cible, vise) {
         defs.forEach(function (d) {

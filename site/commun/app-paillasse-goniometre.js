@@ -295,12 +295,14 @@
   // garde seulement « déjà atteinte » (st.deja) pour montrer en orange une étape qui ne l'est plus.
   // Seuils (calculés avec le cœur, œil normal, pupille 3 mm) : réticule à ε du foyer → image retour à 2ε, floue de
   // 3,3′ par 0,1 mm quand l'œil regarde le réticule, parallaxe de 1,2′ par 0,1 mm l'œil à 1,5 mm du centre du cercle
-  // oculaire. ✓ « nets ensemble » à l'œil = 0,2 mm (6,6′) ; ★ « sans parallaxe » au zoom ×4 (0,6′ par pixel) =
-  // 0,06 mm (2′ de flou, 0,7′ de parallaxe). La fente vue dans la lunette n'est déplacée que de e_C (pas d'aller-retour) :
-  // seuils doubles pour le même aspect. Oculaire : réticule dans la plage de l'œil (✓), net œil au repos et
-  // indicateur « au repos » (★ : image entre PR − pdc/2 et PR + 0,05 δ, soit ~0,1 mm d'oculaire).
-  // ✓ de l'oculaire : net sans forcer (au plus 2 δ d'accommodation ; l'oculaire enfoncé du dérèglement en demande 5 à 8).
-  var SEUILS = { eps: [0.2e-3, 0.06e-3], eC: [0.4e-3, 0.12e-3], repos: 0.05, acc: 2, b: 0.1e-3 };
+  // oculaire. ✓ « correct » = image nette à ×1, 0,12 mm (4,0′ de flou, 1,4′ de parallaxe) ; ★ « soigné » = sans
+  // = sans parallaxe au zoom ×4 (0,6′ par pixel), 0,06 mm (2′ de flou, 0,7′ de parallaxe). La fente vue dans la
+  // lunette n'est déplacée que de e_C (pas d'aller-retour) : seuils doubles pour le même aspect. Oculaire : réticule
+  // dans la plage de l'œil (✓), net œil au repos et indicateur « au repos » (★ : image entre PR − pdc/2 et PR + 0,05 δ,
+  // soit ~0,1 mm d'oculaire).
+  // ✓ de l'oculaire : net sans forcer (au plus 2 δ d'accommodation ; l'oculaire enfoncé du dérèglement en demande 5 à 8)
+  // — l'accommodation ne floute pas l'image (0,6 à 1,2′), elle la fatigue : ce seuil reste à 2 δ.
+  var SEUILS = { eps: [0.12e-3, 0.06e-3], eC: [0.24e-3, 0.12e-3], repos: 0.05, acc: 2, b: 0.1e-3 };
   var ETAPES = [
     { id: "oculaire", nom: "Oculaire", titre: "Réticule net pour votre œil (réglage personnel).",
       soin: "réticule net l'œil au repos : son image au punctum remotum de l'œil." },
@@ -617,7 +619,7 @@
   var CONFIGS = [
     { id: "oculaire", nom: "Oculaire déréglé", f: function (st, GO) { regle(st, GO); miroirFace(st); st.u = -1.5e-3; } },
     { id: "auto", nom: "Autocollimation floue", f: function (st, GO) { regle(st, GO); miroirFace(st); st.eps = 0.8e-3; } },
-    { id: "parallaxe", nom: "Parallaxe", f: function (st, GO) { regle(st, GO); miroirFace(st); st.eps = 0.15e-3; st.zoom = 4; st.oeil.h = [1.5e-3, 0]; } },
+    { id: "parallaxe", nom: "Parallaxe", f: function (st, GO) { regle(st, GO); miroirFace(st); st.eps = 0.1e-3; st.zoom = 4; st.oeil.h = [1.5e-3, 0]; } },
     { id: "lunette", nom: "Lunette réglée", f: function (st, GO) { regle(st, GO); miroirFace(st); } },
     // prisme : lunette sur la déviation minimale (546 nm), la plate-forme balaie ±12° autour (au-delà, réflexion totale)
     { id: "prisme", nom: "Prisme, minimum de déviation", f: function (st, GO) { regle(st, GO); var Dm = devMinPrisme(GO, 546.074);
@@ -669,6 +671,8 @@
   // Réelle : luminance équivalente de l'image rétinienne (lux × f_œil² / aire de la pupille ; elle vaut la luminance
   // de l'objet × la part utile T de la pupille) par `vision` du module couleur, adaptation et pupille stationnaire
   // mesurées sur le champ ENTIER (zoom 1 : agrandir n'est pas changer d'exposition ; définition : `definitionAdapt`), un œil.
+  // Le niveau d'adaptation AFFICHÉ rejoint sa cible dans le temps (`lisser`), l'œil ne sautant pas d'un niveau à
+  // l'autre : c'est la seule partie non stationnaire de la chaîne.
   // Toujours visible : exposition sur le 99e centile du même champ, réponse en L^COMP_VISIBLE.
   var COMP_VISIBLE = 0.5, ADAPT = 64, ADAPT_MAX = 1024;
   var NOMS_OEIL = { normal: "normal", myope: "myope", hyper: "hypermétrope", presbyte: "presbyte" };
@@ -704,6 +708,10 @@
     // Pupille stationnaire de l'œil (mm) : tenue hors de l'état, posée dans CFG (la vue) seulement ; l'analyse des
     // étapes garde la pupille de 3 mm du cœur (ses seuils y sont calculés). Au plus 6 relances par geste.
     var PUP = 3, nPup = 0, AD = null, tAdapt = -1e9;
+    // `relaxant` : l'image est refaite par la seule relaxation du niveau d'adaptation (`relaxe`). Le champ ne change
+    // pas pendant ce temps, donc la cible n'est pas remesurée : sans ce drapeau, chaque image de la relaxation
+    // relancerait un calcul de 1 à 35 ms (`definitionAdapt`).
+    var relaxant = false;
     function maintenant() { return root.performance ? root.performance.now() : Date.now(); }
     function modifie(quoi) {
       tourne = null;                                   // un geste reprend la main sur la plate-forme animée
@@ -1234,8 +1242,8 @@
     // Aperçu pendant un geste : la plus grande définition qui tient dans BUDGET ms, d'après le coût mesuré par pixel
     // (moyenne glissante) ; pleine définition dès que la machine suit, jamais sous la demi-définition.
     var BUDGET = 25, coutPx = 0;
-    // Adaptation : champ entier à ADAPT² pixels, en lux rétiniens ; AD = adapterVision (+ expo du « toujours
-    // visible », pupille tracée). Pendant un geste, l'œil garde son adaptation (remesurée toutes les 200 ms au plus).
+    // Adaptation : champ entier à ADAPT² pixels, en lux rétiniens ; AD = CIBLE mesurée par adapterVision (+ expo du
+    // « toujours visible », pupille tracée) ; le niveau affiché ADa la rejoint (`lisser`) et c'est lui que voit `vision`.
     // Définition : au moins ADAPT ; lampe à raies, un pixel au plus du cinquième de la raie la plus fine du champ (au plus
     // ADAPT_MAX). Le niveau d'adaptation pondère par l² : une raie plus fine que le pixel y est étalée, sa luminance
     // sous-estimée (raies jaunes du mercure : 51 000 cd/m² mesurés à 64², 83 000 en vrai), l'exposition trop forte, et
@@ -1247,15 +1255,51 @@
       if (!isFinite(w)) return ADAPT;
       return Math.max(ADAPT, Math.min(ADAPT_MAX, 32 * Math.ceil(5 * 2 * V.lunette.champ / w / (1 - 16 / Wc) / 32)));
     }
+    // Poids de regard : l'œil regarde le centre du champ (le réticule), pas son bord. Un élément ne pèse donc dans la
+    // moyenne logarithmique que par (1 − u²)², u = ρ / ρ_champ : un bout de raie qui entre au bord du diaphragme de champ
+    // — là où l'œil ne regarde pas — ne peut plus éteindre les raies du centre. Mesuré sur une raie seule à u = 1 : le
+    // niveau d'adaptation tombe de 35 à 0,7 cd/m² ; au centre (u < 0,3) rien ne change.
+    function poidsRegard(pr, N, px) {
+      var a = new Float64Array(N * N), k2 = 1 / (pr.champ.rho * pr.champ.rho), x0 = pr.champ.X, y0 = pr.champ.Y;
+      for (var j = 0, i = 0; j < N; j++) for (var c = 0; c < N; c++, i++) {
+        var x = (c + 0.5 - N / 2) * px - x0, y = (N / 2 - j - 0.5) * px - y0;
+        var u2 = Math.min(1, (x * x + y * y) * k2), w = 1 - u2;
+        a[i] = w * w;                                   // (1 − u²)², sans racine
+      }
+      return a;
+    }
     function adapter() {
       var V0 = MI.VISION, p = PUP * 1e-3, s = GO.F_OEIL * GO.F_OEIL / (Math.PI * p * p / 4), N = definitionAdapt();
       var px = V.lunette.champ / (N / 2 - 8 * N / Wc), pr = GO.preparerChamp(CFG, V, px), img = GO.rendreChamp(pr, N, N, { flottant: true });
-      var n = N * N, L = new Float64Array(n), ys = [], i;
+      var n = N * N, L = new Float64Array(n), a = poidsRegard(pr, N, px), ys = [], i;
       for (i = 0; i < n; i++) { L[i] = Math.max(img[3 * i + 1], 0) * s; if (L[i] > 0) ys.push(L[i]); }
-      AD = MI.adapterVision(L, Math.pow(px * 180 / Math.PI, 2), { M: 0.1, Fsalle: 3283 * V0.Esalle, salle: V0.Lsalle });
+      AD = MI.adapterVision(L, Math.pow(px * 180 / Math.PI, 2), { M: 0.1, Fsalle: 3283 * V0.Esalle, salle: V0.Lsalle, poids: a });
       ys.sort(function (a, b) { return a - b; });
       AD.expo = ys.length ? 0.9 * s / ys[Math.floor(0.99 * (ys.length - 1))] : 1;
       AD.s = s; AD.pupTracee = PUP; tAdapt = maintenant();
+    }
+    // ================= niveau d'adaptation affiché : l'œil ne saute pas d'un niveau à l'autre =================
+    // La loi est celle du module couleur (`suiviAdaptation`), la même aux trois instruments : le LOGARITHME de La
+    // rejoint sa cible en exponentielle, 1 s vers la lumière, 2 s vers le noir (asymétrie de l'œil, Durand-Dorsey
+    // 2000), ancré à l'arrivée et quand la scène change. Les constantes s'y règlent (`TAU_ADAPT`), une seule fois.
+    // Le reste de la chaîne est stationnaire : `parametresVision` est rappelé avec le La du moment, seuil, Ward et
+    // Hunt suivent.
+    // ANCRAGE : aucun transitoire à l'arrivée ni quand la SCÈNE change — lampe, filtre, diaphragme, plateau, lampe du
+    // réticule, œil, mode de luminosité, graine : l'observateur vient de refaire le montage. Tourner la lunette,
+    // déplacer l'œil dans le champ, zoomer, régler la fente, l'oculaire ou le collimateur n'y touchent pas : c'est la
+    // même scène, et l'image ne doit pas s'assombrir parce qu'une raie forte est entrée dans le champ.
+    var ADa = null, sceneAD = "", LISS = MI.suiviAdaptation(), tLiss = 0;
+    function sceneSig() {
+      return [st.graine, st.lampe, st.filtre, st.diaph, st.plateau, st.lampe_lunette, st.oeil.type, reelle()].join("|");
+    }
+    function enRelax() { return !!(AD && LISS.enRelax(AD.La)); }
+    function lisser(ancre) {
+      if (!AD) return;
+      var t = maintenant(), La = LISS.pas(AD.La, tLiss ? (t - tLiss) / 1000 : 0, ancre || LISS.ancre);
+      tLiss = t;
+      // `parametresLisses` : mêmes seuil et chroma que la cible, le gain de Ward sur le niveau affiché ; l'image au
+      // repos est EXACTEMENT la stationnaire (La est alors la valeur mesurée, sans conversion log → exp)
+      ADa = { La: La, p: MI.parametresLisses(La, -1, AD.haut), s: AD.s, expo: AD.expo };
     }
     function suivrePupille() {
       if (!AD || AD.pupTracee !== PUP || !(AD.D > 0) || Math.abs(AD.D - PUP) <= 0.05 * PUP || nPup >= 6) return;
@@ -1266,8 +1310,15 @@
       if (!ctx || !V) return;
       var n = Wc;
       if (!complet && coutPx > 0) n = Math.max(Math.round(Wc / 2), Math.min(Wc, 2 * Math.round(Math.sqrt(BUDGET / coutPx) / 2)));
-      if (complet || !AD || AD.pupTracee !== PUP || maintenant() - tAdapt > 200) adapter();
-      var oR = reelle() ? { vision: { p: AD.p, s: AD.s } } : { expo: AD.expo, comp: COMP_VISIBLE }, pxn = pxDe(n);
+      // Cible mesurée quand la scène change (mesure forcée : c'est elle qui fait l'ancrage), à l'image fine (fin de
+      // geste), pendant un geste (5 fois par seconde au plus) et quand la pupille tracée a bougé ; pas pendant la
+      // relaxation, où le champ ne change pas.
+      var scen = sceneSig(), neuf = scen !== sceneAD;
+      sceneAD = scen;
+      if (neuf || (!relaxant && (complet || !AD || AD.pupTracee !== PUP || maintenant() - tAdapt > 200))) adapter();
+      if (!AD) return;
+      lisser(neuf);
+      var oR = reelle() ? { vision: { p: ADa.p, s: ADa.s } } : { expo: AD.expo, comp: COMP_VISIBLE }, pxn = pxDe(n);
       oR.cx = n / 2 - st.zc[0] / pxn; oR.cy = n / 2 + st.zc[1] / pxn;      // vue agrandie : centrée sur st.zc (rad)
       var t0 = maintenant(), pr = GO.preparerChamp(CFG, V, pxn), data = GO.rendreChamp(pr, n, n, oR);
       var c = (maintenant() - t0) / (n * n);
@@ -1799,10 +1850,13 @@
       function f(v, n) { return fmtNb(v, n); }
       PR.lignes = function () {
         var Y = GO.YEUX[st.oeil.type], R = RA, ps = psi(st), mm = function (x) { return f(x * 1e3, 3) + " mm"; };
+        var pc = function (x) { return x.toPrecision(3).replace(".", ","); };
         var L = [
           ["Œil", NOMS_OEIL[st.oeil.type] + " (PR " + f(Y[0], 1) + " δ, amplitude " + f(Y[1], 1) + " δ)"],
-          ["Luminosité", (reelle() ? "réelle" : "toujours visible") + (AD ? " ; œil adapté à " + AD.La.toPrecision(3).replace(".", ",") + " cd/m², pupille " + f(AD.D, 1) +
-            " mm (tracée " + f(PUP, 2) + "), le plus clair " + AD.haut.toPrecision(3).replace(".", ",") + " cd/m² (seuil " + AD.seuil.toPrecision(3).replace(".", ",") + ")" : "")],
+          // le niveau affiché est celui de l'œil à cet instant ; la cible entre parenthèses pendant qu'il la rejoint
+          ["Luminosité", (reelle() ? "réelle" : "toujours visible") + (AD && ADa ? " ; œil adapté à " + pc(ADa.La) + " cd/m²" +
+            (enRelax() ? " (vers " + pc(AD.La) + ")" : "") + ", pupille " + f(AD.D, 1) +
+            " mm (tracée " + f(PUP, 2) + "), le plus clair " + pc(AD.haut) + " cd/m² (seuil " + pc(AD.seuil) + ")" : "")],
           ["Oculaire", "u " + mm(st.u) + " ; au repos pour cet œil : " + mm(uRepos(st, GO)) + (R ? " (image du réticule à PR " + (R.d.Pr >= 0 ? "+ " : "− ") + f(Math.abs(R.d.Pr), 2) + " δ)" : "")],
           ["Tirage de la lunette", "ε " + mm(st.eps) + "  (seuils " + f(SEUILS.eps[0] * 1e3, 2) + " / " + f(SEUILS.eps[1] * 1e3, 2) + " mm)"],
           ["Tirage du collimateur", "e_C " + mm(st.eC) + "  (seuils " + f(SEUILS.eC[0] * 1e3, 2) + " / " + f(SEUILS.eC[1] * 1e3, 2) + " mm)"],
@@ -1823,7 +1877,15 @@
       PR.panneau.surBascule = function (o) { bProf.setAttribute("aria-pressed", o ? "true" : "false"); if (o) { analyser(); PR.maj(); } };
     })();
     // ================= boucle =================
-    var nTick = 0;
+    var nTick = 0, tRelax = 0;
+    // Après le geste, l'image fine est déjà affichée et le niveau d'adaptation rejoint encore sa cible : on refait
+    // l'image fine (25 fois par seconde au plus) tant qu'il reste plus de 1 % à parcourir, puis on garde le niveau
+    // atteint — la fin du parcours est inaperçue et n'a pas à tourner indéfiniment.
+    function relaxe() {
+      if (!enRelax() || maintenant() - tRelax < 40) return false;
+      tRelax = maintenant();
+      return true;
+    }
     function tick() {
       if (++nTick % 60 === 0) bProf.hidden = !K.estProf();
       if (tourne) {
@@ -1847,6 +1909,7 @@
         sale.champ = false; rendreChamp(false); majEtat(); fin = false;
       } else if (!fin && !anim && maintenant() - tModif > 150) { fin = true; rendreChamp(true); suivrePupille(); majEtat(); analyser();
         if (PR.panneau.ouvert()) PR.maj(); }
+      else if (fin && relaxe()) { relaxant = true; rendreChamp(true); relaxant = false; majEtat(); if (PR.panneau.ouvert()) PR.maj(); }
     }
     function redim(S) {
       cvWrap.style.width = cvWrap.style.height = S + "px";

@@ -963,16 +963,19 @@
   // la laissaient à 0,013 cd/m² : centre blanc saturé, sans couleur.
   // o.noir : nombre d'éléments NOIRS (luminance nulle, salle seule) à compter en plus de L, de même aire : le reste du
   // champ quand L ne couvre que sa partie éclairée (Michelson : grille de `mesure` recadrée sur la lumière).
+  // o.poids : poids relatif de chaque élément dans la moyenne (défaut : 1 partout) — au goniomètre, le poids de regard
+  // (on regarde le centre du champ : un bout de raie au bord du diaphragme de champ ne fixe plus le niveau).
   // o.LB : luminances d'une moitié indépendante B du même tirage (L = A + B, tracé de Monte-Carlo) : le poids l² devient
   // 4·A·B + 2·L·salle + salle², son estimation sans biais. Avec l², le bruit d'un champ peu peuplé de rayons
   // (microscope : un rayon isolé fait un texel très clair, et son carré domine) tirait La vers le haut, jusqu'à 40 fois
   // à 2^14 rayons : œil « ébloui », image sombre. Pondéré par A·B, un texel touché par une seule moitié ne compte plus.
   function adaptation(L, aire, o) {
     o = o || {};
-    var n = L.length, s = 0, w = 0, F = 0, Ls = o.salle != null ? o.salle : VISION.Lsalle, nn = Math.max(0, o.noir || 0), LB = o.LB;
+    var n = L.length, s = 0, w = 0, F = 0, Ls = o.salle != null ? o.salle : VISION.Lsalle, nn = Math.max(0, o.noir || 0), LB = o.LB, po = o.poids;
     for (var i = 0; i < n; i++) {
       var Li = Math.max(L[i], 0), l = Li + Ls, wi = l * l;
       if (LB) { var b = Math.min(Math.max(LB[i], 0), Li); wi = 4 * (Li - b) * b + 2 * Li * Ls + Ls * Ls; }
+      if (po) wi *= Math.max(po[i], 0);                // poids d'aire (goniomètre : poids de regard, cf. `adaptation`)
       s += wi * Math.log(l); w += wi; F += Li * aire;
     }
     s += nn * Ls * Ls * Math.log(Ls); w += nn * Ls * Ls;
@@ -1003,6 +1006,49 @@
     a.p = parametresVision(a.La, o.scot, a.haut); a.seuil = a.p[1]; a.visible = a.haut > 0.5 * a.seuil;
     if (o.pied > 0) a.p[4] = o.pied;     // pied de luminance (fraction du blanc) en luminosité réelle : sources ponctuelles (cf. `vision`)
     return a;
+  }
+  // --- Niveau d'adaptation AFFICHÉ : l'œil ne saute pas d'un niveau à l'autre --------------------------------
+  // Le LOGARITHME de La rejoint sa cible en exponentielle, asymétrique : vers la lumière en TAU_ADAPT.lumiere, vers le
+  // noir en TAU_ADAPT.obscur (Durand-Dorsey 2000). Les deux constantes sont ABRÉGÉES (le vrai retour du noir prend des
+  // minutes) et surtout BORNÉES : le logarithme d'un écart de 5 décades met τ·ln(300) à se refermer (à 5 s, 25 s de
+  // champ noir après un passage sur l'ordre 0, mesuré). Vers la lumière, 1 s est l'ordre du réflexe pupillaire
+  // (fermeture : latence 0,2 à 0,3 s, constante ≈ 1 s) ; la rétine seule irait à 0,1-0,4 s.
+  // Ce filtre ne touche QUE l'affichage : `adaptation`, `adapterVision`, `adaptationCroisee` et `parametresVision`
+  // restent stationnaires et purs (les références les rejouent), et `stats.vision` de chaque moteur reste la CIBLE
+  // mesurée (la boucle de pupille et les relevés la lisent). Aucune horloge ici : l'appelant donne dt.
+  var TAU_ADAPT = { lumiere: 1.0, obscur: 2.0 };      // s, pour les trois instruments (un seul endroit à régler)
+  var POSE_ADAPT = 0.01;                              // 1 % : au-delà, ça ne se voit plus
+  function suiviAdaptation(tau) {
+    var tl = (tau && tau.lumiere) || TAU_ADAPT.lumiere, to = (tau && tau.obscur) || TAU_ADAPT.obscur, niv = null, net = null;
+    function cible(l) { return Math.log(Math.max(l, 1e-12)); }
+    // La cible de la dernière pose, gardée TELLE QUELLE : exp(ln x) s'en écarte d'une unité flottante, et l'image au
+    // repos doit être identique au bit près à la version stationnaire (mêmes paramètres d'affichage, mêmes pixels).
+    function niveau() { return net != null ? net : Math.exp(niv); }
+    return {
+      // Un pas. `l` = cible mesurée (cd/m²), `dt` en secondes (borné à 0,1 s : une page laissée en arrière-plan ne
+      // saute pas d'un coup), `ancre` = arrivée ou scène refaite, sans transitoire. Renvoie le niveau affiché (cd/m²).
+      pas: function (l, dt, ancre) {
+        var c = cible(l), d;
+        if (ancre || niv == null) { niv = c; net = l; }
+        else if (c !== niv) {
+          d = Math.min(Math.max(dt || 0, 0), 0.1); niv += (c - niv) * (1 - Math.exp(-d / (c > niv ? tl : to))); net = null;
+        }
+        if (Math.abs(c - niv) < POSE_ADAPT) { niv = c; net = l; }   // le reste ne se voit pas : au repos, l'image est EXACTEMENT la stationnaire
+        return niveau();
+      },
+      enRelax: function (l) { return niv != null && Math.abs(cible(l) - niv) >= POSE_ADAPT; },
+      // Vrai tant qu'aucun pas n'a été fait : l'appelant ancre à l'arrivée sur la première mesure.
+      get ancre() { return niv == null; },
+      get La() { return niv == null ? null : niveau(); }
+    };
+  }
+  // Paramètres d'affichage du niveau AFFICHÉ, à partir de la cible mesurée (`a` d'`adapterVision` ou de `adaptation`) :
+  // mêmes seuil, chroma et rapport scotopique qu'elle, mais le gain de Ward suit le niveau affiché. `pied` (p[4]) est un
+  // réglage d'affichage de source ponctuelle, indépendant du niveau : repris tel quel.
+  function parametresLisses(La, scot, haut, pied) {
+    var p = parametresVision(La, scot, haut);
+    if (pied > 0) p[4] = pied;
+    return p;
   }
   // Rapport scotopique / photopique d'un corps noir à T (K), sur 380-780 nm : lampe à filament (goniomètre : lampe du
   // réticule), là où le spectre est connu (l'approximation XYZ de `scotXYZ` vaut pour un continu quelconque).
@@ -1162,6 +1208,7 @@
     VISION: VISION, vScot: vScot, rapportScotopique: rapportScotopique, scotXYZ: scotXYZ, pupille: pupille, seuilBatonnets: seuilBatonnets,
     seuilCones: seuilCones, seuilVision: seuilVision, sigmaBatonnets: sigmaBatonnets, facteurWard: facteurWard, facteurHunt: facteurHunt,
     parametresVision: parametresVision, adaptation: adaptation, adapterVision: adapterVision, rapportPlanck: rapportPlanck, vision: vision, parametresVisible: parametresVisible, VISIBLE: VISIBLE, GLSL_VISION: GLSL_VISION,
+    suiviAdaptation: suiviAdaptation, parametresLisses: parametresLisses, TAU_ADAPT: TAU_ADAPT,
     HALO: HALO, psiHalo: psiHalo, voileHalo: voileHalo,
     VERRES: VERRES, indice: indice, cheminLame: cheminLame, lame: lame, dispersion: dispersion, SEG: SEG,
     normaleCompensatrice: normaleCompensatrice, deviationFantome: deviationFantome,
@@ -1412,9 +1459,12 @@
     var R = creerRenduGL(canvas);
     if (!R) return null;
     var cfg = null, aff = null, sale = false, tChange = 0, etat = "repos", fin = 0, graine = (opts && opts.graine) || 1, t0Fin = 0, pose = 0;
-    var stats = { apercuMs: 0, passeMs: 0, passes: 0, finMs: 0, objectif: 0, vision: null, expo: 0, y99: 0, adaptMs: 0 };
-    var chrono = !!(opts && opts.chrono), tPrec = -1e9, adaptDue = false, cleAdapt = null;
-    function demander(c, a, x) { cfg = c; aff = a; pose = (x && x.pose) || 0; sale = true; tPrec = tChange; tChange = performance.now(); }
+    var stats = { apercuMs: 0, passeMs: 0, passes: 0, finMs: 0, objectif: 0, vision: null, expo: 0, y99: 0, adaptMs: 0, adaptLa: null };
+    var chrono = !!(opts && opts.chrono), adaptDue = false, cleAdapt = null, tMesure = -1e9;
+    // Niveau d'adaptation affiché (cf. `suiviAdaptation`) : la cible mesurée reste `stats.vision`, `visA` est ce que
+    // voit l'image ; `sceneAncre` = la scène où le niveau a été ancré pour la dernière fois.
+    var SUIVI = suiviAdaptation(), visA = null, tLiss = 0, tRelax = 0, sceneAncre = null;
+    function demander(c, a, x) { cfg = c; aff = a; pose = (x && x.pose) || 0; sale = true; tChange = performance.now(); }
     function cle(a) { return a ? JSON.stringify([a.vision || null, !!a.auto, a.visible || 0, a.W, a.cx0 || 0, a.cy0 || 0]) : null; }
     function adapter() {
       var t0 = performance.now(), img = R.lire(), n = img.length / 3, h = 2 * aff.W / R.res, Y = new Float64Array(n), i;
@@ -1427,14 +1477,25 @@
         var V = aff.vision, L = new Float64Array(n);
         for (i = 0; i < n; i++) L[i] = Y[i] * V.s;
         var a = adapterVision(L, V.omega * h * h, { M: V.M, Fsalle: V.Fsalle, salle: V.salle, scot: V.scot, pied: V.pied });
-        a.pupTracee = V.pup || 0; a.cfg = cfg; stats.vision = a;
+        a.pupTracee = V.pup || 0; a.cfg = cfg; a.scene = aff.scene == null ? null : aff.scene; stats.vision = a;
       } else stats.vision = null;
-      cleAdapt = cle(aff); adaptDue = false; stats.adaptMs = performance.now() - t0;
+      cleAdapt = cle(aff); adaptDue = false; tMesure = t0; stats.adaptMs = performance.now() - t0;
+    }
+    // Le niveau AFFICHÉ rejoint la cible mesurée, ancré quand la scène change (la cible porte la scène où elle a été
+    // mesurée) et à l'arrivée. Aucune passe : seuls les paramètres d'affichage changent.
+    function lisser() {
+      if (!aff || !aff.vision || !stats.vision) return;
+      var t = performance.now(), a = stats.vision, neuf = a.scene !== sceneAncre;
+      sceneAncre = a.scene;
+      var La = SUIVI.pas(a.La, tLiss ? (t - tLiss) / 1000 : 0, neuf || SUIVI.ancre);
+      tLiss = t;
+      visA = parametresLisses(La, aff.vision.scot, a.haut, a.p[4]);
+      stats.adaptLa = La;
     }
     function aAfficher() {
       if (!aff || !(aff.vision || aff.auto)) return aff;
       var o = {}, k; for (k in aff) o[k] = aff[k];
-      if (aff.vision && aff.vision.affiche !== false && stats.vision) { o.visP = stats.vision.p; o.s = aff.vision.s; }
+      if (aff.vision && aff.vision.affiche !== false && stats.vision) { lisser(); o.visP = visA || stats.vision.p; o.s = aff.vision.s; }
       else if (aff.auto && aff.visible && stats.y99 > 0) { o.visP = parametresVisible(stats.y99 / (aff.expo || 1), aff.visible); o.s = 1; }
       else if (aff.auto && stats.expo > 0) o.expo = stats.expo * (aff.expo || 1);
       return o;
@@ -1459,7 +1520,12 @@
         var r = rendu("apercu"); R.dimensionner(r.res); R.raz();
         stats.apercuMs = unePasse(r, 0); stats.passes = 0;
         if (aff.vision || aff.auto) {
-          if (!(stats.vision || stats.expo) || cle(aff) !== cleAdapt || tChange - tPrec > 200) adapter(); else adaptDue = true;
+          // Pendant un geste, la cible du niveau d'adaptation AFFICHÉ est remesurée 5 fois par seconde au plus (l'aperçu
+          // est le champ entier : le fondu se voit donc pendant le geste) ; un changement parti du repos est mesuré tout
+          // de suite. En « toujours visible » (`auto` sans `vision` affichée) il n'y a rien à faire fondre : la mesure
+          // attend la fin du geste, sinon l'exposition renormalise à chaque pas et l'image clignote.
+          var vu = !!(aff.vision && aff.vision.affiche !== false);
+          if (!(stats.vision || stats.expo) || cle(aff) !== cleAdapt || etat === "repos" || (vu && performance.now() - tMesure > 200)) adapter(); else adaptDue = true;
         }
         etat = "apercu"; R.afficher(aAfficher()); return true;
       }
@@ -1475,10 +1541,18 @@
         if (fin >= qualite().fin.passes) { etat = "repos"; stats.finMs = performance.now() - t0Fin; }
         return true;
       }
+      // Image fine posée et niveau d'adaptation encore en mouvement : on la repeint (aucune passe, l'accumulateur
+      // reste tel quel) 25 fois par seconde au plus ; la fin du parcours est inaperçue et n'a pas à tourner.
+      if (etat === "repos" && stats.vision && SUIVI.enRelax(stats.vision.La) && now - tRelax > 40) {
+        tRelax = now; R.afficher(aAfficher()); return true;
+      }
       return false;
     }
     function reafficher(a) { aff = a; if ((aff.vision || aff.auto) && cle(aff) !== cleAdapt && R.npasses) adapter(); R.afficher(aAfficher()); }
-    return { demander: demander, tick: tick, reafficher: reafficher, stats: stats, rendu: R, get etat() { return etat; } };
+    return { demander: demander, tick: tick, reafficher: reafficher, stats: stats, rendu: R, get etat() { return etat; },
+      // vrai tant que le niveau d'adaptation rejoint encore sa cible : l'appelant sait qu'une repeinte ne dit rien de
+      // neuf du champ (ni histogramme, ni courbe à relire)
+      get relax() { return !!(stats.vision && SUIVI.enRelax(stats.vision.La)); } };
   }
 
   Coeur.creerRenduGL = creerRenduGL;

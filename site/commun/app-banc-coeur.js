@@ -3269,8 +3269,12 @@
     if (!T) return null;
     var seq = null, emb = null, aff = {}, sale = false, etat = "repos", fin = 0, tChange = 0, t0Fin = 0, nRay = 0, expoAuto = 1, graine = opts.graine || 1;
     var mode = "rayons", planA = null, planF = null, paires = 0;
-    var stats = { apercuMs: 0, passeMs: 0, passes: 0, finMs: 0, objectif: 0, rayons: 0, eclairement: 0, moteur: "rayons", onde: null, vision: null, adaptMs: 0, bruit: null, bruitMs: 0, guide: null };
+    var stats = { apercuMs: 0, passeMs: 0, passes: 0, finMs: 0, objectif: 0, rayons: 0, eclairement: 0, moteur: "rayons", onde: null, vision: null, adaptMs: 0, adaptLa: null, bruit: null, bruitMs: 0, guide: null };
     var visP = null, geoVoile = 0, RES_ADAPT = 128, cleAdapt = null, seqAdapt = null, adaptAttente = false;
+    // Niveau d'adaptation affiché (cf. `suiviAdaptation` du module couleur) : `stats.vision` reste la CIBLE mesurée,
+    // `visP` porte les paramètres du niveau affiché ; `sceneAncre` = la scène où il a été ancré en dernier. La clé de
+    // scène vient de l'instrument (`aff.scene`) : le moteur ne sait pas distinguer la source d'un iris.
+    var SUIVI = M.suiviAdaptation(), tLiss = 0, tRelax = 0, tGeste = 0, sceneAncre = null;
     // Le moteur ondulatoire lit le champ AU CENTRE des texels : un détail plus fin qu'un texel de la passe (laser
     // focalisé sur la rétine : tache de quelques µm, texels de 94 µm) y disparaît, et l'œil se croyait dans le noir
     // (« trop peu de lumière » devant un laser). Les rayons, eux, déposent leur flux dans le texel : en onde, une passe
@@ -3314,7 +3318,7 @@
         } else stats.onde = null;
         stats.moteur = mode;
       }
-      if (a) { aff = a; if (!a.vision) { stats.vision = null; visP = null; cleAdapt = null; geoVoile = 0; } }
+      if (a) { aff = a; if (!a.vision) { stats.vision = null; visP = null; cleAdapt = null; geoVoile = 0; SUIVI = M.suiviAdaptation(); sceneAncre = null; } }
       sale = true; tChange = performance.now();
     }
     // g : passe du champ entier pour l'adaptation (vision), {res, W} ; fenêtre centrée sur le détecteur.
@@ -3481,9 +3485,26 @@
     // SOMMES_PAS passes de l'image fine, entre-temps extrapolées au nombre de rayons (22 ms à 2048² à chaque image sinon).
     var smC = null, smN = 0, smFin = -1, SOMMES_PAS = 8;
     function sommesEspacees() {
-      if (!smC || etat !== "fin" || smFin < 0 || fin - smFin >= SOMMES_PAS) { smC = T.sommes(); smN = nRay; smFin = etat === "fin" ? fin : -1; }
+      // Refaites à l'aperçu, et pendant l'image fine toutes les SOMMES_PAS passes ; PAS au repos, où l'accumulateur ne
+      // bouge plus : une repeinte du fondu d'adaptation les relirait sinon 25 fois par seconde pour rien (5 ms à 512²,
+      // 17 ms à 2048² de relecture, mesurées).
+      if (!smC || (etat !== "repos" && (etat !== "fin" || smFin < 0 || fin - smFin >= SOMMES_PAS))) {
+        smC = T.sommes(); smN = nRay; smFin = etat === "fin" ? fin : -1;
+      }
       var e = smN > 0 ? nRay / smN : 1;
       return [smC[0] * e, smC[1] * e, smC[2] * e, smC[3] * e];
+    }
+    // Le niveau AFFICHÉ rejoint la cible mesurée (`adapter`), ancré quand la scène change — la cible porte la scène où
+    // elle a été mesurée, `aff.scene` venant de l'instrument — et à l'arrivée. Aucune passe : seuls les paramètres
+    // d'affichage changent (`visP`).
+    function lisser() {
+      if (!aff.vision || !stats.vision) return;
+      var t = performance.now(), a = stats.vision, neuf = a.scene !== sceneAncre;
+      sceneAncre = a.scene;
+      var La = SUIVI.pas(a.La, tLiss ? (t - tLiss) / 1000 : 0, neuf || SUIVI.ancre);
+      tLiss = t;
+      visP = M.parametresLisses(La, aff.vision.scot, a.haut, aff.vision.pied);
+      stats.adaptLa = La;
     }
     function montrer() {
       // sans « auto » (écran, barrette) : l'exposition fixe aff.expo seule, jamais le gain d'une vue automatique précédente
@@ -3492,6 +3513,7 @@
       // aff.visible (vue « œil » en « toujours visible ») : la chaîne de couleur de `vision` sans seuils, bâtonnets, Hunt
       // ni halo (`parametresVisible`), sur l'exposition automatique (99e centile de la fenêtre à 0,9 × expo, `exposer`).
       var vr = aff.vision && aff.vision.affiche !== false, vv = !vr && !!aff.visible && !aff.photo;
+      if (vr) lisser();
       var k = vr ? aff.vision.s / Math.max(1, nRay) / aire() : (aff.auto && !aff.absolu ? expoAuto : 1) * (aff.expo || 1) / Math.max(1, nRay) / aire();
       // teinte lissée là où un texel a reçu peu de rayons (aperçu, premières passes, image peu lumineuse) ; jamais en onde.
       // Luminance lissée par densité aussi (LISSE_Y), sauf au capteur (bruit de photons physique, histogramme en JS).
@@ -3507,25 +3529,29 @@
       T.afficher({ lisse: lis ? 5 : 0, lisseY: lisY ? LISSE_Y.r : 0, seuilY: LISSE_Y.n, moy: sm && sm[3] > 0 ? [sm[0] / sm[3], sm[1] / sm[3], sm[2] / sm[3]] : null, K: k, bal: aff.bal || BAL, vue: aff.vue || (seq ? seq.vue : [1, 1]), comp: aff.comp || 1, fond: aff.fond, net: aff.net, bruit: aff.bruit || 0, photo: ph, vision: vr ? visP || [0, 1, 1, -1] : vv ? M.parametresVisible(0.9 * (aff.expo || 1)) : null,
         voile: vr && geoVoile ? [aff.W / geoVoile, aff.W / geoVoile, ((aff.cx || 0) - aff.W + geoVoile) / (2 * geoVoile), ((aff.cy || 0) - aff.W + geoVoile) / (2 * geoVoile)] : null });
     }
-    // Vision : niveau d'adaptation et pupille d'après la passe du champ entier (demi-largeur W, centrée sur le détecteur).
-    function adapter(W, rayons) {
-      var cpt = new Float64Array(T.res * T.res), V = aff.vision, img = T.lire(0, T.res, cpt), n = img.length / 3, h = 2 * W / T.res, k = V.s / Math.max(1, nRay) / (mode === "onde" && !rayons ? 1 : h * h);
+    // Vision : niveau d'adaptation et pupille d'après la passe du champ entier (demi-largeur W, centrée sur le
+    // détecteur). `bloc` : lire l'accumulateur en blocs de `bloc` × `bloc` au lieu de sa résolution — l'aperçu d'un
+    // geste, déjà calculé, se mesure ainsi sans passe supplémentaire (le 99e centile et le halo y sont plus grossiers).
+    function adapter(W, rayons, bloc) {
+      var N = bloc || T.res, cpt = new Float64Array(N * N), V = aff.vision;
+      var img = bloc ? T.reduire(bloc, cpt) : T.lire(0, T.res, cpt), n = img.length / 3, h = 2 * W / N, k = V.s / Math.max(1, nRay) / (mode === "onde" && !rayons ? 1 : h * h);
       var L = new Float64Array(n), i;
       for (i = 0; i < n; i++) L[i] = img[3 * i + 1] * k;
       // plus clair du champ (99e centile des texels éclairés) : plancher de `parametresVision`, et « visible » s'il
       // dépasse la moitié du seuil (visibilité 0,2 dans `vision`) ; débiaisé si la passe a deux moitiés (`centileCroise`)
-      var imgB = (rayons || mode !== "onde") && T.blend32 ? T.lireB() : null;
+      var imgB = !bloc && (rayons || mode !== "onde") && T.blend32 ? T.lireB() : null;
       var a = imgB ? adaptationCroisee(L, imgB, k, h, V) : M.adaptation(L, (V.omega || 0) * h * h, { M: V.M, Fsalle: V.Fsalle, salle: V.salle });
       a.haut = imgB ? centileCroise(img, imgB, k) : centileTri(L);
-      visP = M.parametresVision(a.La, V.scot, a.haut); a.seuil = visP[1]; a.visible = a.haut > 0.5 * visP[1];
-      a.pupTracee = V.pup || 0; a.seq = seq;
+      a.p = M.parametresVision(a.La, V.scot, a.haut); a.seuil = a.p[1]; a.visible = a.haut > 0.5 * a.p[1];
+      a.pupTracee = V.pup || 0; a.seq = seq; a.scene = aff.scene == null ? null : aff.scene;
       // halo : voile au plus Ψ(un élément) × angle solide × ΣL ; sauté s'il reste sous le dixième du seuil
       var c = new Float64Array(3 * n), t0 = performance.now();
       for (i = 0; i < 3 * n; i++) c[i] = img[i] * k;
-      if (mode !== "onde" || rayons) teinteLissee(c, cpt, T.res);
-      a.voile = halo(c, T.res, W, a.seuil);
+      if (mode !== "onde" || rayons) teinteLissee(c, cpt, N);
+      a.voile = halo(c, N, W, a.seuil);
       if (geoVoile) a.voileMs = performance.now() - t0;
       stats.vision = a;
+      return a;
     }
     // Niveau d'adaptation sur une passe en deux moitiés indépendantes (A = total − B) : poids croisés 4·A·B (`adaptation`,
     // o.LB). Lumière clairsemée (la part croisée Σ 4AB / Σ (A + B)² sous ADAPT_CROISE : le bruit pèse encore, et le log
@@ -3597,9 +3623,11 @@
       T.voile(vo, n); geoVoile = W;
       return vm;
     }
-    // Pendant un geste, l'œil garde l'adaptation d'avant (adaptAttente) mais le halo, optique, suit l'image : refait sur
-    // l'aperçu réduit à 64² (≈ 5 ms) quand l'aperçu couvre le champ entier ; zoomé, retiré jusqu'à l'image fine (un voile
-    // figé restait en surimpression de la pièce qu'on déplaçait). Pas en onde quand l'œil s'adapte sur les rayons.
+    // Le halo, optique, suit l'image pendant un geste : refait sur l'aperçu réduit à 64² (≈ 5 ms) quand l'aperçu couvre
+    // le champ entier ; zoomé, retiré jusqu'à l'image fine (un voile figé restait en surimpression de la pièce qu'on
+    // déplaçait). Pas en onde quand l'œil s'adapte sur les rayons. L'œil, lui, s'adapte aussi pendant le geste : sa
+    // cible y est remesurée en blocs de 64² sur le même aperçu (cf. `tick`) — quand elle vient d'y être mesurée, le
+    // voile est déjà à jour et cette passe ne sert plus.
     function haloApercu() {
       var V = aff.vision, sv = stats.vision;
       geoVoile = 0;
@@ -3628,17 +3656,30 @@
       if (sale) {
         sale = false; PIL = null;
         // passe d'adaptation : seulement si le montage ou la vue « œil » a changé (zoomer, se déplacer : La inchangé).
-        // Changement parti du repos (montage choisi, interrupteur) ou vue « œil » changée : tout de suite ; pendant un
-        // geste (aperçus enchaînés) : l'œil garde son adaptation, remesurée au début de l'image fine (en onde, la passe
-        // coûte autant qu'un aperçu). Son temps compte dans l'aperçu (qualité adaptative, « Mesurer les temps »).
+        // Changement parti du repos (montage choisi, interrupteur) ou vue « œil » changée : tout de suite, à la
+        // définition d'adaptation (128²) ; pendant un geste (aperçus enchaînés) : `adaptAttente`, et la cible est
+        // remesurée sur l'aperçu lui-même en blocs de 64² (juste après, sans passe de plus) puis à l'image fine. En
+        // onde, la passe coûte autant qu'un aperçu : on s'en tient au report. Son temps compte dans l'aperçu (qualité
+        // adaptative, « Mesurer les temps »).
         var cle = aff.vision ? JSON.stringify(aff.vision) : null;
         stats.adaptMs = 0;
         if (aff.vision && (cle !== cleAdapt || seq !== seqAdapt)) {
           if (!visP || cle !== cleAdapt || etat === "repos") adapterChamp(); else adaptAttente = true;
         }
         T.dimensionner(q().apercu.res); T.raz(); nRay = 0;
-        stats.apercuMs = unePasse("apercu", 0) + stats.adaptMs; stats.passes = 0;
-        if (adaptAttente && aff.vision) { var th = performance.now(); haloApercu(); stats.haloGeste = geoVoile > 0; stats.apercuMs += performance.now() - th; }
+        var ta = unePasse("apercu", 0);
+        // Pendant un geste, l'œil continue de s'adapter : la cible est remesurée sur l'aperçu DÉJÀ calculé (blocs de
+        // 64², aucune passe), 5 fois par seconde au plus, et seulement quand l'aperçu couvre le champ entier (agrandi,
+        // il ne dit plus l'exposition). L'image fine remesurera de toute façon à sa définition (`adaptAttente` reste
+        // vrai) ; en onde, les unités de l'accumulateur sont autres : on s'en tient au report.
+        var mesGeste = false;
+        if (adaptAttente && aff.vision && mode !== "onde" && now - tGeste > 200 &&
+            Math.abs(aff.W - aff.vision.Wg) <= 1e-9 * aff.vision.Wg && !aff.cx && !aff.cy) {
+          var tg = performance.now(); adapter(aff.W, false, 64); ta += performance.now() - tg; tGeste = now; mesGeste = true;
+        }
+        stats.apercuMs = ta + stats.adaptMs; stats.passes = 0;
+        if (adaptAttente && aff.vision && !mesGeste) { var th = performance.now(); haloApercu(); stats.haloGeste = geoVoile > 0; stats.apercuMs += performance.now() - th; }
+        else if (mesGeste) stats.haloGeste = geoVoile > 0;
         if (aff.auto) exposer();
         // délai de l'image fine compté depuis la FIN de l'aperçu : un aperçu plus long que le délai (Fourier sur une
         // diapo : 150 à 300 ms) lançait l'image fine à l'image suivante, en plein geste, et le pas suivant l'attendait
@@ -3658,14 +3699,25 @@
           fini = mes ? finBruit(Q) : fin >= stats.objectif;
           if (!fini && finVisible(Q)) { fini = true; if (stats.bruit) stats.bruit.raison = "visible"; }
         } while (!fini && performance.now() - tb < (opts.budget || 12));
-        if (fini) { etat = "repos"; stats.finMs = performance.now() - t0Fin; if (aff.auto) exposer(); }
+        // l'image fine est finie : les sommes sont relues UNE fois pour la repeinte finale (pile la dernière passe),
+        // puis gardées au repos (les repeintes du fondu n'y touchent plus)
+        if (fini) { etat = "repos"; stats.finMs = performance.now() - t0Fin; if (aff.auto) exposer(); smC = null; }
         stats.passes = fin; montrer();
         return true;
+      }
+      // Image fine posée et niveau d'adaptation encore en mouvement : on la repeint (aucune passe, l'accumulateur
+      // reste tel quel) 25 fois par seconde au plus, HORS du budget des rayons — dans la boucle ci-dessus, la repeinte
+      // volerait du temps au tracé et l'image fine se poserait plus tard après le geste.
+      if (etat === "repos" && aff.vision && stats.vision && SUIVI.enRelax(stats.vision.La) && now - tRelax > 40) {
+        tRelax = now; montrer(); return true;
       }
       return false;
     }
     function reafficher(a) { if (a) aff = a; ECR = {}; if (emb && nRay) montrer(); }
     return { demander: demander, reinit: function () { seq = null; }, tick: tick, reafficher: reafficher, eclairement: eclairement, stats: stats, traceur: T, get etat() { return etat; }, get moteur() { return mode; },
+      // vrai tant que le niveau d'adaptation rejoint encore sa cible : l'appelant sait qu'une repeinte ne dit rien de
+      // neuf du champ (ni histogramme, ni courbe, ni pose à relire)
+      get relax() { return !!(aff.vision && stats.vision && SUIVI.enRelax(stats.vision.La)); },
       get plan() { return mode === "onde" ? (planF && planF.ok ? planF : planA) : null; }, get seq() { return seq; },
       // séquence telle que la carte la trace dans la fenêtre affichée (guide compris) et son emballage : un rayon rejoué
       // sur le processeur (`rejouer`) n'est le même que sur CET objet

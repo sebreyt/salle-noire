@@ -161,6 +161,19 @@
 <p>La salle, très sombre (0,02 lx), n'ajoute rien à l'image mais entre dans le niveau d'adaptation \(L_a\) :
   moyenne logarithmique des luminances sur tout le champ regardé, pondérée par le carré de la luminance. Ce niveau
   fixe le seuil de visibilité, d'après les courbes de Ferwerda pour les cônes et les bâtonnets.</p>
+<p>La moyenne pondère chaque élément par le carré de sa luminance — le regard va où est la lumière — et, au goniomètre,
+  par un <em>poids de regard</em> : \((1 - u^2)^2\), \(u\) étant la distance au centre du champ divisée par le rayon du
+  diaphragme de champ. L'observateur regarde le centre de l'oculaire, pas son bord : un bout de raie qui entre au bord
+  du champ ne peut donc plus éteindre les raies du centre, alors qu'une raie forte au milieu écrase toujours les
+  faibles, comme dans l'œil.</p>
+<p>Ce niveau ne saute pas d'une mesure à l'autre : il rejoint sa cible en un fondu court, 1 s quand le champ s'éclaire
+  et 2 s quand il s'assombrit, sans transitoire à l'arrivée ni au changement de montage. Sans cela, une raie forte qui
+  entre au bord du champ faisait varier l'exposition de plusieurs diaphragmes d'un coup, et les raies faibles déjà
+  présentes s'éteignaient. Le fondu suit les gestes : régler un iris, une mise au point ou déplacer une pièce ne
+  refait pas le montage, l'œil s'y adapte donc progressivement, y compris pendant le geste ; changer de lampe, de
+  filtre, de vue ou de mode d'affichage, en revanche, ancre le niveau d'un coup. Les temps de l'œil (quelques dixièmes
+  de seconde vers la lumière, plusieurs minutes vers l'obscurité) sont ici abrégés et bornés. Le voile
+  d'éblouissement du banc, lui, reste instantané : c'est de la diffusion dans l'œil, pas de l'adaptation.</p>
 
 <h4>Vision de nuit</h4>
 <p>Aux faibles luminances, les bâtonnets remplacent les cônes et les couleurs disparaissent. La part des bâtonnets
@@ -202,8 +215,9 @@
   dernière étape : « sans », l'image est exposée sur le champ regardé, sans seuils, vision de nuit ni
   halo. Les capteurs (photodiode, barrette CCD, appareil photo, spectromètre) ne passent pas par l'œil : ils ont
   leur propre modèle, décrit avec chaque instrument.</p>
-<div class="encart"><p>Non modélisés : le temps d'adaptation de la pupille et de la rétine (seul l'état stationnaire
-  est calculé), la distance d'observation et, sauf au goniomètre, l'acuité.</p></div>
+<div class="encart"><p>Non modélisés : le temps de réponse de la pupille (stationnaire partout), l'adaptation progressive à
+  l'obscurité (plusieurs minutes : le fondu est abrégé et borné), la distance d'observation et, sauf au goniomètre,
+  l'acuité.</p></div>
 
 <h3 id="optiques">Optique parfaite, optique réelle</h3>
 <p>Le banc d'optique propose deux optiques.</p>
@@ -526,7 +540,8 @@
 </ul>
 <h4>Œil</h4>
 <ul>
-  <li>Adaptation stationnaire seulement : ni temps de réponse de la pupille, ni adaptation progressive à
+  <li>Pupille stationnaire ; adaptation de la rétine par un simple fondu du niveau d'adaptation (1 s / 2 s, le
+    logarithme de \(L_a\) filtré, ancré sur les changements de montage) — pas l'adaptation progressive à
     l'obscurité.</li>
   <li>Ni distance d'observation de l'écran, ni acuité hors du goniomètre ; le moniteur est supposé de luminance
     maximale 150 cd/m².</li>
@@ -550,8 +565,8 @@
   <li>G. Krawczyk (2007), <a href="https://people.mpi-inf.mpg.de/alumni/d4/2014/krawczyk/phd/krawczyk07phd_final.pdf"><em>Perception-inspired
     tone mapping</em></a>, thèse (vision de nuit d'après Hunt, teinte scotopique).</li>
   <li>S. Pattanaik et al. (2000), <a href="https://en-cg-web.coecis.cornell.edu/pubs/2000/PTYG00.html">« Time-dependent
-    visual adaptation for fast realistic image display »</a>, SIGGRAPH (pour mémoire : le temps d'adaptation n'est pas
-    modélisé).</li>
+    visual adaptation for fast realistic image display »</a>, SIGGRAPH (le fondu des trois paillasses n'en reprend que l'idée :
+    un filtre du logarithme de \(L_a\), sans modèle de photopigment).</li>
   <li>A. Kirk, J. O'Brien (2011), <a href="https://www2.eecs.berkeley.edu/Pubs/TechRpts/2011/EECS-2011-91.html">« Perceptually
     based tone mapping for low-light conditions »</a>.</li>
   <li>CIE 146:2002, <a href="https://cie.co.at/publications/cie-collection-glare-2002">équation générale de

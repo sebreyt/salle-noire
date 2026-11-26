@@ -8,7 +8,8 @@
  *    Repère du dessin = vue de dessus, en mm, séparatrice au centre : entrée par le bas (+y), M1 à gauche (−x),
  *    M2 en haut (−y), sortie à droite (+x). Positions sur les bancs en m depuis la séparatrice ; le moteur compte
  *    depuis le plan de M1 le long du trajet (d = ARM + position).
- *    Vis : C3 0,5 mm par tour (lecture du contact tirée et cachée) ; C1, C2 0,15 mrad par tour (un glisser rapide
+ *    Vis : C3 0,5 mm par tour, le chariotage (lecture du contact tirée et cachée ; au glisser elle suit la vitesse de
+ *    la main : ÷3 tout doucement, ×25 lancée, donc 0,5 mm par tour au rythme de la main) ; C1, C2 0,15 mrad par tour (un glisser rapide
  *    accélère), A1, A2 0,02 mrad par tour, selon des axes à 45° de l'horizontale et de la verticale ; B1, B2 :
  *    compensatrice, 2,5 mrad par tour (B1 : axe horizontal, B2 : axe vertical). Lames réelles (séparatrice et
  *    compensatrice BK7 de 6 mm, image fantôme de 5 %) et lamelle couvre-objet : modélisées dans le moteur (cfg.lames,
@@ -363,12 +364,20 @@
     var o = (cfg.sortie || []).filter(function (q) { return q.nom === "oeil"; })[0];
     return o ? [o.ox || 0, o.oy || 0] : [0, 0];
   }
+  // Scène du Michelson, pour l'ancrage du niveau d'adaptation de l'œil (`a.scene`, lu par le moteur) : ce que l'élève
+  // refait en regardant le champ — la lampe (spectre et filtre), le dépoli, le condenseur de la lanterne, la feuille
+  // posée, la vue, la luminosité, le dérèglement. N'en sont PAS : l'iris, les positions, C₃, la compensatrice, l'œil
+  // (position, accommodation), la pupille — réglés en regardant le champ, ceux-là doivent fondre.
+  function sceneSig(st) {
+    return [st.graine, st.lampe, !!st.depoli, condLanterne(st), st.feuille || "", vue(st), reelle(st)].join("|");
+  }
   // Affichage du moteur (vues écran et œil ; la feuille et l'iris sont dessinés en 2D) : luminosité réelle (`vision`)
   // ou toujours visible (exposition automatique, `auto`, salle noire comme en réelle, linéaire + pied : `visible`).
   function affichage(st, bal) {
     var v = vue(st), a;
     if (v === "oeil") a = { W: W_VUE.oeil, cx0: st.oeilX || 0, cy0: st.oeilY || 0, expo: 1, bal: bal, fond: [0, 0, 0], cadre: [0, 0, 0, 0], retourne: true };
     else a = { W: W_VUE.ecran, expo: 1, bal: bal, fond: [0, 0, 0], cadre: [8, 8, 432, 432], retourne: false };
+    a.scene = sceneSig(st);   // la cible mesurée s'en souvient : c'est elle qui ancre le niveau d'adaptation
     if (v !== "oeil" && v !== "ecran") return a;
     if (reelle(st)) a.vision = visionDe(st, v);
     else { a.auto = true; a.visible = PIED_VISIBLE; if (v === "oeil") a.vision = visionDe(st, v, true); }
@@ -1760,7 +1769,10 @@
     var V = {};
     function vis(id, o) { V[id] = K.vis(gVis, o); V[id].g.setAttribute("data-vis", id); return V[id]; }
     function posM2() { return -130 - epaisseur(st, c3Vu) * 1000; }
+    // C₃ : le chariot de M₂ suit la main (gainMin 0,3 : un glisser lent avance par pas plus fins que le pixel ; accel 25 :
+    // lancée d'un coup de poignet, elle chariote vite, et le chariot lissé (τ) étale le mouvement).
     vis("C3", { x: 0, y: -266, long: 26, diam: 32, axe: "y", nom: "C₃", lx: 24, ly: 3, ancre: "start", stries: 28, repere: true,
+      accel: 25, gainMin: 0.3,
       tours: function () { return c3Vu / PAS_C3; }, pasMolette: [0.01 / PAS_C3, 0.001 / PAS_C3, 0.0001 / PAS_C3],
       tourner: function (dt) { st.C3 = Math.round(clamp(st.C3 + dt * PAS_C3, 0, C3_MAX) * 1e5) / 1e5; modifie(); } });
     function visInc(id, cle, x, y, axe, lx, ly, anc) {
@@ -2547,13 +2559,20 @@
       else if (ctx2) { ctx2.fillStyle = "#000"; ctx2.fillRect(0, 0, 440, 440); }
     }
     function montrerCanvas() { var f = vue2D() || !MOT; cv.hidden = f; cv2.hidden = !f; }
-    function cpuPas() {
-      if (!ctx2 || !CPU.acc || CPU.n >= CPU.max || vue2D()) return;
+    // Repli sans carte graphique : une passe de rayons par image jusqu'à CPU.max, puis — le niveau d'adaptation
+    // continuant de rejoindre sa cible — la seule conversion en couleurs, 25 fois par seconde au plus. Même loi de
+    // fondu qu'au moteur (module couleur) et même ancrage par scène : les deux chemins ne divergent pas selon la machine.
+    var SUIVI_CPU = CO.suiviAdaptation ? CO.suiviAdaptation() : null, sceneAncreCPU = null, tLissCPU = 0, tRelaxCPU = 0;
+    function cpuPasse() {
       var cfg = configOptique(st, c3Vu), a = affichage(st, BAL), q = qualite(cfg).apercu;
       var im = CO.rendreCPU(cfg, { res: CPU.res, W: a.W, cx0: a.cx0 || 0, cy0: a.cy0 || 0, K: CPU.K, M: q.M, graine: 1 }, 1, CPU.n);
       for (var i = 0; i < im.length; i++) CPU.acc[i] += im[i];
       CPU.n++;
-      var n = CPU.res; img2.width = img2.height = n;
+    }
+    function cpuMontre() {
+      if (!ctx2 || !CPU.acc || !(CPU.n > 0) || vue2D()) return;
+      var a = affichage(st, BAL), n = CPU.res;
+      img2.width = img2.height = n;
       var ic = img2.getContext("2d"), id = ic.createImageData(n, n), Dd = id.data, p, Y = new Float64Array(n * n);
       // luminosité (comme le moteur, `creerMoteur` du module couleur) : adaptation sur l'image accumulée
       for (p = 0; p < n * n; p++) Y[p] = Math.max(CPU.acc[3 * p + 1] / CPU.n, 0);
@@ -2563,7 +2582,17 @@
         var hh = 2 * a.W / n, LL = Y.map(function (y) { return y * a.vision.s; });
         CPU.vision = CO.adapterVision(LL, a.vision.omega * hh * hh, { M: a.vision.M, Fsalle: a.vision.Fsalle, salle: a.vision.salle, scot: a.vision.scot, pied: a.vision.pied });
         CPU.vision.pupTracee = a.vision.pup || 0;
-        if (a.vision.affiche !== false) { vis = CPU.vision.p; sv = a.vision.s; }
+        CPU.vision.scene = a.scene == null ? null : a.scene;
+        if (a.vision.affiche !== false) {
+          if (SUIVI_CPU) {
+            var tn = maintenant(), neuf = CPU.vision.scene !== sceneAncreCPU;
+            sceneAncreCPU = CPU.vision.scene;
+            CPU.adaptLa = SUIVI_CPU.pas(CPU.vision.La, tLissCPU ? (tn - tLissCPU) / 1000 : 0, neuf || SUIVI_CPU.ancre);
+            tLissCPU = tn;
+          }
+          vis = SUIVI_CPU ? CO.parametresLisses(CPU.adaptLa, a.vision.scot, CPU.vision.haut, CPU.vision.p[4]) : CPU.vision.p;
+          sv = a.vision.s;
+        }
       }
       for (p = 0; p < n * n; p++) {
         var xyz = [CPU.acc[3 * p] / CPU.n, CPU.acc[3 * p + 1] / CPU.n, CPU.acc[3 * p + 2] / CPU.n], c;
@@ -2576,6 +2605,13 @@
       ctx2.fillStyle = "#000"; ctx2.fillRect(0, 0, 440, 440);
       if (vue(st) === "ecran" && !a.vision) { ctx2.fillStyle = "#16181b"; ctx2.fillRect(8, 8, 424, 424); }
       ctx2.save(); ctx2.imageSmoothingEnabled = true; ctx2.globalCompositeOperation = "lighter"; ctx2.drawImage(img2, 0, 0, 440, 440); ctx2.restore();
+    }
+    function cpuPas() {
+      if (!ctx2 || !CPU.acc || vue2D()) return;
+      if (CPU.n < CPU.max) { cpuPasse(); cpuMontre(); return; }
+      // plus de passe à ajouter : il ne reste que le fondu du niveau d'adaptation (l'accumulateur ne bouge pas)
+      if (!SUIVI_CPU || !CPU.vision || !SUIVI_CPU.enRelax(CPU.vision.La) || maintenant() - tRelaxCPU < 40) return;
+      tRelaxCPU = maintenant(); cpuMontre();
     }
     // ---- la feuille vue de face (rendu 2D, optique géométrique : feuilleGeom) ----
     var FA = document.createElement("canvas"), FB = document.createElement("canvas"), FEU = null;
@@ -3228,7 +3264,7 @@
     D.addEventListener("mousemove", function (ev) { PT = K.ptSvg(ev); });
     var VIS_FINE = "glisser : la faire rouler (Maj : dix fois plus fin · Ctrl+Maj : cent fois) · molette : 1/40 de tour par cran (Maj 1/400 · Ctrl+Maj 1/4000 · Ctrl 1/4)";
     var TXT_VIS = {
-      C3: "<b>C₃</b>, vis micrométrique du chariot de M₂ — glisser : la faire rouler (Maj : dix fois plus fin · Ctrl+Maj : cent fois) · molette : une division (10 µm) par cran, Maj 1 µm, Ctrl+Maj 0,1 µm, Ctrl 0,1 mm · lecture : loupe sous l'image",
+      C3: "<b>C₃</b>, vis micrométrique du chariot de M₂ — glisser : la faire rouler (lancée, elle tourne plus vite ; tout doucement, moins vite que la main · Maj : dix fois plus fin · Ctrl+Maj : cent fois) · molette : une division (10 µm) par cran, Maj 1 µm, Ctrl+Maj 0,1 µm, Ctrl 0,1 mm · lecture : loupe sous l'image",
       C1: "<b>C₁</b>, vis d'inclinaison de M₂, grossière — glisser : la faire rouler (lancée, elle tourne plus vite) · molette : 1/40 de tour par cran (Ctrl : un tour, pour amener vite les taches l'une sur l'autre) · on affine avec A₁, A₂",
       A1: "<b>A₁</b>, vis d'inclinaison de M₁, fine — " + VIS_FINE,
       B1: "<b>B₁</b>, vis de la compensatrice : l'oriente — " + VIS_FINE,
@@ -3553,7 +3589,11 @@
         if (m) L.push(["Mesure du champ", "V " + f(m.V, 2) + " (max " + f(m.Vmax, 2) + "), éclairé " + Math.round(m.part * 100) + " %, " + f(m.nfr, 1) +
           " franges, courbure " + f(m.quad, 2) + ", circularité " + f(m.ratio, 2) + (m.centreDedans ? ", centre dans le champ" : "")]);
         var VS = MOT ? MOT.stats.vision : CPU && CPU.vision, vv = vue(st) === "feuille" ? FEU : VS;
-        L.push(["Œil", (reelle(st) ? "luminosité réelle" : "toujours visible") + (vv ? ", adapté à " + g3(vv.La) + " cd/m², pupille " + f(vv.D, 1) + " mm, le plus clair "
+        // le niveau AFFICHÉ est celui de l'œil à cet instant ; la cible entre parenthèses pendant qu'il la rejoint (la
+        // feuille et le « toujours visible » restent stationnaires : rien à annoncer)
+        var laAff = reelle(st) && vue(st) !== "feuille" && (MOT ? MOT.stats.adaptLa : CPU && CPU.adaptLa);
+        var relaxe = reelle(st) && vv && vv === VS && (MOT ? MOT.relax : !!(SUIVI_CPU && VS && SUIVI_CPU.enRelax(VS.La)));
+        L.push(["Œil", (reelle(st) ? "luminosité réelle" : "toujours visible") + (vv ? ", adapté à " + g3(laAff || vv.La) + (relaxe ? " (vers " + g3(vv.La) + ")" : "") + " cd/m², pupille " + f(vv.D, 1) + " mm, le plus clair "
           + g3(vv.haut) + " cd/m² (seuil " + g3(vv.seuil) + ")" + (vv.visible ? "" : ", trop peu de lumière") : "") + (vue(st) === "oeil" ? ", pupille tracée " + f(pupilleDe(st), 2) + " mm" : "")]);
         L.push(["Pendant les gestes", GESTE[gesteQ].nom + " (" + GESTE[gesteQ].res + " px)" + (CAD.ips ? ", " + Math.round(CAD.ips) + " images/s au dernier geste" : ", cadence : faire un geste")]);
         if (R) L.push(["Atteint en ce moment", ETAPES.filter(function (d) { return R.ok[d.id] || R.top[d.id]; }).map(function (d) { return d.nom + (R.top[d.id] ? " ★" : ""); }).join(", ") || "rien"]);

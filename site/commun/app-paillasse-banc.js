@@ -3705,6 +3705,23 @@
     }
     // Affichage de la fenêtre : capteur tel quel (pose) ; vue « œil » (écran, plaque, œil) en luminosité
     // réelle (`vision`, le même calcul sous les deux moteurs) ou toujours visible (exposition automatique de la fenêtre).
+    // Scène du banc, pour l'ancrage du niveau d'adaptation de l'œil (`aff.scene`, lu par le moteur) : ce que l'élève
+    // refait en regardant le champ — la source (lampe, spectre, laser), le dépoli, les verres qu'il met devant (filtre
+    // et sa couleur, densité et sa valeur, polariseur, lame, diapo et son image), le mode de luminosité, la vue.
+    // N'en sont PAS : l'iris, la mise au point, les positions, la rotation d'un polariseur — réglés ou déplacés en
+    // regardant le champ, ceux-là doivent fondre comme une rotation de lunette.
+    var TYPES_SCENE = { depoli: 1, filtre: 1, densite: 1, polariseur: 1, lame: 1, diapo: 1 };
+    function sceneSig() {
+      var S = SEQ && SEQ.source, src = S ? S.el + ":" + S.nomSpectre : "";
+      var verres = (st.elements || []).filter(function (e) { return TYPES_SCENE[e.type]; }).map(function (e) {
+        var q = C.params(e) || {};
+        return e.type + (e.type === "filtre" ? ":" + q.couleur : e.type === "densite" ? ":" + q.d
+          : e.type === "diapo" ? ":" + q.image + (q.eclairee ? ":clair" : "") : "");
+      });
+      // le MONTAGE chargé en est un aussi (on refait le banc, pas un réglage) : `st.montage` ne bouge plus ensuite, même
+      // si l'élève déplace les pièces — sinon un montage bien plus sombre que le précédent se fondrait pendant 10 s
+      return [st.montage || "", src, verres.join(","), FEN && FEN.vue ? (FEN.vue.retine ? "retine" : "ecran") : "", lumq()].join("|");
+    }
     function affichage() {
       var a = { W: FEN.W, cx: FEN.cx, cy: FEN.cy, expo: FEN.expo, auto: !!FEN.auto, absolu: !!FEN.absolu, bruit: FEN.bruit || 0, photo: FEN.photo || null, comp: FEN.comp, fond: FEN.fond, net: FEN.net };
       if (FEN.vue && lumq() !== "visible") { a.vision = visionDe(FEN, SEQ, PUP); a.auto = false; }
@@ -3712,6 +3729,7 @@
         a.visible = true;
         if (FEN.vue.retine) a.vision = visionDe(FEN, SEQ, PUP, true);
       }
+      a.scene = sceneSig();    // la cible mesurée s'en souvient : c'est elle qui ancre le niveau d'adaptation
       return a;
     }
     // Pupille stationnaire de l'œil qui observe : celle que le moteur mesure (stats.vision.D, adaptation du
@@ -4693,8 +4711,9 @@
         t += " · (lentille décentrée ou inclinée : le calcul ondulatoire la prend sur l'axe)";
       if (MOT && MOT.etat !== "repos") t += " · image en cours d'affinage";
       else if (MOT && MOT.stats.vision && DET !== "capteur") {
-        var VS = MOT.stats.vision;
-        t += VS.visible ? " · œil adapté à " + fmtLum(VS.La) + " (pupille " + fmt(VS.D, 1) + " mm)" : " · trop peu de lumière pour l'œil";
+        var VS = MOT.stats.vision, laAff = lumq() !== "visible" && MOT.stats.adaptLa, relaxe = lumq() !== "visible" && MOT.relax;
+        t += VS.visible ? " · œil adapté à " + fmtLum(laAff || VS.La) + (relaxe ? " (vers " + fmtLum(VS.La) + ")" : "") +
+          " (pupille " + fmt(VS.D, 1) + " mm)" : " · trop peu de lumière pour l'œil";
       }
       if (DET === "capteur" && notePose) t += " · " + notePose;
       if (st.aides.rebours && RET && RET.seq === SEQ && !RET.fini) t += " · rayons vers le point : recherche en cours";
@@ -5347,19 +5366,25 @@
       if (sale.photo) { sale.photo = false; dessinerSurc(); majPhoto(); }
       if (sale.barr) { sale.barr = false; dessinerSurc(); majCourbe(); majPied(); }
       if (MOT && MOT.tick()) {
-        suivrePupille();
-        if (MOT.etat === "apercu") {
-          // préréglage prof : 3 crans sous son plafond, entre 9 et 24 ms ; niveau de rendu : autour de son temps visé
-          var ta = MOT.stats.apercuMs, vise = Ql.prof ? 0 : RENDUS[Ql.rendu].ms, hautA = Ql.prof ? Ql.rApExp : 24, basA = Ql.prof ? Math.max(14, hautA - 3) : 14;
-          var tHaut = vise ? 1.45 * vise : 24, tBas = vise ? 0.6 * vise : 9;
-          if ((Ql.prof && !Ql.adapt) || nivApercu > hautA) nivApercu = hautA;
-          else if (ta > tHaut && nivApercu > basA) nivApercu--; else if (ta < tBas && nivApercu < hautA) nivApercu++;
+        // Repeinte du seul niveau d'adaptation (fondu au repos, 25 im/s) : rien du champ n'a bougé — ni histogramme,
+        // ni courbe, ni pose à relire (la relecture de la carte coûterait plus que la repeinte). Seule la ligne d'état
+        // suit ; le passage à « repos » garde son tick complet (etatMot le dit).
+        if (MOT.relax && MOT.etat === "repos" && etatMot === "repos") majPied();
+        else {
+          suivrePupille();
+          if (MOT.etat === "apercu") {
+            // préréglage prof : 3 crans sous son plafond, entre 9 et 24 ms ; niveau de rendu : autour de son temps visé
+            var ta = MOT.stats.apercuMs, vise = Ql.prof ? 0 : RENDUS[Ql.rendu].ms, hautA = Ql.prof ? Ql.rApExp : 24, basA = Ql.prof ? Math.max(14, hautA - 3) : 14;
+            var tHaut = vise ? 1.45 * vise : 24, tBas = vise ? 0.6 * vise : 9;
+            if ((Ql.prof && !Ql.adapt) || nivApercu > hautA) nivApercu = hautA;
+            else if (ta > tHaut && nivApercu > basA) nivApercu--; else if (ta < tBas && nivApercu < hautA) nivApercu++;
+          }
+          if (MOT.etat !== etatMot) { etatMot = MOT.etat; if (COURBE) majCourbe(); majPied(); }      // la courbe relit l'image finale
+          if (COURBE && (MOT.etat === "repos" || maintenant() - tCourbe > 250)) { tCourbe = maintenant(); majCourbe(); }
+          if (PHOTO && (MOT.etat === "repos" || maintenant() - tPhoto > 250)) { tPhoto = maintenant(); majPhoto(); }
+          if (MOT.etat !== "repos") poseAuto(true);
+          if (MOT.etat === "repos") { poseAuto(); majHisto(); if (PR.panneau.ouvert()) PR.maj(); }
         }
-        if (MOT.etat !== etatMot) { etatMot = MOT.etat; if (COURBE) majCourbe(); majPied(); }      // la courbe relit l'image finale
-        if (COURBE && (MOT.etat === "repos" || maintenant() - tCourbe > 250)) { tCourbe = maintenant(); majCourbe(); }
-        if (PHOTO && (MOT.etat === "repos" || maintenant() - tPhoto > 250)) { tPhoto = maintenant(); majPhoto(); }
-        if (MOT.etat !== "repos") poseAuto(true);
-        if (MOT.etat === "repos") { poseAuto(); majHisto(); if (PR.panneau.ouvert()) PR.maj(); }
       }
       if (MOT) { specTick(); retourTick(); if (MOT.moteur !== motVu) { motVu = MOT.moteur; majAides(); } }
       majL3();
