@@ -21,6 +21,19 @@
  */
 (function (root) {
   "use strict";
+  // Traduction : sans le moteur i18n (node, jsdom des tests, et les pages qui ne le chargent
+  // pas), TRAD rend le texte français tel quel — mais il substitue quand même {0}, {1}… :
+  // un appel paramétré doit afficher « clic ou touche ? » en français, jamais son gabarit.
+  var TRAD = root.VITRINE_I18N ? root.VITRINE_I18N.T : function (s, p) {
+    return !p ? s : String(s).replace(/\{(\d+)\}/g, function (m, i) { return p[i] == null ? m : String(p[i]); });
+  };
+  // Nombres affichés : un seul point de passage, le séparateur décimal de la langue (virgule en
+  // français, point en anglais). Hors moteur, I18N est absent : la virgule reste.
+  var I18N = root.VITRINE_I18N;
+  function nb(v, n) {
+    var s = n == null ? String(v) : (+v).toFixed(n);
+    return I18N && I18N.dec() === "." ? s : s.replace(".", ",");
+  }
   // Pupille de l'œil (diamètre, mm) : st.pupille, pupille STATIONNAIRE que
   // l'instrument tient de l'adaptation mesurée sur l'image (`stats.vision.D` du moteur) ; absente (partie sans DOM,
   // tests) : PUPILLE_DEFAUT. Elle règle la profondeur de champ sur les franges localisées et l'éclairement rétinien.
@@ -36,13 +49,13 @@
   var VERRES_LAMES = { t: 0.006, verre: "bk7", fantome: 0.05 }, EP_LAMELLE = 1.7e-4, VERRE_LAMELLE = "d263";
   var S2 = Math.SQRT1_2;
   var LAMPES = {
-    na: { nom: "lampe à vapeur de sodium", court: "Sodium", spectre: "na", type: "spectrale", coul: "#ffc23a" },
-    hg: { nom: "lampe à vapeur de mercure haute pression + filtre vert", court: "Mercure + filtre vert", spectre: "hg", type: "spectrale", coul: "#8cff6a" },
-    hgb: { nom: "lampe spectrale au mercure basse pression + filtre vert", court: "Mercure basse pression + filtre vert", spectre: "hgb", type: "spectrale", coul: "#8cff6a" },
-    hgc: { nom: "lampe à vapeur de mercure", court: "Mercure", spectre: "hgc", type: "spectrale", coul: "#c3ccff" },
-    hgcb: { nom: "lampe spectrale au mercure basse pression", court: "Mercure basse pression", spectre: "hgcb", type: "spectrale", coul: "#c3ccff" },
-    bl: { nom: "lanterne", court: "Lanterne", spectre: "bl", type: "filament", coul: "#fff1d2" },
-    laser: { nom: "laser He-Ne", court: "Laser", spectre: "laser", type: "point", coul: "#ff3b2f" }
+    na: { nom: TRAD("lampe à vapeur de sodium"), court: "Sodium", spectre: "na", type: "spectrale", coul: "#ffc23a" },
+    hg: { nom: TRAD("lampe à vapeur de mercure haute pression + filtre vert"), court: TRAD("Mercure + filtre vert"), spectre: "hg", type: "spectrale", coul: "#8cff6a" },
+    hgb: { nom: TRAD("lampe spectrale au mercure basse pression + filtre vert"), court: TRAD("Mercure basse pression + filtre vert"), spectre: "hgb", type: "spectrale", coul: "#8cff6a" },
+    hgc: { nom: TRAD("lampe à vapeur de mercure"), court: TRAD("Mercure"), spectre: "hgc", type: "spectrale", coul: "#c3ccff" },
+    hgcb: { nom: TRAD("lampe spectrale au mercure basse pression"), court: TRAD("Mercure basse pression"), spectre: "hgcb", type: "spectrale", coul: "#c3ccff" },
+    bl: { nom: TRAD("lanterne"), court: TRAD("Lanterne"), spectre: "bl", type: "filament", coul: "#fff1d2" },
+    laser: { nom: TRAD("laser He-Ne"), court: "Laser", spectre: "laser", type: "point", coul: "#ff3b2f" }
   };
   var ORDRE_LAMPES = ["na", "hg", "hgc", "bl", "laser"];
   // Forme lumineuse vue sans dépoli (plan de la source, x horizontal, y vertical, m) : ampoule droite d'une
@@ -89,9 +102,9 @@
   }
   var ELEMENTS = {   // f (m), rayon de monture (m), banc
     cond: { banc: "ent", f: 0.06, R: 0.02, nom: "condenseur", defaut: 0.17 },
-    coll: { banc: "ent", f: 0.20, R: 0.025, nom: "lentille 20 cm", defaut: 0.15 },
-    l20: { banc: "sor", f: 0.20, R: 0.025, nom: "lentille 20 cm", defaut: 0.12 },
-    l1: { banc: "sor", f: 1.0, R: 0.025, nom: "lentille 1 m", defaut: 0.12 }
+    coll: { banc: "ent", f: 0.20, R: 0.025, nom: TRAD("lentille 20 cm"), defaut: 0.15 },
+    l20: { banc: "sor", f: 0.20, R: 0.025, nom: TRAD("lentille 20 cm"), defaut: 0.12 },
+    l1: { banc: "sor", f: 1.0, R: 0.025, nom: TRAD("lentille 1 m"), defaut: 0.12 }
   };
   var BORNES = { ent: [0.07, 0.8], sor: [0.06, 2.5] }, ECART = { ent: 0.025, sor: 0.03 };
 
@@ -364,12 +377,14 @@
     var o = (cfg.sortie || []).filter(function (q) { return q.nom === "oeil"; })[0];
     return o ? [o.ox || 0, o.oy || 0] : [0, 0];
   }
-  // Scène du Michelson, pour l'ancrage du niveau d'adaptation de l'œil (`a.scene`, lu par le moteur) : ce que l'élève
-  // refait en regardant le champ — la lampe (spectre et filtre), le dépoli, le condenseur de la lanterne, la feuille
-  // posée, la vue, la luminosité, le dérèglement. N'en sont PAS : l'iris, les positions, C₃, la compensatrice, l'œil
-  // (position, accommodation), la pupille — réglés en regardant le champ, ceux-là doivent fondre.
+  // Scène du Michelson, pour l'ancrage du niveau d'adaptation de l'œil (`a.scene`, lu par le moteur) : repartir d'un
+  // réglage déréglé (graine), la vue (écran, œil, iris, feuille) et le mode de luminosité. Tout ce qu'on manipule SUR
+  // le banc FOND au contraire : changer de lampe (spectre et filtre), poser ou retirer le dépoli, l'avancer dans la
+  // lanterne, glisser une feuille se fait en regardant le champ — la transition rétinienne y a un sens, c'est la
+  // variation qu'on veut voir. L'iris, les positions, C₃, la compensatrice, l'œil (position, accommodation) et la
+  // pupille n'entrent pas dans la scène du tout.
   function sceneSig(st) {
-    return [st.graine, st.lampe, !!st.depoli, condLanterne(st), st.feuille || "", vue(st), reelle(st)].join("|");
+    return [st.graine, vue(st), reelle(st)].join("|");
   }
   // Affichage du moteur (vues écran et œil ; la feuille et l'iris sont dessinés en 2D) : luminosité réelle (`vision`)
   // ou toujours visible (exposition automatique, `auto`, salle noire comme en réelle, linéaire + pied : `visible`).
@@ -609,9 +624,10 @@
     for (var p = 0; p < nn; p++) { L[p] = m.I[p] * V.s; H[p] = (m.I[p] + m.G[p]) * V.s; }
     var a = MI_.adapterVision(L, V.omega * m.cellule, { M: V.M, Fsalle: V.Fsalle, salle: V.salle, scot: V.scot, haut: H,
       noir: Math.max(0, 4 * m.W * m.W / m.cellule - nn) });
-    // Source ponctuelle : la tache (une ou deux cases de la grille) est sous le 99e centile des cases éclairées, qui
-    // tombe alors sur le halo et change avec la taille de la grille : « Pas assez de lumière » à tort devant un point
-    // laser bien visible. Le plus clair de la grille fait foi (un point lumineux se voit, aussi petit soit-il).
+    // Source ponctuelle : la tache (une ou deux cases de la grille) peut tomber ENTRE les cases d'une grille de 25 × 25
+    // — éclairement mesuré nul, « Pas assez de lumière » à tort devant un point laser bien visible. Le plus clair de la
+    // grille fait foi alors (un point lumineux se voit, aussi petit soit-il). Le centile n'est plus en cause : `visible`
+    // se lit sur `plusClairDrapeau` (max de blocs 4 × 4), qui garde la tache quelle que soit sa taille.
     if (!a.visible && ponctuelle(st)) {
       var mx = 0; for (p = 0; p < nn; p++) mx = Math.max(mx, H[p]);
       a.visible = mx > 0.5 * a.seuil;
@@ -635,8 +651,8 @@
   // cannelures dans une raie), RÉELS comme en TP : barrette Caliens, 2048 pixels de 14 µm (28,7 mm) ; spectromètre
   // fibré à fente de 25 µm (type Ocean Optics USB), ~1,5 nm de résolution : le doublet du sodium n'y est pas séparé.
   var CAPTEURS = {
-    parfaits: { L: 0.15, n: 500, res: 0.02, rf: 25e-6, barrette: "barrette parfaite : 15 cm, 500 points", fibre: "spectromètre parfait : fibre de 50 µm, résolution 0,02 nm" },
-    reels: { L: 0.02867, n: 2048, res: 1.5, rf: 200e-6, barrette: "barrette réelle (type Caliens) : 2048 pixels de 14 µm, 28,7 mm", fibre: "spectromètre fibré réel : fibre de 400 µm, résolution 1,5 nm" }
+    parfaits: { L: 0.15, n: 500, res: 0.02, rf: 25e-6, barrette: TRAD("barrette parfaite : 15 cm, 500 points"), fibre: TRAD("spectromètre parfait : fibre de 50 µm, résolution 0,02 nm") },
+    reels: { L: 0.02867, n: 2048, res: 1.5, rf: 200e-6, barrette: TRAD("barrette réelle (type Caliens) : 2048 pixels de 14 µm, 28,7 mm"), fibre: TRAD("spectromètre fibré réel : fibre de 400 µm, résolution 1,5 nm") }
   };
   function capteurs(st) { return st && st.capReels ? CAPTEURS.reels : CAPTEURS.parfaits; }
   var L_BARRETTE = CAPTEURS.parfaits.L, N_BARRETTE = CAPTEURS.parfaits.n, RES_SPECTRO = CAPTEURS.parfaits.res;   // m, points, nm (largeur à mi-hauteur)
@@ -754,14 +770,14 @@
   // assumé (validation « par chance » rare). regarde : ce qu'on regarde (bulle de la puce, sans jugement) ; titre et soin :
   // quand la case se coche, quand elle s'étoile.
   var ETAPES = [
-    { id: "comp", nom: "Compensatrice", regarde: "à l'œil les images d'un petit trou de lumière données par M₁ seul (feuille sur M₂) : la principale et, plus pâle, son fantôme (reflet sur la compensatrice), à superposer ; ou, près du contact, la rondeur des anneaux.",
-      titre: "la compensatrice est à peu près parallèle à la séparatrice : les images données par M₁ se superposent.", soin: "parallèle : anneaux bien ronds près du contact." },
-    { id: "grossier", nom: "Parallélisme grossier", regarde: "deux images d'un petit trou de lumière, une par miroir, à superposer (ou les deux taches du laser sans son objectif).",
-      titre: "les miroirs sont à peu près parallèles : les deux images d'un petit diaphragme se recouvrent.", soin: "images confondues, diaphragme presque fermé : assez parallèles pour voir des anneaux loin du contact." },
-    { id: "fin", nom: "Parallélisme fin", regarde: "des anneaux à l'infini, dont la zone la plus contrastée gagne le centre ; ou, sur les miroirs, les franges d'un coin d'air, à écarter.",
-      titre: "les miroirs sont parallèles : en lame d'air, la zone la mieux contrastée a gagné le centre, toute la figure est contrastée.", soin: "épaisseur uniforme à une fraction de longueur d'onde près : les anneaux restent fixes quand l'œil se déplace, dans toutes les directions." },
-    { id: "contact", nom: "Contact optique", regarde: "des anneaux qui rentrent au centre, jusqu'à une teinte plate ; ou, en lumière blanche, les franges colorées.",
-      titre: "la lame d'air est assez mince pour une teinte plate dans tout le champ.", soin: "au contact à quelques longueurs d'onde près : la lumière blanche y donne des franges (manipulation « Lumière blanche »)." }
+    { id: "comp", nom: TRAD("Compensatrice"), regarde: TRAD("à l'œil les images d'un petit trou de lumière données par M₁ seul (feuille sur M₂) : la principale et, plus pâle, son fantôme (reflet sur la compensatrice), à superposer ; ou, près du contact, la rondeur des anneaux."),
+      titre: TRAD("la compensatrice est à peu près parallèle à la séparatrice : les images données par M₁ se superposent."), soin: TRAD("parallèle : anneaux bien ronds près du contact.") },
+    { id: "grossier", nom: TRAD("Parallélisme grossier"), regarde: TRAD("deux images d'un petit trou de lumière, une par miroir, à superposer (ou les deux taches du laser sans son objectif)."),
+      titre: TRAD("les miroirs sont à peu près parallèles : les deux images d'un petit diaphragme se recouvrent."), soin: TRAD("images confondues, diaphragme presque fermé : assez parallèles pour voir des anneaux loin du contact.") },
+    { id: "fin", nom: TRAD("Parallélisme fin"), regarde: TRAD("des anneaux à l'infini, dont la zone la plus contrastée gagne le centre ; ou, sur les miroirs, les franges d'un coin d'air, à écarter."),
+      titre: TRAD("les miroirs sont parallèles : en lame d'air, la zone la mieux contrastée a gagné le centre, toute la figure est contrastée."), soin: TRAD("épaisseur uniforme à une fraction de longueur d'onde près : les anneaux restent fixes quand l'œil se déplace, dans toutes les directions.") },
+    { id: "contact", nom: TRAD("Contact optique"), regarde: TRAD("des anneaux qui rentrent au centre, jusqu'à une teinte plate ; ou, en lumière blanche, les franges colorées."),
+      titre: TRAD("la lame d'air est assez mince pour une teinte plate dans tout le champ."), soin: TRAD("au contact à quelques longueurs d'onde près : la lumière blanche y donne des franges (manipulation « Lumière blanche »).") }
   ];
   // Seuils des réglages, sur l'état seul : [atteint, soigné]. Mesurés dans le moteur : compensatrice
   // tournée de |B| = 0,7 mrad : image fantôme déviée de 1 mrad (les images de M₁ se recouvrent encore) ; 0,25 mrad :
@@ -789,71 +805,71 @@
   // peut poser au mode prof (CONFIGS, manip: true, même id). observe : ce qu'on voit et pourquoi ; etapes : comment
   // faire, gestes seulement, jamais de valeur ; titre : quand la case se coche.
   var MANIPS = [
-    { id: "localisation", nom: "Localisation des franges",
-      observe: "Avec une source étendue, les franges ne sont nettes que sur une surface, où l'on doit observer. Les anneaux de la lame d'air sont à l'infini : on éclaire avec une source étendue (dépoli et diaphragme ouvert, ou condenseur) et on observe sur l'écran au foyer de la lentille de 1 m, ou à l'œil accommodé à l'infini ; leur contraste ne dépend pas de l'étendue de la source. Les franges du coin d'air sont au voisinage des miroirs : on observe le plan des miroirs, par son image sur l'écran à travers la lentille de 20 cm, ou à l'œil accommodé sur eux ; hors de ce plan, une source étendue les brouille. Avec une source presque ponctuelle (diaphragme presque fermé, ou laser), les franges ne sont plus localisées : on les voit partout, mais un petit diaphragme laisse passer peu de lumière.",
-      etapes: ["Coin d'air un peu à l'écart du contact (tout près du contact, les franges du coin d'air sont nettes partout), éclairé par le dépoli, diaphragme ouvert, l'image des miroirs sur l'écran par la lentille de 20 cm.",
-        "Déplacer l'écran sur le banc de sortie : hors du plan conjugué des miroirs, les franges se brouillent.",
-        "Fermer presque entièrement le diaphragme : les franges reviennent, l'écran hors de ce plan ; elles sont sombres (approcher l'écran de la lentille, ou observer à l'œil)."],
-      titre: "les franges du coin d'air contrastées loin du plan des miroirs, avec une source presque ponctuelle." },
-    { id: "blanc", nom: "Lumière blanche",
-      observe: "La lumière blanche ne donne de franges qu'au voisinage immédiat du contact optique, à quelques longueurs d'onde près. Au centre, la frange achromatique, de différence de marche nulle, est commune à toutes les couleurs ; de part et d'autre, quelques franges colorées (les teintes de Newton), puis un blanc d'ordre supérieur, où toutes les couleurs se mêlent. Repérer la frange achromatique situe le contact bien plus précisément que la teinte plate au sodium.",
-      etapes: ["Partir du Michelson réglé : lame d'air au voisinage du contact, teinte plate au sodium.",
-        "Incliner un miroir avec C₁ ou C₂ pour former un coin d'air, et observer le plan des miroirs : leur image sur l'écran par la lentille de 20 cm, ou l'œil accommodé sur eux. Plus il y a de franges, plus le champ couvre d'épaisseurs : le contact s'y trouve plus vite, mais les franges colorées sont plus serrées.",
-        "Remplacer la lampe au sodium par la lanterne, puis charioter très lentement (Ctrl et molette sur C₃), d'un côté puis de l'autre, jusqu'à voir les couleurs."],
-      titre: "des franges colorées dans le champ, en coin d'air, en lumière blanche (le contact optique devient soigné)." },
-    { id: "cannele", nom: "Spectre cannelé",
-      observe: "Dans le blanc d'ordre supérieur, l'œil ne voit plus de franges. Pourtant, en un point de différence de marche δ, chaque longueur d'onde garde sa propre intensité, maximale quand δ est un multiple de λ, nulle à mi-chemin : le spectre de la lumière reçue en ce point est cannelé, de bandes sombres régulièrement espacées en 1/λ, distantes de λ²/δ en longueur d'onde. Plus δ est grand, plus elles sont serrées ; plus fines que la résolution du spectromètre, elles ne sont plus séparées.",
-      etapes: ["Franges de lumière blanche dans le champ (manipulation « Lumière blanche »).",
-        "Poser la fibre du spectromètre sur l'écran (Mesurer ▾, au-dessus de l'image), dans la zone blanche, à quelques franges de la frange achromatique.",
-        "L'éloigner peu à peu de la frange achromatique : les cannelures se resserrent, jusqu'à ce que le spectromètre ne les sépare plus."],
-      titre: "un spectre cannelé, au moins quatre cannelures bien contrastées, relevé par la fibre en lumière blanche." },
-    { id: "defilement", nom: "Défilement des anneaux",
-      observe: "Au centre des anneaux, la différence de marche vaut 2e. Quand le miroir mobile avance de λ/2, elle change d'une longueur d'onde : un anneau naît au centre quand e augmente, un anneau y disparaît quand e diminue. Une photodiode posée au centre suit ce défilement : le nombre de franges comptées sur un déplacement du chariot donne λ ; la longueur d'onde connue, il étalonne la vis.",
-      etapes: ["Anneaux du sodium sur l'écran, au foyer de la lentille de 1 m, assez près du contact pour qu'ils soient larges.",
-        "Poser la photodiode sur l'écran (Mesurer ▾, au-dessus de l'image) et la glisser au centre des anneaux.",
-        "Charioter lentement, toujours dans le même sens : l'éclairement s'inscrit en fonction du déplacement du chariot ; compter les franges entre deux lectures de C₃."],
-      titre: "la photodiode posée au centre des anneaux." },
-    { id: "rayons", nom: "Anneaux et épaisseur",
-      observe: "Les anneaux d'une lame d'air sont d'égale inclinaison. Au foyer d'une lentille de focale f, le carré du rayon d'un anneau croît linéairement avec son numéro, avec une pente f²λ/e : plus la lame est épaisse, plus les anneaux sont serrés. Quand e diminue, ils rentrent au centre.",
-      etapes: ["Anneaux du sodium sur l'écran, au foyer de la lentille de 1 m, plusieurs anneaux dans le champ.",
-        "Poser la barrette sur l'écran (Mesurer ▾, au-dessus de l'image) et relever les rayons des anneaux.",
-        "Charioter pour changer l'épaisseur, et recommencer : la pente change."],
-      titre: "au moins cinq anneaux du sodium sur l'écran, barrette posée." },
-    { id: "coherence", nom: "Longueur de cohérence",
-      observe: "Une raie n'est jamais parfaitement fine. Sa largeur limite les différences de marche qui donnent encore des franges : en s'éloignant du contact, le contraste diminue, puis s'annule au-delà de la longueur de cohérence, de l'ordre de λ²/Δλ. En lame d'air, l'étendue de la source n'y est pour rien ; en coin d'air, une source étendue brouille aussi les franges quand e grandit, et il faut fermer le diaphragme pour ne voir que l'effet de la raie.",
-      etapes: ["Anneaux au voisinage du contact, en lame d'air, observés à l'infini, au mercure avec son filtre vert (au sodium, le brouillage du doublet vient bien avant). Ou bien un coin d'air observé dans le plan des miroirs, la source peu étendue.",
-        "Charioter toujours dans le même sens en suivant le contraste : les franges pâlissent, jusqu'à disparaître.",
-        "Lire C₃ au contact et au brouillage : la différence de marche vaut le double du déplacement du miroir."],
-      titre: "franges ou anneaux brouillés par la largeur de la raie, à une épaisseur où la géométrie seule en donnerait encore." },
-    { id: "mercure", nom: "Mercure sans filtre",
-      observe: "Sans son filtre, la lampe au mercure donne plusieurs raies : la verte, le doublet jaune, des raies bleues et violettes. Chacune donne ses franges, d'interfrange propre : elles ne restent en phase qu'au voisinage immédiat du contact. Plus loin, celles de la raie verte et du doublet jaune, les plus lumineuses, se décalent puis se retrouvent : le contraste fluctue d'une région du champ à l'autre et reste en deçà de celui de la raie verte seule. Le filtre ne garde qu'une raie, et des franges régulières.",
-      etapes: ["Coin d'air près du contact, observé dans le plan des miroirs, à la lampe au mercure sans filtre.",
-        "Incliner davantage un miroir avec C₁ ou C₂ : beaucoup de franges dans le champ, dont le contraste varie le long du coin d'air.",
-        "Comparer avec le filtre vert (étagère, onglet Sources) : même figure, contraste régulier."],
-      titre: "franges ou anneaux du mercure sans filtre nettement moins contrastés que ceux de la raie verte seule, au même réglage." },
-    { id: "doublet", nom: "Doublet du sodium",
-      observe: "La lumière du sodium contient deux raies très proches, et chacune donne ses anneaux. Quand l'épaisseur change, les deux systèmes glissent l'un par rapport à l'autre : là où les anneaux brillants de l'un tombent sur les sombres de l'autre (anticoïncidence), le contraste s'annule ; il revient quand ils coïncident de nouveau. Le déplacement du miroir entre deux anticoïncidences donne l'écart entre les deux raies.",
-      etapes: ["Anneaux du sodium bien contrastés, en lame d'air, observés à l'infini.",
-        "Charioter lentement, toujours dans le même sens : le contraste diminue, s'annule, puis revient.",
-        "Pour une mesure, lire C₃ à deux brouillages successifs, appareil au repos."],
-      titre: "les anneaux du sodium vus brouillés, puis de nouveau contrastés plus loin." },
+    { id: "localisation", nom: TRAD("Localisation des franges"),
+      observe: TRAD("Avec une source étendue, les franges ne sont nettes que sur une surface, où l'on doit observer. Les anneaux de la lame d'air sont à l'infini : on éclaire avec une source étendue (dépoli et diaphragme ouvert, ou condenseur) et on observe sur l'écran au foyer de la lentille de 1 m, ou à l'œil accommodé à l'infini ; leur contraste ne dépend pas de l'étendue de la source. Les franges du coin d'air sont au voisinage des miroirs : on observe le plan des miroirs, par son image sur l'écran à travers la lentille de 20 cm, ou à l'œil accommodé sur eux ; hors de ce plan, une source étendue les brouille. Avec une source presque ponctuelle (diaphragme presque fermé, ou laser), les franges ne sont plus localisées : on les voit partout, mais un petit diaphragme laisse passer peu de lumière."),
+      etapes: [TRAD("Coin d'air un peu à l'écart du contact (tout près du contact, les franges du coin d'air sont nettes partout), éclairé par le dépoli, diaphragme ouvert, l'image des miroirs sur l'écran par la lentille de 20 cm."),
+        TRAD("Déplacer l'écran sur le banc de sortie : hors du plan conjugué des miroirs, les franges se brouillent."),
+        TRAD("Fermer presque entièrement le diaphragme : les franges reviennent, l'écran hors de ce plan ; elles sont sombres (approcher l'écran de la lentille, ou observer à l'œil).")],
+      titre: TRAD("les franges du coin d'air contrastées loin du plan des miroirs, avec une source presque ponctuelle.") },
+    { id: "blanc", nom: TRAD("Lumière blanche"),
+      observe: TRAD("La lumière blanche ne donne de franges qu'au voisinage immédiat du contact optique, à quelques longueurs d'onde près. Au centre, la frange achromatique, de différence de marche nulle, est commune à toutes les couleurs ; de part et d'autre, quelques franges colorées (les teintes de Newton), puis un blanc d'ordre supérieur, où toutes les couleurs se mêlent. Repérer la frange achromatique situe le contact bien plus précisément que la teinte plate au sodium."),
+      etapes: [TRAD("Partir du Michelson réglé : lame d'air au voisinage du contact, teinte plate au sodium."),
+        TRAD("Incliner un miroir avec C₁ ou C₂ pour former un coin d'air, et observer le plan des miroirs : leur image sur l'écran par la lentille de 20 cm, ou l'œil accommodé sur eux. Plus il y a de franges, plus le champ couvre d'épaisseurs : le contact s'y trouve plus vite, mais les franges colorées sont plus serrées."),
+        TRAD("Remplacer la lampe au sodium par la lanterne, puis charioter très lentement (Ctrl et molette sur C₃), d'un côté puis de l'autre, jusqu'à voir les couleurs.")],
+      titre: TRAD("des franges colorées dans le champ, en coin d'air, en lumière blanche (le contact optique devient soigné).") },
+    { id: "cannele", nom: TRAD("Spectre cannelé"),
+      observe: TRAD("Dans le blanc d'ordre supérieur, l'œil ne voit plus de franges. Pourtant, en un point de différence de marche δ, chaque longueur d'onde garde sa propre intensité, maximale quand δ est un multiple de λ, nulle à mi-chemin : le spectre de la lumière reçue en ce point est cannelé, de bandes sombres régulièrement espacées en 1/λ, distantes de λ²/δ en longueur d'onde. Plus δ est grand, plus elles sont serrées ; plus fines que la résolution du spectromètre, elles ne sont plus séparées."),
+      etapes: [TRAD("Franges de lumière blanche dans le champ (manipulation « Lumière blanche »)."),
+        TRAD("Poser la fibre du spectromètre sur l'écran (Mesurer ▾, au-dessus de l'image), dans la zone blanche, à quelques franges de la frange achromatique."),
+        TRAD("L'éloigner peu à peu de la frange achromatique : les cannelures se resserrent, jusqu'à ce que le spectromètre ne les sépare plus.")],
+      titre: TRAD("un spectre cannelé, au moins quatre cannelures bien contrastées, relevé par la fibre en lumière blanche.") },
+    { id: "defilement", nom: TRAD("Défilement des anneaux"),
+      observe: TRAD("Au centre des anneaux, la différence de marche vaut 2e. Quand le miroir mobile avance de λ/2, elle change d'une longueur d'onde : un anneau naît au centre quand e augmente, un anneau y disparaît quand e diminue. Une photodiode posée au centre suit ce défilement : le nombre de franges comptées sur un déplacement du chariot donne λ ; la longueur d'onde connue, il étalonne la vis."),
+      etapes: [TRAD("Anneaux du sodium sur l'écran, au foyer de la lentille de 1 m, assez près du contact pour qu'ils soient larges."),
+        TRAD("Poser la photodiode sur l'écran (Mesurer ▾, au-dessus de l'image) et la glisser au centre des anneaux."),
+        TRAD("Charioter lentement, toujours dans le même sens : l'éclairement s'inscrit en fonction du déplacement du chariot ; compter les franges entre deux lectures de C₃.")],
+      titre: TRAD("la photodiode posée au centre des anneaux.") },
+    { id: "rayons", nom: TRAD("Anneaux et épaisseur"),
+      observe: TRAD("Les anneaux d'une lame d'air sont d'égale inclinaison. Au foyer d'une lentille de focale f, le carré du rayon d'un anneau croît linéairement avec son numéro, avec une pente f²λ/e : plus la lame est épaisse, plus les anneaux sont serrés. Quand e diminue, ils rentrent au centre."),
+      etapes: [TRAD("Anneaux du sodium sur l'écran, au foyer de la lentille de 1 m, plusieurs anneaux dans le champ."),
+        TRAD("Poser la barrette sur l'écran (Mesurer ▾, au-dessus de l'image) et relever les rayons des anneaux."),
+        TRAD("Charioter pour changer l'épaisseur, et recommencer : la pente change.")],
+      titre: TRAD("au moins cinq anneaux du sodium sur l'écran, barrette posée.") },
+    { id: "coherence", nom: TRAD("Longueur de cohérence"),
+      observe: TRAD("Une raie n'est jamais parfaitement fine. Sa largeur limite les différences de marche qui donnent encore des franges : en s'éloignant du contact, le contraste diminue, puis s'annule au-delà de la longueur de cohérence, de l'ordre de λ²/Δλ. En lame d'air, l'étendue de la source n'y est pour rien ; en coin d'air, une source étendue brouille aussi les franges quand e grandit, et il faut fermer le diaphragme pour ne voir que l'effet de la raie."),
+      etapes: [TRAD("Anneaux au voisinage du contact, en lame d'air, observés à l'infini, au mercure avec son filtre vert (au sodium, le brouillage du doublet vient bien avant). Ou bien un coin d'air observé dans le plan des miroirs, la source peu étendue."),
+        TRAD("Charioter toujours dans le même sens en suivant le contraste : les franges pâlissent, jusqu'à disparaître."),
+        TRAD("Lire C₃ au contact et au brouillage : la différence de marche vaut le double du déplacement du miroir.")],
+      titre: TRAD("franges ou anneaux brouillés par la largeur de la raie, à une épaisseur où la géométrie seule en donnerait encore.") },
+    { id: "mercure", nom: TRAD("Mercure sans filtre"),
+      observe: TRAD("Sans son filtre, la lampe au mercure donne plusieurs raies : la verte, le doublet jaune, des raies bleues et violettes. Chacune donne ses franges, d'interfrange propre : elles ne restent en phase qu'au voisinage immédiat du contact. Plus loin, celles de la raie verte et du doublet jaune, les plus lumineuses, se décalent puis se retrouvent : le contraste fluctue d'une région du champ à l'autre et reste en deçà de celui de la raie verte seule. Le filtre ne garde qu'une raie, et des franges régulières."),
+      etapes: [TRAD("Coin d'air près du contact, observé dans le plan des miroirs, à la lampe au mercure sans filtre."),
+        TRAD("Incliner davantage un miroir avec C₁ ou C₂ : beaucoup de franges dans le champ, dont le contraste varie le long du coin d'air."),
+        TRAD("Comparer avec le filtre vert (étagère, onglet Sources) : même figure, contraste régulier.")],
+      titre: TRAD("franges ou anneaux du mercure sans filtre nettement moins contrastés que ceux de la raie verte seule, au même réglage.") },
+    { id: "doublet", nom: TRAD("Doublet du sodium"),
+      observe: TRAD("La lumière du sodium contient deux raies très proches, et chacune donne ses anneaux. Quand l'épaisseur change, les deux systèmes glissent l'un par rapport à l'autre : là où les anneaux brillants de l'un tombent sur les sombres de l'autre (anticoïncidence), le contraste s'annule ; il revient quand ils coïncident de nouveau. Le déplacement du miroir entre deux anticoïncidences donne l'écart entre les deux raies."),
+      etapes: [TRAD("Anneaux du sodium bien contrastés, en lame d'air, observés à l'infini."),
+        TRAD("Charioter lentement, toujours dans le même sens : le contraste diminue, s'annule, puis revient."),
+        TRAD("Pour une mesure, lire C₃ à deux brouillages successifs, appareil au repos.")],
+      titre: TRAD("les anneaux du sodium vus brouillés, puis de nouveau contrastés plus loin.") },
     { id: "laser", nom: "Laser",
-      observe: "La raie d'un laser est si fine que sa longueur de cohérence dépasse de loin la course du chariot : ses anneaux restent contrastés à toute épaisseur, là où ceux du sodium se sont brouillés. Source ponctuelle, il donne des franges non localisées : sur l'écran, où qu'il soit.",
-      etapes: ["Remplacer la lampe par le laser, objectif vissé : des anneaux sur l'écran.",
-        "Charioter loin du contact, aussi loin que le permet la course du chariot : les anneaux se resserrent, mais restent contrastés."],
-      titre: "les anneaux du laser contrastés loin du contact, au-delà de la longueur de cohérence du sodium." },
-    { id: "rolecomp", nom: "Rôle de la compensatrice",
-      observe: "La lumière qui va vers M₂ traverse trois fois la séparatrice ; celle qui va vers M₁, une fois la séparatrice et deux fois la compensatrice, du même verre et de même épaisseur. Parallèle à la séparatrice, la compensatrice égalise les épaisseurs de verre traversées, pour toutes les directions et toutes les couleurs. Tournée, elle ajoute dans un bras une épaisseur de verre qui dépend de la direction : les anneaux deviennent elliptiques, et le contact optique (la frange achromatique) se déplace sur la course du chariot.",
-      etapes: ["Anneaux du sodium près du contact, en lame d'air, observés à l'infini, compensatrice réglée : bien ronds.",
-        "Tourner la compensatrice avec B₁ ou B₂ : les anneaux s'allongent en ellipses.",
-        "La régler de nouveau (anneaux ronds) avant de passer à autre chose."],
-      titre: "des anneaux nettement elliptiques près du contact, compensatrice tournée." },
-    { id: "lamelle", nom: "Lamelle",
-      observe: "Une lamelle de verre d'épaisseur ε posée sur un miroir allonge l'aller-retour de la lumière dans ce bras : derrière elle, les franges de lumière blanche disparaissent. On les retrouve en déplaçant le miroir mobile de (n − 1)ε, n étant l'indice du verre (en lumière blanche, plus exactement, son indice de groupe) : de quoi mesurer l'épaisseur ou l'indice de la lamelle.",
-      etapes: ["Franges de lumière blanche en coin d'air (manipulation « Lumière blanche »).",
-        "Poser la lamelle sur un miroir, sur une partie du faisceau seulement (étagère, onglet Accessoires) : les franges disparaissent derrière elle.",
-        "Charioter lentement jusqu'à les faire réapparaître derrière la lamelle."],
-      titre: "les franges de lumière blanche retrouvées derrière la lamelle." }
+      observe: TRAD("La raie d'un laser est si fine que sa longueur de cohérence dépasse de loin la course du chariot : ses anneaux restent contrastés à toute épaisseur, là où ceux du sodium se sont brouillés. Source ponctuelle, il donne des franges non localisées : sur l'écran, où qu'il soit."),
+      etapes: [TRAD("Remplacer la lampe par le laser, objectif vissé : des anneaux sur l'écran."),
+        TRAD("Charioter loin du contact, aussi loin que le permet la course du chariot : les anneaux se resserrent, mais restent contrastés.")],
+      titre: TRAD("les anneaux du laser contrastés loin du contact, au-delà de la longueur de cohérence du sodium.") },
+    { id: "rolecomp", nom: TRAD("Rôle de la compensatrice"),
+      observe: TRAD("La lumière qui va vers M₂ traverse trois fois la séparatrice ; celle qui va vers M₁, une fois la séparatrice et deux fois la compensatrice, du même verre et de même épaisseur. Parallèle à la séparatrice, la compensatrice égalise les épaisseurs de verre traversées, pour toutes les directions et toutes les couleurs. Tournée, elle ajoute dans un bras une épaisseur de verre qui dépend de la direction : les anneaux deviennent elliptiques, et le contact optique (la frange achromatique) se déplace sur la course du chariot."),
+      etapes: [TRAD("Anneaux du sodium près du contact, en lame d'air, observés à l'infini, compensatrice réglée : bien ronds."),
+        TRAD("Tourner la compensatrice avec B₁ ou B₂ : les anneaux s'allongent en ellipses."),
+        TRAD("La régler de nouveau (anneaux ronds) avant de passer à autre chose.")],
+      titre: TRAD("des anneaux nettement elliptiques près du contact, compensatrice tournée.") },
+    { id: "lamelle", nom: TRAD("Lamelle"),
+      observe: TRAD("Une lamelle de verre d'épaisseur ε posée sur un miroir allonge l'aller-retour de la lumière dans ce bras : derrière elle, les franges de lumière blanche disparaissent. On les retrouve en déplaçant le miroir mobile de (n − 1)ε, n étant l'indice du verre (en lumière blanche, plus exactement, son indice de groupe) : de quoi mesurer l'épaisseur ou l'indice de la lamelle."),
+      etapes: [TRAD("Franges de lumière blanche en coin d'air (manipulation « Lumière blanche »)."),
+        TRAD("Poser la lamelle sur un miroir, sur une partie du faisceau seulement (étagère, onglet Accessoires) : les franges disparaissent derrière elle."),
+        TRAD("Charioter lentement jusqu'à les faire réapparaître derrière la lamelle.")],
+      titre: TRAD("les franges de lumière blanche retrouvées derrière la lamelle.") }
   ];
   function estManip(id) { return MANIPS.some(function (x) { return x.id === id; }); }
   // États sauvés d'avant les réglages sur l'état : « Deux taches » devient le parallélisme grossier,
@@ -985,8 +1001,8 @@
   var AXE_VIS = { C1: "y", C2: "y", C3: "y", B2: "y", A1: "x", A2: "x", B1: "x" };
   var NOM_VIS = { C1: "C₁", C2: "C₂", C3: "C₃", A1: "A₁", A2: "A₂", B1: "B₁", B2: "B₂" };
   function geste(id, signe) {
-    var s = signe > 0 ? (AXE_VIS[id] === "y" ? "vers la droite" : "vers le haut") : (AXE_VIS[id] === "y" ? "vers la gauche" : "vers le bas");
-    return "Faire rouler " + NOM_VIS[id] + " " + s + (id === "C3" ? " (ou molette vers le " + (signe > 0 ? "haut" : "bas") + ")." : ".");
+    var s = signe > 0 ? (AXE_VIS[id] === "y" ? TRAD("vers la droite") : TRAD("vers le haut")) : (AXE_VIS[id] === "y" ? TRAD("vers la gauche") : TRAD("vers le bas"));
+    return TRAD("Faire rouler {0} {1}{2}", [NOM_VIS[id], s, (id === "C3" ? TRAD(" (ou molette vers le {0}).", [signe > 0 ? TRAD("haut") : TRAD("bas")]) : ".")]);
   }
   // e (m) vers la cible : C₃ augmente e.
   function gesteC3(st, cible) { return geste("C3", (cible || 0) - epaisseur(st) > 0 ? 1 : -1); }
@@ -997,7 +1013,7 @@
     return Math.abs(u) >= Math.abs(w) ? geste("C1", -u) : geste("C2", -w);
   }
   // Étape 1 : la régler à la main, ou la faire régler (bandeau de la compensatrice, choisie d'un clic sur ses lames).
-  var POUR_MOI = " Pour sauter l'étape : un clic sur la compensatrice, puis « Régler la compensatrice ».";
+  var POUR_MOI = TRAD(" Pour sauter l'étape : un clic sur la compensatrice, puis « Régler la compensatrice ».");
   function gesteComp(st) {
     var b1 = st.b1 + st.cache.b10, b2 = st.b2 + st.cache.b20;
     return Math.abs(b1) >= Math.abs(b2) ? geste("B1", -b1) : geste("B2", -b2);
@@ -1046,25 +1062,25 @@
     st.acc = accommodation(st); st.accMode = "main";
     st.acc = clamp(st.acc - k * (ev && ev.shiftKey ? ((ev.ctrlKey || ev.metaKey) ? 0.002 : 0.02) : ev && ev.ctrlKey ? 0.5 : 0.1), 0, ACC_MAX);
   }
-  var NOM_ACC = { infini: "À l'infini", miroirs: "Sur les miroirs", main: "À la main" };
+  var NOM_ACC = { infini: TRAD("À l'infini"), miroirs: TRAD("Sur les miroirs"), main: TRAD("À la main") };
   // Où mettre le détecteur pour voir net le plan des miroirs (cible "miroirs") ou l'infini ("infini") : sens du
   // déplacement de l'écran, ou de l'accommodation de l'œil. Renvoie une phrase.
   function gesteDetecteur(st, cible) {
     var I = imageSortie(st, cible), lent = I.lent, zl = I.zl, t = I.t;
     if (st.det === "ecran") {
-      if (!lent.length && cible === "source" && isFinite(zSource(st))) return "Poser une lentille sur le banc de sortie (étagère, onglet Sortie) : elle forme sur l'écran l'image du diaphragme.";
-      if (!lent.length) return cible === "miroirs" ? "Poser la lentille 20 cm sur le banc de sortie (étagère, onglet Sortie), pour former l'image des miroirs sur l'écran."
-        : "Poser la lentille 1 m sur le banc de sortie (étagère, onglet Sortie) : l'écran se place dans son plan focal image.";
-      if (!(t > 0) || zl + t > ARM + BORNES.sor[1]) return cible === "miroirs" ? "Avec cette lentille, l'image des miroirs ne se forme pas sur le banc : prendre la lentille 20 cm, assez loin des miroirs."
-        : "Prendre une autre lentille de sortie : son plan focal image doit tomber sur le banc.";
-      return (zl + t > ARM + st.sor.ecran ? "Éloigner" : "Rapprocher") + " l'écran de la lentille.";
+      if (!lent.length && cible === "source" && isFinite(zSource(st))) return TRAD("Poser une lentille sur le banc de sortie (étagère, onglet Sortie) : elle forme sur l'écran l'image du diaphragme.");
+      if (!lent.length) return cible === "miroirs" ? TRAD("Poser la lentille 20 cm sur le banc de sortie (étagère, onglet Sortie), pour former l'image des miroirs sur l'écran.")
+        : TRAD("Poser la lentille 1 m sur le banc de sortie (étagère, onglet Sortie) : l'écran se place dans son plan focal image.");
+      if (!(t > 0) || zl + t > ARM + BORNES.sor[1]) return cible === "miroirs" ? TRAD("Avec cette lentille, l'image des miroirs ne se forme pas sur le banc : prendre la lentille 20 cm, assez loin des miroirs.")
+        : TRAD("Prendre une autre lentille de sortie : son plan focal image doit tomber sur le banc.");
+      return TRAD("{0} l'écran de la lentille.", [zl + t > ARM + st.sor.ecran ? TRAD("Éloigner") : TRAD("Rapprocher")]);
     }
     var ze = ARM + st.sor.oeil, u = isFinite(t) ? ze - zl - t : Infinity;   // objet de l'œil, devant lui
-    if (!(u > 0)) return "Le faisceau converge derrière l'œil : reculer l'œil, ou retirer la lentille de sortie.";
+    if (!(u > 0)) return TRAD("Le faisceau converge derrière l'œil : reculer l'œil, ou retirer la lentille de sortie.");
     var acc = isFinite(u) ? 1 / u : 0;
-    if (acc > ACC_MAX) return "Reculer l'œil sur le banc : on n'accommode pas à moins de 25 cm.";
-    if (modeAcc(st) !== "main") return "Regarder " + (cible === "miroirs" ? "sur les miroirs" : "à l'infini") + " : sous l'image, « " + NOM_ACC[cible] + " ».";
-    return (acc > (st.acc || 0) ? "Accommoder plus près" : "Accommoder plus loin") + " (curseur sous l'image, ou molette sur l'image ou sur la pastille de l'œil ; ou, sous l'image, « " + NOM_ACC[cible] + " »).";
+    if (acc > ACC_MAX) return TRAD("Reculer l'œil sur le banc : on n'accommode pas à moins de 25 cm.");
+    if (modeAcc(st) !== "main") return TRAD("Regarder {0} : sous l'image, « {1} ».", [(cible === "miroirs" ? TRAD("sur les miroirs") : TRAD("à l'infini")), NOM_ACC[cible]]);
+    return TRAD("{0} (curseur sous l'image, ou molette sur l'image ou sur la pastille de l'œil ; ou, sous l'image, « {1} »).", [(acc > (st.acc || 0) ? TRAD("Accommoder plus près") : TRAD("Accommoder plus loin")), NOM_ACC[cible]]);
   }
   // Mesure d'une variante de l'état (hypothèse : « et si α était nul ? ») : visibilité dans le champ.
   function variante(st, CO, f) {
@@ -1080,17 +1096,17 @@
       var mP = variante(st, CO, function (s) { var b = inclinaison(s); viser(s, epaisseur(s) + 0.145e-3, b.ax, b.ay); });
       var mM = variante(st, CO, function (s) { var b = inclinaison(s); viser(s, epaisseur(s) - 0.145e-3, b.ax, b.ay); });
       if (Math.max(mP.V, mM.V) > 0.35 && Math.max(mP.V, mM.V) > 2 * R.m.V + 0.15 && mA.V < 0.35)
-        return { cle: cle + "-anti", t1: "Si le contraste n'est pas satisfaisant, on est peut-être sur une anticoïncidence du doublet : charioter légèrement.",
+        return { cle: cle + "-anti", t1: TRAD("Si le contraste n'est pas satisfaisant, on est peut-être sur une anticoïncidence du doublet : charioter légèrement."),
           t2: geste("C3", mP.V > mM.V ? 1 : -1) };
     }
-    if (mA.V > 0.35 && mA.V >= mE.V) return { cle: cle + "-alpha", t1: "Un éclairement uniforme : le parallélisme des miroirs n'est pas satisfaisant ; revenir au parallélisme grossier (C₁, C₂).",
+    if (mA.V > 0.35 && mA.V >= mE.V) return { cle: cle + "-alpha", t1: TRAD("Un éclairement uniforme : le parallélisme des miroirs n'est pas satisfaisant ; revenir au parallélisme grossier (C₁, C₂)."),
       t2: gesteAlpha(st, al < 0.05e-3) };
-    if (mE.V > 0.35) return { cle: cle + "-e", t1: "Le contraste se perd : la lame d'air est trop épaisse pour ce montage ; charioter vers le contact optique.", t2: gesteC3(st, 0) };
-    return { cle: cle + "-tout", t1: "Un éclairement uniforme : le parallélisme des miroirs ou la longueur des bras n'est pas satisfaisant ; revenir aux réglages précédents (le parallélisme grossier).",
+    if (mE.V > 0.35) return { cle: cle + "-e", t1: TRAD("Le contraste se perd : la lame d'air est trop épaisse pour ce montage ; charioter vers le contact optique."), t2: gesteC3(st, 0) };
+    return { cle: cle + "-tout", t1: TRAD("Un éclairement uniforme : le parallélisme des miroirs ou la longueur des bras n'est pas satisfaisant ; revenir aux réglages précédents (le parallélisme grossier)."),
       t2: al > 0.3e-3 ? gesteAlpha(st, false) : gesteC3(st, 0) };
   }
   function diagFeuille(st) {
-    return st.feuille ? { cle: "feuille", t1: "Une feuille cache " + (st.feuille === "M1" ? "M₁" : "M₂") + " : un seul faisceau, pas d'interférences.", t2: "Retirer la feuille : un clic sur sa carte (étagère, onglet Accessoires), ou la glisser hors du miroir." } : null;
+    return st.feuille ? { cle: "feuille", t1: TRAD("Une feuille cache {0} : un seul faisceau, pas d'interférences.", [st.feuille === "M1" ? "M₁" : "M₂"]), t2: TRAD("Retirer la feuille : un clic sur sa carte (étagère, onglet Accessoires), ou la glisser hors du miroir.") } : null;
   }
   // Cible des indices = le réglage ou la manipulation que l'élève a choisi (clic sur sa puce, manipulation ouverte),
   // sinon le premier réglage non atteint. Un réglage atteint mais pas soigné ne retient pas la cible automatique.
@@ -1100,10 +1116,10 @@
     return null;                                  // Michelson réglé : les indices attendent une manipulation ouverte
   }
   var APPLIS = {
-    coherence: "En lame d'air (ou en coin d'air, dans le plan des miroirs), au mercure et son filtre vert, en haute pression : partir du contact optique et charioter dans le même sens jusqu'à la disparition du contraste (lire C₃ aux deux bouts).",
-    doublet: "En lame d'air, au sodium : charioter lentement dans le même sens ; le contraste des anneaux s'annule, puis revient.",
-    rayons: "Anneaux du sodium bien contrastés sur l'écran, au foyer de la lentille de 1 m (au moins cinq) : poser la barrette sur l'écran.",
-    lamelle: "Coin d'air en lumière blanche, puis la lamelle devant un miroir, sur une partie du faisceau : charioter pour retrouver les franges derrière elle."
+    coherence: TRAD("En lame d'air (ou en coin d'air, dans le plan des miroirs), au mercure et son filtre vert, en haute pression : partir du contact optique et charioter dans le même sens jusqu'à la disparition du contraste (lire C₃ aux deux bouts)."),
+    doublet: TRAD("En lame d'air, au sodium : charioter lentement dans le même sens ; le contraste des anneaux s'annule, puis revient."),
+    rayons: TRAD("Anneaux du sodium bien contrastés sur l'écran, au foyer de la lentille de 1 m (au moins cinq) : poser la barrette sur l'écran."),
+    lamelle: TRAD("Coin d'air en lumière blanche, puis la lamelle devant un miroir, sur une partie du faisceau : charioter pour retrouver les franges derrière elle.")
   };
   function nomEtape(id) { return ETAPES.concat(MANIPS).filter(function (x) { return x.id === id; })[0].nom; }
   function aSoin(id) { return ETAPES.some(function (x) { return x.id === id && x.soin; }); }
@@ -1116,10 +1132,10 @@
   // si aucun ne suffit seul, et le meilleur est proposé s'il améliore nettement le score (`MARGE`). Sinon, ou si le
   // même symptôme revient après deux indices (`o.recours`, compté par l'interface), un montage de référence
   // (`RECOURS`, ceux de CONFIGS), sans prétendre que c'est le seul. Un réglage soigné ne passe pas par là.
-  var SODIUM = "Étagère, onglet Sources : un clic sur la carte Sodium, elle remplace la lampe.";
-  var FERMER_IRIS = "Fermer l'iris : molette vers le bas sur sa pastille, ou la glisser vers le bas.";
-  var OUVRIR_IRIS = "Ouvrir l'iris : molette vers le haut sur sa pastille, ou la glisser vers le haut.";
-  var POSER_IRIS = "Poser l'iris : étagère, onglet Entrée, un clic sur sa carte.";
+  var SODIUM = TRAD("Étagère, onglet Sources : un clic sur la carte Sodium, elle remplace la lampe.");
+  var FERMER_IRIS = TRAD("Fermer l'iris : molette vers le bas sur sa pastille, ou la glisser vers le bas.");
+  var OUVRIR_IRIS = TRAD("Ouvrir l'iris : molette vers le haut sur sa pastille, ou la glisser vers le haut.");
+  var POSER_IRIS = TRAD("Poser l'iris : étagère, onglet Entrée, un clic sur sa carte.");
   // Plan vu net ↔ source : vergences comparées au premier élément après les miroirs (lentille de sortie ou détecteur),
   // à TOL_CONJ près (celle de TOL_INFINI : un plan à plus de 2 m compte pour l'infini).
   var TOL_CONJ = 0.5;
@@ -1178,15 +1194,15 @@
     return { q: V * gp, sym: gp < 0.5 ? "minuscule" : V >= 0.35 ? "la" : m.nfr < 0.35 ? "uniforme" : "brouillee", ok: V >= 0.35 && gp >= 0.5 };
   }
   var SYMPTOMES = {
-    sombre: "Trop peu de lumière pour y voir une figure",
-    minuscule: "Le champ éclairé est minuscule",
-    uniforme: "Un éclairement uniforme, sans figure",
-    brouillee: "Une figure peu contrastée",
-    flou: "Les images de la source ne se forment pas là où l'on regarde",
-    grande: "Les images de la source sont trop grandes pour qu'on juge de leur écart",
-    "laser-obj": "Ouvert par son objectif, le laser ne donne pas une tache par miroir",
-    "laser-oeil": "Au laser, on n'observe jamais à l'œil",
-    fantome: "L'image fantôme de la compensatrice, bien plus pâle que l'image principale, est trop sombre pour être vue ici"
+    sombre: TRAD("Trop peu de lumière pour y voir une figure"),
+    minuscule: TRAD("Le champ éclairé est minuscule"),
+    uniforme: TRAD("Un éclairement uniforme, sans figure"),
+    brouillee: TRAD("Une figure peu contrastée"),
+    flou: TRAD("Les images de la source ne se forment pas là où l'on regarde"),
+    grande: TRAD("Les images de la source sont trop grandes pour qu'on juge de leur écart"),
+    "laser-obj": TRAD("Ouvert par son objectif, le laser ne donne pas une tache par miroir"),
+    "laser-oeil": TRAD("Au laser, on n'observe jamais à l'œil"),
+    fantome: TRAD("L'image fantôme de la compensatrice, bien plus pâle que l'image principale, est trop sombre pour être vue ici")
   };
   // Catalogue des gestes de montage. voies : "images" ou "franges" (toutes les autres) ; possible(st, G) : légal dans
   // l'interface et utile à essayer ; f(s, vo) : le geste appliqué à une copie (mêmes fonctions que l'interface :
@@ -1204,99 +1220,99 @@
     { id: "det-ecran", voies: ["images", "franges"],
       possible: function (st) { return lampe(st).type === "point" && st.det === "oeil"; },
       f: function (s) { detecteur(s, "ecran"); },
-      quoi: function () { return "observer sur l'écran"; },
-      comment: function () { return "Étagère, onglet Sortie : un clic sur la carte Écran."; } },
+      quoi: function () { return TRAD("observer sur l'écran"); },
+      comment: function () { return TRAD("Étagère, onglet Sortie : un clic sur la carte Écran."); } },
     { id: "oeil-source", voies: ["images"],
       possible: function (st, G) { return lampe(st).type !== "point" && (!netSurSource(G) || st.det === "ecran"); },
       f: oeilSource,
-      quoi: function () { return "regarder la source à l'œil, sans lentille de sortie : chaque miroir en donne une image"; },
-      comment: function (st) { return (st.det === "ecran" ? "Étagère, onglet Sortie : un clic sur la carte Œil, il remplace l'écran ; " : "") +
-        (sansLentille(st) ? "" : "retirer les lentilles de sortie ; ") + "sous l'image, « À la main » : accommoder sur la source, au curseur ou à la molette."; } },
+      quoi: function () { return TRAD("regarder la source à l'œil, sans lentille de sortie : chaque miroir en donne une image"); },
+      comment: function (st) { return (st.det === "ecran" ? TRAD("Étagère, onglet Sortie : un clic sur la carte Œil, il remplace l'écran ; ") : "") +
+        (sansLentille(st) ? "" : TRAD("retirer les lentilles de sortie ; ")) + TRAD("sous l'image, « À la main » : accommoder sur la source, au curseur ou à la molette."); } },
     { id: "iris-fermer", voies: ["images"],
       possible: function (st) { return lampe(st).type !== "point" && !(st.iris != null && st.iris <= 2 * IRIS_TROU); },
       f: function (s) { s.iris = IRIS_TROU; },
-      quoi: function (st) { return (st.iris == null ? "poser l'iris devant la lampe et le fermer presque entièrement" : "fermer presque entièrement l'iris") + " : la source devient un petit trou de lumière, dont chaque miroir donne une petite image"; },
-      comment: function (st) { return (st.iris == null ? POSER_IRIS + " Puis : " : "") + FERMER_IRIS; } },
+      quoi: function (st) { return TRAD("{0} : la source devient un petit trou de lumière, dont chaque miroir donne une petite image", [(st.iris == null ? TRAD("poser l'iris devant la lampe et le fermer presque entièrement") : TRAD("fermer presque entièrement l'iris"))]); },
+      comment: function (st) { return (st.iris == null ? POSER_IRIS + TRAD(" Puis : ") : "") + FERMER_IRIS; } },
     { id: "objectif-devisser", voies: ["images"],
       possible: function (st) { return lampe(st).type === "point" && st.lc !== false; },
       f: function (s) { s.lc = false; if (s.det === "oeil") detecteur(s, "ecran"); },
-      quoi: function () { return "dévisser l'objectif du laser : son faisceau nu, étroit, donne une tache par miroir sur l'écran"; },
-      comment: function () { return "Un clic sur la carte Objectif (étagère, onglet Entrée), ou « faisceau nu » au bandeau du laser."; } },
+      quoi: function () { return TRAD("dévisser l'objectif du laser : son faisceau nu, étroit, donne une tache par miroir sur l'écran"); },
+      comment: function () { return TRAD("Un clic sur la carte Objectif (étagère, onglet Entrée), ou « faisceau nu » au bandeau du laser."); } },
     { id: "objectif-visser", voies: ["franges"],
       possible: function (st) { return laserNu(st); },
       f: function (s) { s.lc = true; },
-      quoi: function () { return "visser l'objectif sur le laser : le faisceau s'ouvre en un cône, qui éclaire tout le champ"; },
-      comment: function () { return "Un clic sur la carte Objectif (étagère, onglet Entrée), ou ×20 au bandeau du laser."; } },
+      quoi: function () { return TRAD("visser l'objectif sur le laser : le faisceau s'ouvre en un cône, qui éclaire tout le champ"); },
+      comment: function () { return TRAD("Un clic sur la carte Objectif (étagère, onglet Entrée), ou ×20 au bandeau du laser."); } },
     { id: "iris-ouvrir", voies: ["images", "franges"],
       possible: function (st, G, vo) { return lampe(st).type !== "point" && st.iris != null && st.iris < (vo === "images" ? 4 * IRIS_TROU : 0.009); },
       f: function (s, vo) { s.iris = vo === "images" ? 2.5 * s.iris : Math.max(s.iris, 0.010); },
-      quoi: function (st, vo) { return vo === "images" ? "ouvrir un peu l'iris : plus de lumière, des images encore petites" : "ouvrir l'iris : une source étendue éclaire tout le champ, et donne plus de lumière"; },
+      quoi: function (st, vo) { return vo === "images" ? TRAD("ouvrir un peu l'iris : plus de lumière, des images encore petites") : TRAD("ouvrir l'iris : une source étendue éclaire tout le champ, et donne plus de lumière"); },
       comment: function () { return OUVRIR_IRIS; } },
     { id: "det-infini", voies: ["franges"],
       possible: function (st, G, vo) { return vo !== "blanc" && G.plan !== "infini" && lampe(st).type !== "point"; },
       f: function (s) { if (s.det === "oeil") s.accMode = "infini"; else ecranInfini(s); },
-      quoi: function () { return "observer à l'infini, où sont les anneaux d'une lame d'air"; },
+      quoi: function () { return TRAD("observer à l'infini, où sont les anneaux d'une lame d'air"); },
       comment: function (st) { return gesteDetecteur(st, "infini"); } },
     { id: "det-miroirs", voies: ["franges"],
       possible: function (st, G, vo) { return vo === "blanc" && G.plan !== "miroirs"; },
       f: function (s) { if (s.det === "oeil") s.accMode = "miroirs"; else ecranMiroirs(s); },
-      quoi: function () { return "observer le plan des miroirs, où sont les franges d'un coin d'air"; },
+      quoi: function () { return TRAD("observer le plan des miroirs, où sont les franges d'un coin d'air"); },
       comment: function (st) { return gesteDetecteur(st, "miroirs"); } },
     { id: "iris-reduire", voies: ["franges"],
       possible: function (st, G, vo) { return vo === "coin" && lampe(st).type !== "point" && !(st.iris != null && st.iris <= 0.0035); },
       f: function (s) { s.iris = 0.003; },
-      quoi: function (st) { return (st.iris == null ? "poser l'iris et le fermer un peu" : "fermer un peu l'iris") + " : une source moins étendue brouille moins les franges du coin d'air"; },
-      comment: function (st) { return (st.iris == null ? POSER_IRIS + " Puis : " : "") + FERMER_IRIS; } },
+      quoi: function (st) { return TRAD("{0} : une source moins étendue brouille moins les franges du coin d'air", [(st.iris == null ? TRAD("poser l'iris et le fermer un peu") : TRAD("fermer un peu l'iris"))]); },
+      comment: function (st) { return (st.iris == null ? POSER_IRIS + TRAD(" Puis : ") : "") + FERMER_IRIS; } },
     { id: "lampe-eloigner", voies: ["franges"],
       possible: function (st, G, vo) { if (vo !== "coin") return false; var s = JSON.parse(JSON.stringify(st)); deplacer(s, "ent", "lampe", BORNES.ent[1]); return s.ent.lampe > st.ent.lampe + 0.1; },
       f: function (s) { deplacer(s, "ent", "lampe", BORNES.ent[1]); },
-      quoi: function () { return "reculer la lampe au bout du banc : vue sous un plus petit angle, elle brouille moins les franges du coin d'air"; },
-      comment: function () { return "Glisser la lampe sur le banc d'entrée, loin de l'appareil (ou ↓ quand elle est choisie)."; } },
+      quoi: function () { return TRAD("reculer la lampe au bout du banc : vue sous un plus petit angle, elle brouille moins les franges du coin d'air"); },
+      comment: function () { return TRAD("Glisser la lampe sur le banc d'entrée, loin de l'appareil (ou ↓ quand elle est choisie)."); } },
     { id: "lampe-approcher", voies: ["images", "franges"],
       possible: function (st) { var s = JSON.parse(JSON.stringify(st)); deplacer(s, "ent", "lampe", BORNES.ent[0]); return s.ent.lampe < st.ent.lampe - 0.03; },
       f: function (s) { deplacer(s, "ent", "lampe", BORNES.ent[0]); },
-      quoi: function (st, vo) { return vo === "images" ? "approcher la lampe de l'appareil : plus de lumière" : "approcher la lampe de l'appareil : plus de lumière, et une source vue sous un plus grand angle, qui éclaire tout le champ"; },
-      comment: function () { return "Glisser la lampe sur le banc d'entrée, vers l'appareil (ou ↑ quand elle est choisie)."; } },
+      quoi: function (st, vo) { return vo === "images" ? TRAD("approcher la lampe de l'appareil : plus de lumière") : TRAD("approcher la lampe de l'appareil : plus de lumière, et une source vue sous un plus grand angle, qui éclaire tout le champ"); },
+      comment: function () { return TRAD("Glisser la lampe sur le banc d'entrée, vers l'appareil (ou ↑ quand elle est choisie)."); } },
     { id: "entree-retirer", voies: ["franges"],
       possible: function (st) { return st.ent.coll != null; },
       f: function (s) { s.ent.coll = null; },
-      quoi: function () { return "retirer la lentille d'entrée : la lumière arrive alors sur les miroirs sous toutes les inclinaisons, et chacune donne son anneau"; },
-      comment: function () { return "Un clic sur sa carte (étagère, onglet Entrée), ou Suppr."; } },
+      quoi: function () { return TRAD("retirer la lentille d'entrée : la lumière arrive alors sur les miroirs sous toutes les inclinaisons, et chacune donne son anneau"); },
+      comment: function () { return TRAD("Un clic sur sa carte (étagère, onglet Entrée), ou Suppr."); } },
     { id: "lampe-sodium", voies: ["franges"],
       possible: function (st) { return lampe(st).type === "filament"; },
       f: function (s) { s.lampe = "na"; normaliserPorte(s); },
-      quoi: function () { return "prendre la lampe au sodium : la lumière blanche ne donne de franges qu'au voisinage immédiat du contact optique"; },
+      quoi: function () { return TRAD("prendre la lampe au sodium : la lumière blanche ne donne de franges qu'au voisinage immédiat du contact optique"); },
       comment: function () { return SODIUM; } },
     { id: "depoli-poser", voies: ["images", "franges"],
       possible: function (st) { return !st.depoli && lampe(st).type !== "point"; },
       f: function (s) { s.depoli = true; },
-      quoi: function (st, vo) { return vo === "images" && condLanterne(st) ? "poser le dépoli sur la lanterne : l'iris borne alors la source (sans lui, l'iris n'est que la monture du condenseur)" : "poser le dépoli devant la lampe : une source étendue et uniforme"; },
-      comment: function () { return "Étagère, onglet Entrée : un clic sur la carte Dépoli."; } },
+      quoi: function (st, vo) { return vo === "images" && condLanterne(st) ? TRAD("poser le dépoli sur la lanterne : l'iris borne alors la source (sans lui, l'iris n'est que la monture du condenseur)") : TRAD("poser le dépoli devant la lampe : une source étendue et uniforme"); },
+      comment: function () { return TRAD("Étagère, onglet Entrée : un clic sur la carte Dépoli."); } },
     { id: "depoli-retirer", voies: ["images", "franges"],
       possible: function (st) { return !!st.depoli && lampe(st).type !== "point"; },
       f: function (s) { s.depoli = false; },
-      quoi: function () { return "retirer le dépoli : la lampe nue éclaire bien davantage"; },
-      comment: function () { return "Un clic sur la carte Dépoli (étagère, onglet Entrée)."; } },
+      quoi: function () { return TRAD("retirer le dépoli : la lampe nue éclaire bien davantage"); },
+      comment: function () { return TRAD("Un clic sur la carte Dépoli (étagère, onglet Entrée)."); } },
     { id: "cond-poser", voies: ["franges"],
       possible: function (st) { return lampe(st).type === "spectrale" && !st.depoli && st.ent.cond == null && st.ent.coll == null; },
       f: function (s) { poser(s, "cond"); deplacer(s, "ent", "lampe", s.ent.cond + 1 / (1 / ELEMENTS.cond.f - 1 / (ARM + s.ent.cond))); },
-      quoi: function () { return "poser le condenseur, la lampe derrière lui : il forme l'image de la lampe sur les miroirs, beaucoup de lumière dans tout le champ"; },
-      comment: function () { return "Étagère, onglet Entrée : la carte Condenseur ; puis glisser la lampe jusqu'à ce que son image se forme sur les miroirs."; } }
+      quoi: function () { return TRAD("poser le condenseur, la lampe derrière lui : il forme l'image de la lampe sur les miroirs, beaucoup de lumière dans tout le champ"); },
+      comment: function () { return TRAD("Étagère, onglet Entrée : la carte Condenseur ; puis glisser la lampe jusqu'à ce que son image se forme sur les miroirs."); } }
   ];
   // Montages de référence (ceux de CONFIGS : autocollimation, anneaux, lumière blanche), en dernier recours.
-  var UN_MONTAGE = "Un montage qui marche (il y en a d'autres) : ";
+  var UN_MONTAGE = TRAD("Un montage qui marche (il y en a d'autres) : ");
   var RECOURS = {
-    images: { t1: UN_MONTAGE + "l'autocollimation. Sur le banc d'entrée, l'iris presque fermé sur le dépoli, au foyer de la lentille 20 cm ; en sortie, l'œil sans lentille, accommodé à l'infini : chaque miroir donne une petite image de l'iris.",
-      t2: "Étagère, onglet Entrée : la lentille 20 cm, puis glisser la lampe jusqu'à ce que l'iris soit à son foyer (vue de la face de l'iris : la lumière revenue y forme une image nette) ; onglet Sortie : la carte Œil, les lentilles retirées ; sous l'image, « À l'infini »." },
-    franges: { t1: UN_MONTAGE + "la lampe au sodium près de l'appareil, dépoli posé, iris grand ouvert, sans lentille d'entrée ; en sortie, la lentille 1 m et l'écran dans son plan focal image (ou l'œil sans lentille, accommodé à l'infini) : des anneaux à l'infini.",
-      t2: "Étagère, onglet Sources : Sodium ; onglet Entrée : le dépoli, les lentilles retirées ; onglet Sortie : la lentille 1 m, puis l'écran glissé à un mètre d'elle." },
-    blanc: { t1: UN_MONTAGE + "le contact trouvé d'abord au sodium (teinte plate), puis un coin d'air : la lanterne au bout du banc d'entrée, sans dépoli, et l'image des miroirs sur l'écran par la lentille 20 cm ; charioter alors très lentement.",
-      t2: "Étagère, onglet Sources : Lanterne ; onglet Sortie : la lentille 20 cm, l'écran à un mètre d'elle ; C₁ ou C₂ pour incliner un miroir, puis Ctrl et molette sur C₃." }
+    images: { t1: TRAD("{0}l'autocollimation. Sur le banc d'entrée, l'iris presque fermé sur le dépoli, au foyer de la lentille 20 cm ; en sortie, l'œil sans lentille, accommodé à l'infini : chaque miroir donne une petite image de l'iris.", [UN_MONTAGE]),
+      t2: TRAD("Étagère, onglet Entrée : la lentille 20 cm, puis glisser la lampe jusqu'à ce que l'iris soit à son foyer (vue de la face de l'iris : la lumière revenue y forme une image nette) ; onglet Sortie : la carte Œil, les lentilles retirées ; sous l'image, « À l'infini ».") },
+    franges: { t1: TRAD("{0}la lampe au sodium près de l'appareil, dépoli posé, iris grand ouvert, sans lentille d'entrée ; en sortie, la lentille 1 m et l'écran dans son plan focal image (ou l'œil sans lentille, accommodé à l'infini) : des anneaux à l'infini.", [UN_MONTAGE]),
+      t2: TRAD("Étagère, onglet Sources : Sodium ; onglet Entrée : le dépoli, les lentilles retirées ; onglet Sortie : la lentille 1 m, puis l'écran glissé à un mètre d'elle.") },
+    blanc: { t1: TRAD("{0}le contact trouvé d'abord au sodium (teinte plate), puis un coin d'air : la lanterne au bout du banc d'entrée, sans dépoli, et l'image des miroirs sur l'écran par la lentille 20 cm ; charioter alors très lentement.", [UN_MONTAGE]),
+      t2: TRAD("Étagère, onglet Sources : Lanterne ; onglet Sortie : la lentille 20 cm, l'écran à un mètre d'elle ; C₁ ou C₂ pour incliner un miroir, puis Ctrl et molette sur C₃.") }
   };
   function recours(c, vo, sym) {
     var r = RECOURS[vo === "images" ? "images" : vo === "blanc" ? "blanc" : "franges"];
     return { cle: "rec-" + c + "-" + vo, sym: sym, recours: true,
-      t1: r.t1 + (c === "comp" && vo === "images" ? " Puis la feuille sur M₂ : seules restent les images données par M₁, à travers la compensatrice." : ""), t2: r.t2 };
+      t1: r.t1 + (c === "comp" && vo === "images" ? TRAD(" Puis la feuille sur M₂ : seules restent les images données par M₁, à travers la compensatrice.") : ""), t2: r.t2 };
   }
   function appliquerGeste(st, id, vo) { var g = GESTES.filter(function (x) { return x.id === id; })[0]; g.f(st, vo); return st; }
   // Diagnostic du montage pour le réglage c (voie vo) : null si sa figure suffit (ou si aucun geste de montage n'y
@@ -1323,8 +1339,8 @@
     if (best) {
       var g1 = best.gs[0], g2 = best.gs[1];
       return { cle: "m-" + c + "-" + best.gs.map(function (g) { return g.id; }).join("+"), sym: sym, gestes: best.gs.map(function (g) { return g.id; }),
-        t1: SYMPTOMES[F0.sym] + " : " + g1.quoi(st, vo) + (g2 ? ", et " + g2.quoi(st, vo) : "") + ".",
-        t2: g1.comment(st, vo) + (g2 ? " Puis : " + g2.comment(st, vo) : "") };
+        t1: TRAD("{0} : {1}{2}.", [SYMPTOMES[F0.sym], g1.quoi(st, vo), (g2 ? TRAD(", et {0}", [g2.quoi(st, vo)]) : "")]),
+        t2: g1.comment(st, vo) + (g2 ? TRAD(" Puis : {0}", [g2.comment(st, vo)]) : "") };
     }
     if (F0.sym === "sombre" || fam === "images" || F0.sym === "laser-oeil" || F0.sym === "minuscule") return recours(c, vo, sym);
     return null;
@@ -1336,41 +1352,41 @@
   // deux indices).
   function indiceReglage(st, CO, R, c, o) {
     var vo = voie(st, R, c), m = R.m, G = R.G, d, at = R.ok[c];
-    if (R.top[c]) return { cle: c + "-ok", t1: "Réglage « " + nomEtape(c) + " » soigné.", t2: "" };
-    var soin = function (o) { return { cle: o.cle, t1: "Réglage « " + nomEtape(c) + " » atteint ; pour le soigner : " + o.t1, t2: o.t2 }; };
+    if (R.top[c]) return { cle: c + "-ok", t1: TRAD("Réglage « {0} » soigné.", [nomEtape(c)]), t2: "" };
+    var soin = function (o) { return { cle: o.cle, t1: TRAD("Réglage « {0} » atteint ; pour le soigner : {1}", [nomEtape(c), o.t1]), t2: o.t2 }; };
     // compensatrice, sur les images d'un petit trou : M₂ caché (la lumière qui va vers M₁ traverse la compensatrice), on
     // ne voit plus que les images données par M₁, l'image principale et ses fantômes
     var parM1 = c === "comp" && vo === "images";
     if (!parM1 && (d = diagFeuille(st))) return d;
-    if (!parM1 && !m) return { cle: "vue", t1: "Revenir à l'observation (écran ou œil).", t2: "" };
+    if (!parM1 && !m) return { cle: "vue", t1: TRAD("Revenir à l'observation (écran ou œil)."), t2: "" };
     if ((d = diagMontage(st, CO, R, c, vo, o))) return d;
-    if (parM1 && st.feuille !== "M2") return { cle: "c-feuille", t1: "Cacher M₂ avec une feuille de papier : il ne reste que l'image donnée par M₁ et, à côté, plus pâle, son fantôme (le reflet sur une face de la compensatrice, que traverse la lumière qui va vers M₁). Sans la feuille, on ne sait pas laquelle des deux taches amener sur le fantôme.",
-      t2: "Étagère, onglet Accessoires : glisser la feuille sur M₂ (un clic sur sa carte la pose aussi sur M₂)." + POUR_MOI };
-    if (R.sombre) return { cle: "sombre", t1: vue(st) === "oeil" ? "Trop peu de lumière pour y voir une figure à l'œil." : "Pas assez de lumière sur l'écran pour y voir une figure.",
-      t2: st.iris != null && st.iris < R_DEPOLI ? "Ouvrir un peu l'iris (molette ou glisser vers le haut, sur sa pastille), ou approcher l'écran, ou observer à l'œil." : "Approcher l'écran ou la lampe, ou observer à l'œil." };
+    if (parM1 && st.feuille !== "M2") return { cle: "c-feuille", t1: TRAD("Cacher M₂ avec une feuille de papier : il ne reste que l'image donnée par M₁ et, à côté, plus pâle, son fantôme (le reflet sur une face de la compensatrice, que traverse la lumière qui va vers M₁). Sans la feuille, on ne sait pas laquelle des deux taches amener sur le fantôme."),
+      t2: TRAD("Étagère, onglet Accessoires : glisser la feuille sur M₂ (un clic sur sa carte la pose aussi sur M₂).") + POUR_MOI };
+    if (R.sombre) return { cle: "sombre", t1: vue(st) === "oeil" ? TRAD("Trop peu de lumière pour y voir une figure à l'œil.") : TRAD("Pas assez de lumière sur l'écran pour y voir une figure."),
+      t2: st.iris != null && st.iris < R_DEPOLI ? TRAD("Ouvrir un peu l'iris (molette ou glisser vers le haut, sur sa pastille), ou approcher l'écran, ou observer à l'œil.") : TRAD("Approcher l'écran ou la lampe, ou observer à l'œil.") };
     if (c === "comp") {
-      if (parM1) return at ? soin({ cle: "cs", t1: "confondre exactement le fantôme et l'image principale avec B₁ et B₂ ; puis rendre les anneaux bien ronds près du contact optique.", t2: gesteComp(st) })
-        : { cle: "c-B", t1: "L'image principale et, plus pâle, son fantôme sont séparés : la compensatrice n'est pas parallèle à la séparatrice ; amener le fantôme sur l'image principale avec B₁ et B₂.", t2: gesteComp(st) + POUR_MOI };
-      if (m.V < 0.35 || !R.vu.anneaux) return { cle: "cr-anneaux", t1: "Pas d'anneaux nets à juger : la rondeur ne se voit que miroirs parallèles, près du contact. Régler la compensatrice sur les images d'un petit trou de lumière, ou passer d'abord aux réglages suivants (clic sur leur puce).",
-        t2: "Le diaphragme presque fermé, regardé à l'œil sur la source, puis la feuille sur M₂." + POUR_MOI };
-      if (Math.abs(G.e) >= 0.35e-3) return { cle: "cr-loin", t1: "Se rapprocher du contact optique pour juger de la rondeur des anneaux : charioter, les anneaux rentrent et grossissent.", t2: gesteC3(st, 0) };
-      d = { cle: "cr-ell", t1: "anneaux encore un peu elliptiques : B₁ place le grand axe suivant la verticale ou l'horizontale, B₂ diminue l'excentricité.", t2: gesteComp(st) };
-      return at ? soin(d) : { cle: d.cle, t1: "Anneaux elliptiques : la compensatrice n'est pas parallèle à la séparatrice ; B₁ place le grand axe suivant la verticale ou l'horizontale, B₂ diminue l'excentricité.", t2: d.t2 };
+      if (parM1) return at ? soin({ cle: "cs", t1: TRAD("confondre exactement le fantôme et l'image principale avec B₁ et B₂ ; puis rendre les anneaux bien ronds près du contact optique."), t2: gesteComp(st) })
+        : { cle: "c-B", t1: TRAD("L'image principale et, plus pâle, son fantôme sont séparés : la compensatrice n'est pas parallèle à la séparatrice ; amener le fantôme sur l'image principale avec B₁ et B₂."), t2: gesteComp(st) + POUR_MOI };
+      if (m.V < 0.35 || !R.vu.anneaux) return { cle: "cr-anneaux", t1: TRAD("Pas d'anneaux nets à juger : la rondeur ne se voit que miroirs parallèles, près du contact. Régler la compensatrice sur les images d'un petit trou de lumière, ou passer d'abord aux réglages suivants (clic sur leur puce)."),
+        t2: TRAD("Le diaphragme presque fermé, regardé à l'œil sur la source, puis la feuille sur M₂.") + POUR_MOI };
+      if (Math.abs(G.e) >= 0.35e-3) return { cle: "cr-loin", t1: TRAD("Se rapprocher du contact optique pour juger de la rondeur des anneaux : charioter, les anneaux rentrent et grossissent."), t2: gesteC3(st, 0) };
+      d = { cle: "cr-ell", t1: TRAD("anneaux encore un peu elliptiques : B₁ place le grand axe suivant la verticale ou l'horizontale, B₂ diminue l'excentricité."), t2: gesteComp(st) };
+      return at ? soin(d) : { cle: d.cle, t1: TRAD("Anneaux elliptiques : la compensatrice n'est pas parallèle à la séparatrice ; B₁ place le grand axe suivant la verticale ou l'horizontale, B₂ diminue l'excentricité."), t2: d.t2 };
     }
     if (c === "grossier") {
-      if (lampe(st).type === "point") return at ? soin({ cle: "gs-laser", t1: "confondre exactement les deux taches avec C₁ et C₂.", t2: gesteAlpha(st, false) })
-        : { cle: "g-laser", t1: "Superposer les deux taches sur l'écran avec C₁ et C₂ : M₂* devient à peu près parallèle à M₁.", t2: gesteAlpha(st, false) };
-      if (!at) return { cle: "g-C", t1: "Superposer au mieux les deux images du diaphragme avec C₁ et C₂, réglage grossier de M₂ : M₁ et M₂* deviennent à peu près parallèles.", t2: gesteAlpha(st, false) };
-      return soin(G.thetaS >= 2.5e-3 ? { cle: "gs-iris", t1: "fermer l'iris au plus petit : les taches rétrécissent, leur écart se juge mieux.", t2: FERMER_IRIS }
-        : { cle: "gs-C", t1: "confondre exactement les deux images avec C₁ et C₂.", t2: gesteAlpha(st, false) });
+      if (lampe(st).type === "point") return at ? soin({ cle: "gs-laser", t1: TRAD("confondre exactement les deux taches avec C₁ et C₂."), t2: gesteAlpha(st, false) })
+        : { cle: "g-laser", t1: TRAD("Superposer les deux taches sur l'écran avec C₁ et C₂ : M₂* devient à peu près parallèle à M₁."), t2: gesteAlpha(st, false) };
+      if (!at) return { cle: "g-C", t1: TRAD("Superposer au mieux les deux images du diaphragme avec C₁ et C₂, réglage grossier de M₂ : M₁ et M₂* deviennent à peu près parallèles."), t2: gesteAlpha(st, false) };
+      return soin(G.thetaS >= 2.5e-3 ? { cle: "gs-iris", t1: TRAD("fermer l'iris au plus petit : les taches rétrécissent, leur écart se juge mieux."), t2: FERMER_IRIS }
+        : { cle: "gs-C", t1: TRAD("confondre exactement les deux images avec C₁ et C₂."), t2: gesteAlpha(st, false) });
     }
     if (c === "fin") {
       if (vo === "coin") {
         if (m.V < 0.35) return diagBrouille(st, CO, R, "r");
-        if (m.quad >= 1 / 3) return { cle: "r-courbe", t1: "Des portions d'anneaux : il subsiste une lame d'air ; charioter pour diminuer leur courbure, les franges deviennent rectilignes.", t2: gesteC3(st, 0) };
-        if (m.nfr > 1.5) return { cle: "r-ecart", t1: "Écarter les franges au maximum, jusqu'à n'en voir presque plus qu'une sur le champ : les vis grossières C₁ et C₂ y suffisent, en douceur.", t2: gesteAlpha(st, false) };
-        d = { cle: "r-lame", t1: "Franges écartées : passer en lame d'air (dépoli près de la lampe, observation à l'infini), puis y amener le contraste au centre avec les vis fines.",
-          t2: "Étagère, onglet Sortie : la lentille 1 m, l'écran dans son plan focal (ou l'œil accommodé à l'infini) ; puis A₁ et A₂." };
+        if (m.quad >= 1 / 3) return { cle: "r-courbe", t1: TRAD("Des portions d'anneaux : il subsiste une lame d'air ; charioter pour diminuer leur courbure, les franges deviennent rectilignes."), t2: gesteC3(st, 0) };
+        if (m.nfr > 1.5) return { cle: "r-ecart", t1: TRAD("Écarter les franges au maximum, jusqu'à n'en voir presque plus qu'une sur le champ : les vis grossières C₁ et C₂ y suffisent, en douceur."), t2: gesteAlpha(st, false) };
+        d = { cle: "r-lame", t1: TRAD("Franges écartées : passer en lame d'air (dépoli près de la lampe, observation à l'infini), puis y amener le contraste au centre avec les vis fines."),
+          t2: TRAD("Étagère, onglet Sortie : la lentille 1 m, l'écran dans son plan focal (ou l'œil accommodé à l'infini) ; puis A₁ et A₂.") };
         return at ? soin(d) : d;
       }
       if (m.V < 0.35 && !(Math.hypot(inclinaison(st).ax, inclinaison(st).ay) < 30e-6)) {
@@ -1384,40 +1400,40 @@
         var coin = function (de) { return variante(st, CO, function (s) { if (s.det !== "oeil") detecteur(s, "oeil"); s.sor.l20 = s.sor.l1 = null; s.accMode = "miroirs";
           if (de) { var b = inclinaison(s); viser(s, epaisseur(s) + de, b.ax, b.ay); } }); };
         var vu = function (x) { return x.V > 0.35 || x.Vmax > 0.6; }, mc = coin(0), anti = !vu(mc) && st.lampe === "na" && (vu(coin(EP_DOUBLET / 2)) || vu(coin(-EP_DOUBLET / 2)));
-        if (lampe(st).type !== "point" && (vu(mc) || anti)) return { cle: "n-coin", t1: "Les miroirs sont encore trop inclinés pour des anneaux à l'infini, mais assez peu pour voir les franges du coin d'air : les regarder à l'œil, accommodé sur les miroirs, puis les écarter avec C₁ et C₂ jusqu'à n'en voir presque plus qu'une." +
-            (anti ? " Si elles restent pâles, charioter un peu : anticoïncidence du doublet." : ""),
-          t2: st.det === "oeil" ? (sansLentille(st) ? "" : "Retirer les lentilles de sortie ; ") + "sous l'image, « Sur les miroirs »." : "Étagère, onglet Sortie : un clic sur la carte Œil, il remplace l'écran ; retirer les lentilles de sortie ; sous l'image, « Sur les miroirs »." };
+        if (lampe(st).type !== "point" && (vu(mc) || anti)) return { cle: "n-coin", t1: TRAD("Les miroirs sont encore trop inclinés pour des anneaux à l'infini, mais assez peu pour voir les franges du coin d'air : les regarder à l'œil, accommodé sur les miroirs, puis les écarter avec C₁ et C₂ jusqu'à n'en voir presque plus qu'une.{0}",
+            [(anti ? TRAD(" Si elles restent pâles, charioter un peu : anticoïncidence du doublet.") : "")]),
+          t2: st.det === "oeil" ? TRAD("{0}sous l'image, « Sur les miroirs ».", [(sansLentille(st) ? "" : TRAD("Retirer les lentilles de sortie ; "))]) : TRAD("Étagère, onglet Sortie : un clic sur la carte Œil, il remplace l'écran ; retirer les lentilles de sortie ; sous l'image, « Sur les miroirs ».") };
         return diagBrouille(st, CO, R, "n");
       }
-      if (!at) return { cle: "n-centre", t1: "Amener au centre de la figure la zone la mieux contrastée, avec les vis fines A₁ et A₂ : quand elle l'atteint, toute la figure gagne en contraste d'un coup.",
+      if (!at) return { cle: "n-centre", t1: TRAD("Amener au centre de la figure la zone la mieux contrastée, avec les vis fines A₁ et A₂ : quand elle l'atteint, toute la figure gagne en contraste d'un coup."),
         t2: gesteAlpha(st, true) };
       // test de la tête : en se déplaçant de ±1 cm, la pupille regarde des zones des miroirs d'épaisseurs e ± α·1 cm
-      return soin(st.det === "oeil" && sansLentille(st) ? { cle: "n-oeil", t1: "déplacer l'œil latéralement, puis verticalement ; si l'éclairement du centre change, l'épaisseur de la lame d'air n'est pas uniforme : affiner avec A₁ et A₂.",
-        t2: "Glisser sur l'image pour déplacer l'œil, dans les deux directions ; puis " + gesteAlpha(st, true).charAt(0).toLowerCase() + gesteAlpha(st, true).slice(1) }
-        : { cle: "n-oeil-pose", t1: "observer à l'œil accommodé à l'infini et déplacer la tête dans toutes les directions : l'éclairement du centre ne doit pas changer.",
-          t2: "Étagère, onglet Sortie : un clic sur la carte Œil, et retirer les lentilles de sortie ; puis glisser sur l'image pour déplacer l'œil, et A₁, A₂." });
+      return soin(st.det === "oeil" && sansLentille(st) ? { cle: "n-oeil", t1: TRAD("déplacer l'œil latéralement, puis verticalement ; si l'éclairement du centre change, l'épaisseur de la lame d'air n'est pas uniforme : affiner avec A₁ et A₂."),
+        t2: TRAD("Glisser sur l'image pour déplacer l'œil, dans les deux directions ; puis ") + gesteAlpha(st, true).charAt(0).toLowerCase() + gesteAlpha(st, true).slice(1) }
+        : { cle: "n-oeil-pose", t1: TRAD("observer à l'œil accommodé à l'infini et déplacer la tête dans toutes les directions : l'éclairement du centre ne doit pas changer."),
+          t2: TRAD("Étagère, onglet Sortie : un clic sur la carte Œil, et retirer les lentilles de sortie ; puis glisser sur l'image pour déplacer l'œil, et A₁, A₂.") });
     }
     // contact
     if (vo === "blanc") {
-      if (m.Vmax > 0.5 && m.nfr < 1.5) return { cle: "b-coin", t1: "Incliner un miroir pour former un coin d'air : plus il y a de franges, plus le champ couvre d'épaisseurs, et plus vite on y trouve le contact en lumière blanche.", t2: "Faire rouler C₁ ou C₂, dans un sens ou dans l'autre." };
-      if (R.ok.blanc) return soin({ cle: "os-centre", t1: "amener la frange achromatique au centre du champ, en chariotant très lentement.", t2: gesteC3(st, 0) });
-      if (!at && !sensBlancSigne(st, CO)) return { cle: "b-sodium", t1: "Aucune frange de lumière blanche à portée de chariot : trouver d'abord le contact au sodium (teinte plate), puis revenir à la lanterne.", t2: SODIUM };
-      return { cle: "b-C3", t1: "Modifier très légèrement C₃ : en lumière blanche, on ne voit de franges qu'au voisinage immédiat du contact optique.", t2: sensBlanc(st, CO) };
+      if (m.Vmax > 0.5 && m.nfr < 1.5) return { cle: "b-coin", t1: TRAD("Incliner un miroir pour former un coin d'air : plus il y a de franges, plus le champ couvre d'épaisseurs, et plus vite on y trouve le contact en lumière blanche."), t2: TRAD("Faire rouler C₁ ou C₂, dans un sens ou dans l'autre.") };
+      if (R.ok.blanc) return soin({ cle: "os-centre", t1: TRAD("amener la frange achromatique au centre du champ, en chariotant très lentement."), t2: gesteC3(st, 0) });
+      if (!at && !sensBlancSigne(st, CO)) return { cle: "b-sodium", t1: TRAD("Aucune frange de lumière blanche à portée de chariot : trouver d'abord le contact au sodium (teinte plate), puis revenir à la lanterne."), t2: SODIUM };
+      return { cle: "b-C3", t1: TRAD("Modifier très légèrement C₃ : en lumière blanche, on ne voit de franges qu'au voisinage immédiat du contact optique."), t2: sensBlanc(st, CO) };
     }
-    if (at) return soin({ cle: "os-blanc", t1: "préciser le contact en lumière blanche, en coin d'air : des couleurs n'apparaissent qu'au voisinage immédiat du contact (manipulation « Lumière blanche »).",
-      t2: "Incliner un miroir avec C₁ ou C₂ et observer le plan des miroirs ; puis étagère, onglet Sources : un clic sur la carte Lanterne, et charioter très lentement (Ctrl et molette sur C₃)." });
+    if (at) return soin({ cle: "os-blanc", t1: TRAD("préciser le contact en lumière blanche, en coin d'air : des couleurs n'apparaissent qu'au voisinage immédiat du contact (manipulation « Lumière blanche »)."),
+      t2: TRAD("Incliner un miroir avec C₁ ou C₂ et observer le plan des miroirs ; puis étagère, onglet Sources : un clic sur la carte Lanterne, et charioter très lentement (Ctrl et molette sur C₃).") });
     if (m.V < 0.35) {
       d = diagBrouille(st, CO, R, "n");
-      if (/-alpha$/.test(d.cle)) d.t1 = "Le champ reste brouillé : faire tendre α vers 0 en affinant C₁ et C₂ tout en chariotant ; A₁ et A₂ pour finir.";
+      if (/-alpha$/.test(d.cle)) d.t1 = TRAD("Le champ reste brouillé : faire tendre α vers 0 en affinant C₁ et C₂ tout en chariotant ; A₁ et A₂ pour finir.");
       return d;
     }
-    if (!m.centreDedans) return { cle: "o-alpha", t1: "Faire tendre α vers 0 en affinant C₁ et C₂ tout en chariotant ; A₁ et A₂ pour finir.", t2: gesteAlpha(st, alphaFin(st)) };
-    return { cle: "o-C3", t1: "Charioter : les anneaux rentrent quand e diminue ; on atteint le contact optique quand la teinte devient uniforme.", t2: gesteC3(st, 0) };
+    if (!m.centreDedans) return { cle: "o-alpha", t1: TRAD("Faire tendre α vers 0 en affinant C₁ et C₂ tout en chariotant ; A₁ et A₂ pour finir."), t2: gesteAlpha(st, alphaFin(st)) };
+    return { cle: "o-C3", t1: TRAD("Charioter : les anneaux rentrent quand e diminue ; on atteint le contact optique quand la teinte devient uniforme."), t2: gesteC3(st, 0) };
   }
   // Lumière blanche : le sens du chariotage qui fait apparaître des franges (variantes de l'état), sinon les deux.
   function sensBlanc(st, CO) {
     var sens = sensBlancSigne(st, CO);
-    return sens ? geste("C3", sens) : "Charioter très lentement, d'un côté puis de l'autre (Ctrl et molette sur C₃ : un dixième de micromètre par cran).";
+    return sens ? geste("C3", sens) : TRAD("Charioter très lentement, d'un côté puis de l'autre (Ctrl et molette sur C₃ : un dixième de micromètre par cran).");
   }
   function sensBlancSigne(st, CO) {
     var best = 0, sens = 0;
@@ -1435,114 +1451,114 @@
     faits = faits || {};
     var I = indiceBrut(st, CO, R, faits, vise, o);
     // images de M₁, face de l'iris affichée : on n'y voit pas l'image fantôme
-    if (vue(st) === "iris" && /^(cs|c-)/.test(I.cle || "")) I = { cle: I.cle, t1: I.t1 + " Ne pas regarder la face de l'iris pour cela : on n'y voit pas l'image de la compensatrice ; observer à l'œil.", t2: I.t2 };
+    if (vue(st) === "iris" && /^(cs|c-)/.test(I.cle || "")) I = { cle: I.cle, t1: I.t1 + TRAD(" Ne pas regarder la face de l'iris pour cela : on n'y voit pas l'image de la compensatrice ; observer à l'œil."), t2: I.t2 };
     if (!vise && I.cle !== "fini") {
       var aS = ETAPES.filter(function (x) { return faits[x.id] === true && R.ok[x.id] && !R.top[x.id]; })[0];
-      if (aS && aS.id !== cible(faits, vise)) I = { cle: I.cle, t1: I.t1 + " (« " + aS.nom + " » peut encore être soigné : cliquer sa puce, en bas.)", t2: I.t2 };
+      if (aS && aS.id !== cible(faits, vise)) I = { cle: I.cle, t1: I.t1 + TRAD(" (« {0} » peut encore être soigné : cliquer sa puce, en bas.)", [aS.nom]), t2: I.t2 };
     }
     return I;
   }
   // Manipulation « Laser » : anneaux à l'objectif, puis loin du contact, du côté où la course du chariot le permet.
   function indiceLaserLoin(st, R) {
-    if (lampe(st).type !== "point") return { cle: "e-laser", t1: "Prendre le laser.", t2: "Étagère, onglet Sources : un clic sur la carte Laser, il remplace la lampe." };
-    if (laserNu(st)) return { cle: "e-obj", t1: "Visser l'objectif sur le laser : le faisceau s'ouvre en un cône, des anneaux apparaissent sur l'écran.", t2: "Un clic sur la carte Objectif (étagère, onglet Entrée), ou ×20 au bandeau du laser." };
-    if (st.det !== "ecran") return { cle: "o-ecran", t1: "Au laser, on observe sur l'écran, jamais à l'œil.", t2: "Étagère, onglet Sortie : un clic sur la carte Écran." };
+    if (lampe(st).type !== "point") return { cle: "e-laser", t1: TRAD("Prendre le laser."), t2: TRAD("Étagère, onglet Sources : un clic sur la carte Laser, il remplace la lampe.") };
+    if (laserNu(st)) return { cle: "e-obj", t1: TRAD("Visser l'objectif sur le laser : le faisceau s'ouvre en un cône, des anneaux apparaissent sur l'écran."), t2: TRAD("Un clic sur la carte Objectif (étagère, onglet Entrée), ou ×20 au bandeau du laser.") };
+    if (st.det !== "ecran") return { cle: "o-ecran", t1: TRAD("Au laser, on observe sur l'écran, jamais à l'œil."), t2: TRAD("Étagère, onglet Sortie : un clic sur la carte Écran.") };
     if (!R.laser.anneaux) {
-      if (R.m && R.m.nl && !R.m.centreDedans) return { cle: "z-centre", t1: "Les anneaux ne sont pas centrés : M₁ et M₂* sont encore inclinés ; corriger avec C₁ et C₂.", t2: gesteAlpha(st, false) };
-      return { cle: "z-anneaux", t1: "Des anneaux complets et centrés : affiner le parallélisme avec C₁ et C₂, ou prendre un objectif plus fort pour éclairer tout le champ.", t2: gesteAlpha(st, false) };
+      if (R.m && R.m.nl && !R.m.centreDedans) return { cle: "z-centre", t1: TRAD("Les anneaux ne sont pas centrés : M₁ et M₂* sont encore inclinés ; corriger avec C₁ et C₂."), t2: gesteAlpha(st, false) };
+      return { cle: "z-anneaux", t1: TRAD("Des anneaux complets et centrés : affiner le parallélisme avec C₁ et C₂, ou prendre un objectif plus fort pour éclairer tout le champ."), t2: gesteAlpha(st, false) };
     }
     var c = st.cache, e = epaisseur(st), haut = C3_MAX - c.Rc, bas = c.Rc, E = 1.2 * E_LASER;
     var sg = e > 0 && haut > E ? 1 : e < 0 && bas > E ? -1 : haut > bas ? 1 : -1;
-    return { cle: "z-loin", t1: "Charioter loin du contact, aussi loin que le permet la course du chariot : les anneaux se resserrent, mais restent contrastés.", t2: gesteC3(st, sg * E) };
+    return { cle: "z-loin", t1: TRAD("Charioter loin du contact, aussi loin que le permet la course du chariot : les anneaux se resserrent, mais restent contrastés."), t2: gesteC3(st, sg * E) };
   }
-  var LANTERNE = "Étagère, onglet Sources : un clic sur la carte Lanterne, elle remplace la lampe.";
+  var LANTERNE = TRAD("Étagère, onglet Sources : un clic sur la carte Lanterne, elle remplace la lampe.");
   function indiceBrut(st, CO, R, faits, vise, o) {
     var c = cible(faits, vise), m = R.m, G = R.G, d, L = lampe(st);
-    if (!c) return { cle: "fini", t1: "Le Michelson est réglé : lame d'air au contact optique. Ouvrir une manipulation (bouton « Manipulations », en bas) : les indices aident alors sur elle.", t2: "" };
+    if (!c) return { cle: "fini", t1: TRAD("Le Michelson est réglé : lame d'air au contact optique. Ouvrir une manipulation (bouton « Manipulations », en bas) : les indices aident alors sur elle."), t2: "" };
     if (!estManip(c)) return indiceReglage(st, CO, R, c, o);
-    if (R.ok[c]) return { cle: c + "-ok", t1: "Manipulation « " + nomEtape(c) + " » : le phénomène est dans le champ.", t2: "" };
+    if (R.ok[c]) return { cle: c + "-ok", t1: TRAD("Manipulation « {0} » : le phénomène est dans le champ.", [nomEtape(c)]), t2: "" };
     if (c === "laser") return indiceLaserLoin(st, R);
-    if (L.type === "point" && c !== "localisation") return { cle: "l-lampe", t1: "Cette manipulation se fait à la lampe : le laser éclaire par un point.",
+    if (L.type === "point" && c !== "localisation") return { cle: "l-lampe", t1: TRAD("Cette manipulation se fait à la lampe : le laser éclaire par un point."),
       t2: c === "blanc" || c === "cannele" || c === "lamelle" ? LANTERNE : SODIUM };
     if ((d = diagFeuille(st))) return d;
-    if (!m) return { cle: "vue", t1: "Revenir à l'observation (écran ou œil).", t2: "" };
-    if (c === "localisation" && R.sombre && ponctuelle(st)) return { cle: "z-sombre", t1: "Source presque ponctuelle : les franges sont partout, mais peu lumineuses.",
-      t2: st.det === "ecran" ? "Approcher l'écran de la lentille, ou observer à l'œil (étagère, onglet Sortie : un clic sur la carte Œil)." : "Ouvrir un peu le diaphragme, juste assez pour y voir." };
-    if (R.sombre) return { cle: "sombre", t1: vue(st) === "oeil" ? "Trop peu de lumière pour y voir une figure à l'œil." : "Pas assez de lumière sur l'écran pour y voir une figure.",
-      t2: st.iris != null && st.iris < R_DEPOLI ? "Ouvrir l'iris (molette ou glisser vers le haut, sur sa pastille), ou approcher l'écran, ou observer à l'œil." : "Approcher l'écran ou la lampe, ou observer à l'œil." };
+    if (!m) return { cle: "vue", t1: TRAD("Revenir à l'observation (écran ou œil)."), t2: "" };
+    if (c === "localisation" && R.sombre && ponctuelle(st)) return { cle: "z-sombre", t1: TRAD("Source presque ponctuelle : les franges sont partout, mais peu lumineuses."),
+      t2: st.det === "ecran" ? TRAD("Approcher l'écran de la lentille, ou observer à l'œil (étagère, onglet Sortie : un clic sur la carte Œil).") : TRAD("Ouvrir un peu le diaphragme, juste assez pour y voir.") };
+    if (R.sombre) return { cle: "sombre", t1: vue(st) === "oeil" ? TRAD("Trop peu de lumière pour y voir une figure à l'œil.") : TRAD("Pas assez de lumière sur l'écran pour y voir une figure."),
+      t2: st.iris != null && st.iris < R_DEPOLI ? TRAD("Ouvrir l'iris (molette ou glisser vers le haut, sur sa pastille), ou approcher l'écran, ou observer à l'œil.") : TRAD("Approcher l'écran ou la lampe, ou observer à l'œil.") };
     if (c === "localisation") {
-      if (L.type === "filament") return { cle: "z-lampe", t1: "Travailler avec une lampe spectrale : ses franges se voient loin du contact.", t2: SODIUM };
-      if (m.nfr < 1.5 || m.quad >= 1) return { cle: "z-coin", t1: "Former un coin d'air : incliner un miroir, des franges rectilignes dans le champ.", t2: "Faire rouler C₁ ou C₂, dans un sens ou dans l'autre." };
-      if (Math.abs(G.e) < 0.02e-3) return { cle: "z-contact", t1: "Tout près du contact, les franges du coin d'air sont nettes partout : s'en écarter un peu en chariotant.", t2: geste("C3", G.e >= 0 ? 1 : -1) };
-      if (G.plan === "miroirs") return { cle: "z-plan", t1: "Les franges sont dans le plan des miroirs : quitter ce plan, et voir ce qu'elles deviennent.",
-        t2: st.det === "ecran" ? "Glisser l'écran sur le banc de sortie." : "Accommoder plus près ou plus loin (molette sur l'image)." };
-      if (!ponctuelle(st)) return { cle: "z-iris", t1: "Hors du plan des miroirs, une source étendue brouille les franges du coin d'air : fermer presque entièrement le diaphragme, la source devient presque ponctuelle.",
-        t2: st.iris == null ? "Poser l'iris : étagère, onglet Entrée, un clic sur sa carte." : !st.depoli && condLanterne(st) ? "Poser le dépoli devant la lanterne (étagère, onglet Entrée) : l'iris borne alors la source." : "Fermer l'iris : molette vers le bas sur sa pastille, ou la glisser vers le bas." };
-      return { cle: "z-V", t1: "Contraste encore faible : fermer davantage le diaphragme.", t2: "Fermer l'iris : molette vers le bas sur sa pastille, ou la glisser vers le bas." };
+      if (L.type === "filament") return { cle: "z-lampe", t1: TRAD("Travailler avec une lampe spectrale : ses franges se voient loin du contact."), t2: SODIUM };
+      if (m.nfr < 1.5 || m.quad >= 1) return { cle: "z-coin", t1: TRAD("Former un coin d'air : incliner un miroir, des franges rectilignes dans le champ."), t2: TRAD("Faire rouler C₁ ou C₂, dans un sens ou dans l'autre.") };
+      if (Math.abs(G.e) < 0.02e-3) return { cle: "z-contact", t1: TRAD("Tout près du contact, les franges du coin d'air sont nettes partout : s'en écarter un peu en chariotant."), t2: geste("C3", G.e >= 0 ? 1 : -1) };
+      if (G.plan === "miroirs") return { cle: "z-plan", t1: TRAD("Les franges sont dans le plan des miroirs : quitter ce plan, et voir ce qu'elles deviennent."),
+        t2: st.det === "ecran" ? TRAD("Glisser l'écran sur le banc de sortie.") : TRAD("Accommoder plus près ou plus loin (molette sur l'image).") };
+      if (!ponctuelle(st)) return { cle: "z-iris", t1: TRAD("Hors du plan des miroirs, une source étendue brouille les franges du coin d'air : fermer presque entièrement le diaphragme, la source devient presque ponctuelle."),
+        t2: st.iris == null ? TRAD("Poser l'iris : étagère, onglet Entrée, un clic sur sa carte.") : !st.depoli && condLanterne(st) ? TRAD("Poser le dépoli devant la lanterne (étagère, onglet Entrée) : l'iris borne alors la source.") : TRAD("Fermer l'iris : molette vers le bas sur sa pastille, ou la glisser vers le bas.") };
+      return { cle: "z-V", t1: TRAD("Contraste encore faible : fermer davantage le diaphragme."), t2: TRAD("Fermer l'iris : molette vers le bas sur sa pastille, ou la glisser vers le bas.") };
     }
     if (c === "cannele") {
-      if (L.type !== "filament") return { cle: "k-lampe", t1: "Le spectre cannelé se voit en lumière blanche, dans le blanc d'ordre supérieur.", t2: "Étagère, onglet Sources : un clic sur la carte Lanterne, elle remplace la lampe." };
-      if (vue(st) !== "ecran") return { cle: "k-ecran", t1: "La fibre du spectromètre se pose sur l'écran.", t2: "Étagère, onglet Sortie : un clic sur la carte Écran." };
-      if (!(st.capteur && st.capteur.type === "fibre")) return { cle: "k-fibre", t1: "Poser la fibre du spectromètre sur l'écran, dans le blanc d'ordre supérieur, à quelques franges de la frange achromatique.",
-        t2: "Mesurer ▾, au-dessus de l'image : Fibre (spectromètre) ; puis la glisser sur l'écran." };
-      if (!(R.cannele && R.cannele.amp > 0.3)) return { cle: "k-serre", t1: "Les cannelures, trop serrées, ne sont plus séparées par le spectromètre : rapprocher la fibre de la frange achromatique, ou trouver d'abord les franges de lumière blanche (manipulation « Lumière blanche »).",
-        t2: "Glisser la fibre sur l'écran, vers la frange achromatique." };
-      return { cle: "k-newton", t1: "Trop près de la frange achromatique, dans les teintes de Newton : le spectre n'a qu'une ou deux cannelures ; éloigner la fibre dans le blanc d'ordre supérieur.",
-        t2: "Glisser la fibre sur l'écran, en s'éloignant de la frange achromatique." };
+      if (L.type !== "filament") return { cle: "k-lampe", t1: TRAD("Le spectre cannelé se voit en lumière blanche, dans le blanc d'ordre supérieur."), t2: TRAD("Étagère, onglet Sources : un clic sur la carte Lanterne, elle remplace la lampe.") };
+      if (vue(st) !== "ecran") return { cle: "k-ecran", t1: TRAD("La fibre du spectromètre se pose sur l'écran."), t2: TRAD("Étagère, onglet Sortie : un clic sur la carte Écran.") };
+      if (!(st.capteur && st.capteur.type === "fibre")) return { cle: "k-fibre", t1: TRAD("Poser la fibre du spectromètre sur l'écran, dans le blanc d'ordre supérieur, à quelques franges de la frange achromatique."),
+        t2: TRAD("Mesurer ▾, au-dessus de l'image : Fibre (spectromètre) ; puis la glisser sur l'écran.") };
+      if (!(R.cannele && R.cannele.amp > 0.3)) return { cle: "k-serre", t1: TRAD("Les cannelures, trop serrées, ne sont plus séparées par le spectromètre : rapprocher la fibre de la frange achromatique, ou trouver d'abord les franges de lumière blanche (manipulation « Lumière blanche »)."),
+        t2: TRAD("Glisser la fibre sur l'écran, vers la frange achromatique.") };
+      return { cle: "k-newton", t1: TRAD("Trop près de la frange achromatique, dans les teintes de Newton : le spectre n'a qu'une ou deux cannelures ; éloigner la fibre dans le blanc d'ordre supérieur."),
+        t2: TRAD("Glisser la fibre sur l'écran, en s'éloignant de la frange achromatique.") };
     }
     if (c === "mercure") {
-      if (st.lampe !== "hgc" && st.lampe !== "hgcb") return { cle: "m-lampe", t1: "Prendre la lampe au mercure sans son filtre : plusieurs raies, de la verte au violet.", t2: "Étagère, onglet Sources : un clic sur la carte Mercure, elle remplace la lampe." };
-      if (G.plan !== "miroirs" && G.plan !== "infini") return { cle: "m-plan", t1: "Observer un coin d'air dans le plan des miroirs : beaucoup de franges, d'épaisseurs différentes, dans le même champ.", t2: gesteDetecteur(st, "miroirs") };
-      if (R.Vvert == null) return { cle: "m-conv", t1: "Éclairer les miroirs par une source étendue : dépoli près de la lampe, sans lentille d'entrée.",
-        t2: !st.depoli ? "Poser le dépoli : étagère, onglet Entrée." : "Retirer la lentille d'entrée : un clic sur sa carte (étagère, onglet Entrée), ou Suppr." };
-      if (!(R.Vvert > 0.5)) return { cle: "m-loin", t1: "Même la raie verte seule n'y donnerait plus de franges contrastées : charioter vers le contact optique.", t2: gesteC3(st, 0) };
-      if (G.plan === "miroirs" && m.nfr < 20) return { cle: "m-coin", t1: "Incliner davantage un miroir : beaucoup de franges dans le champ, dont le contraste varie le long du coin d'air.", t2: "Faire rouler C₁ ou C₂, dans un sens ou dans l'autre." };
-      return { cle: "m-C3", t1: "Les franges des différentes raies sont encore presque en phase : charioter lentement, leur contraste fluctue.", t2: "Faire rouler C₃ lentement, dans un sens ou dans l'autre." };
+      if (st.lampe !== "hgc" && st.lampe !== "hgcb") return { cle: "m-lampe", t1: TRAD("Prendre la lampe au mercure sans son filtre : plusieurs raies, de la verte au violet."), t2: TRAD("Étagère, onglet Sources : un clic sur la carte Mercure, elle remplace la lampe.") };
+      if (G.plan !== "miroirs" && G.plan !== "infini") return { cle: "m-plan", t1: TRAD("Observer un coin d'air dans le plan des miroirs : beaucoup de franges, d'épaisseurs différentes, dans le même champ."), t2: gesteDetecteur(st, "miroirs") };
+      if (R.Vvert == null) return { cle: "m-conv", t1: TRAD("Éclairer les miroirs par une source étendue : dépoli près de la lampe, sans lentille d'entrée."),
+        t2: !st.depoli ? TRAD("Poser le dépoli : étagère, onglet Entrée.") : TRAD("Retirer la lentille d'entrée : un clic sur sa carte (étagère, onglet Entrée), ou Suppr.") };
+      if (!(R.Vvert > 0.5)) return { cle: "m-loin", t1: TRAD("Même la raie verte seule n'y donnerait plus de franges contrastées : charioter vers le contact optique."), t2: gesteC3(st, 0) };
+      if (G.plan === "miroirs" && m.nfr < 20) return { cle: "m-coin", t1: TRAD("Incliner davantage un miroir : beaucoup de franges dans le champ, dont le contraste varie le long du coin d'air."), t2: TRAD("Faire rouler C₁ ou C₂, dans un sens ou dans l'autre.") };
+      return { cle: "m-C3", t1: TRAD("Les franges des différentes raies sont encore presque en phase : charioter lentement, leur contraste fluctue."), t2: TRAD("Faire rouler C₃ lentement, dans un sens ou dans l'autre.") };
     }
     if (c === "blanc" || c === "lamelle") {
-      if (G.plan !== "miroirs") return { cle: "r-plan", t1: "Les franges du coin d'air sont localisées au voisinage des miroirs : l'œil y accommode (dépoli près de la lampe, diaphragme grand ouvert), ou on forme sur l'écran l'image des miroirs avec la lentille de 20 cm.",
+      if (G.plan !== "miroirs") return { cle: "r-plan", t1: TRAD("Les franges du coin d'air sont localisées au voisinage des miroirs : l'œil y accommode (dépoli près de la lampe, diaphragme grand ouvert), ou on forme sur l'écran l'image des miroirs avec la lentille de 20 cm."),
         t2: gesteDetecteur(st, "miroirs") };
-      if (!m.nl) return { cle: "r-champ", t1: "Le champ est presque noir : ouvrir largement le diaphragme, ou approcher la lampe.", t2: st.iris != null ? "Ouvrir l'iris : molette vers le haut sur sa pastille, ou la glisser vers le haut." : "Approcher la lampe des miroirs." };
+      if (!m.nl) return { cle: "r-champ", t1: TRAD("Le champ est presque noir : ouvrir largement le diaphragme, ou approcher la lampe."), t2: st.iris != null ? TRAD("Ouvrir l'iris : molette vers le haut sur sa pastille, ou la glisser vers le haut.") : TRAD("Approcher la lampe des miroirs.") };
       if (L.type === "spectrale" && m.nfr < 1.5 && !(c === "blanc" && m.V < 0.35))
-        return { cle: "b-coin", t1: "Incliner un miroir pour former un coin d'air : plus il y a de franges, plus le champ couvre d'épaisseurs, et plus vite on y trouve le contact en lumière blanche.", t2: "Faire rouler C₁ ou C₂, dans un sens ou dans l'autre." };
-      if (c === "blanc" && L.type === "spectrale") return { cle: "b-lampe", t1: "Au voisinage du contact optique, en coin d'air, remplacer la lampe à sodium par une source de lumière blanche.", t2: "Étagère, onglet Sources : un clic sur la carte Lanterne, elle remplace la lampe." };
-      if (c === "lamelle" && !st.lamelle) return { cle: "l-pose", t1: APPLIS.lamelle, t2: "Étagère, onglet Accessoires : glisser la lamelle sur M₁ ou sur M₂." };
-      if (c === "lamelle" && L.type !== "filament") return { cle: "l-blanc", t1: "Travailler en lumière blanche : les franges ne reviennent qu'au bon chariotage.", t2: "Étagère, onglet Sources : un clic sur la carte Lanterne, elle remplace la lampe." };
-      if (c === "lamelle") return { cle: "l-C3", t1: "Derrière la lamelle, la différence de marche a changé : charioter pour y retrouver les franges.",
+        return { cle: "b-coin", t1: TRAD("Incliner un miroir pour former un coin d'air : plus il y a de franges, plus le champ couvre d'épaisseurs, et plus vite on y trouve le contact en lumière blanche."), t2: TRAD("Faire rouler C₁ ou C₂, dans un sens ou dans l'autre.") };
+      if (c === "blanc" && L.type === "spectrale") return { cle: "b-lampe", t1: TRAD("Au voisinage du contact optique, en coin d'air, remplacer la lampe à sodium par une source de lumière blanche."), t2: TRAD("Étagère, onglet Sources : un clic sur la carte Lanterne, elle remplace la lampe.") };
+      if (c === "lamelle" && !st.lamelle) return { cle: "l-pose", t1: APPLIS.lamelle, t2: TRAD("Étagère, onglet Accessoires : glisser la lamelle sur M₁ ou sur M₂.") };
+      if (c === "lamelle" && L.type !== "filament") return { cle: "l-blanc", t1: TRAD("Travailler en lumière blanche : les franges ne reviennent qu'au bon chariotage."), t2: TRAD("Étagère, onglet Sources : un clic sur la carte Lanterne, elle remplace la lampe.") };
+      if (c === "lamelle") return { cle: "l-C3", t1: TRAD("Derrière la lamelle, la différence de marche a changé : charioter pour y retrouver les franges."),
         t2: geste("C3", st.lamelle.miroir === "M2" ? -1 : 1) };
-      if (m.Vmax > 0.5 && m.nfr < 1.5) return { cle: "b-coin", t1: "Incliner un miroir pour former un coin d'air : plus il y a de franges, plus le champ couvre d'épaisseurs, et plus vite on y trouve le contact en lumière blanche.", t2: "Faire rouler C₁ ou C₂, dans un sens ou dans l'autre." };
-      return { cle: "b-C3", t1: "Modifier très légèrement C₃ : en lumière blanche, on ne voit de franges qu'au voisinage immédiat du contact optique.", t2: sensBlanc(st, CO) };
+      if (m.Vmax > 0.5 && m.nfr < 1.5) return { cle: "b-coin", t1: TRAD("Incliner un miroir pour former un coin d'air : plus il y a de franges, plus le champ couvre d'épaisseurs, et plus vite on y trouve le contact en lumière blanche."), t2: TRAD("Faire rouler C₁ ou C₂, dans un sens ou dans l'autre.") };
+      return { cle: "b-C3", t1: TRAD("Modifier très légèrement C₃ : en lumière blanche, on ne voit de franges qu'au voisinage immédiat du contact optique."), t2: sensBlanc(st, CO) };
     }
     if (c === "coherence" || c === "doublet" || c === "rayons" || c === "defilement" || c === "rolecomp") {
-      if (c === "coherence" && st.lampe === "hgb") return { cle: "h-pression", t1: "Repasser la lampe au mercure en haute pression : basse pression, la raie est si fine que les anneaux gardent leur contraste sur toute la course de C₃, le brouillage ne vient jamais.",
-        t2: "Lampe choisie (bandeau des réglages) : Pression, haute." };
-      if (c === "coherence" && st.lampe !== "hg" && st.lampe !== "na") return { cle: "h-lampe", t1: "Observer les anneaux avec la lampe au mercure et son filtre vert : une seule raie, assez fine pour des anneaux loin du contact, assez large pour qu'ils finissent par se brouiller.",
-        t2: "Étagère, onglet Sources : un clic sur la carte Mercure + filtre vert, elle remplace la lampe." };
-      if ((c === "doublet" || c === "rayons" || c === "rolecomp" || (c === "defilement" && st.lampe !== "hg") || L.type !== "spectrale") && st.lampe !== "na") return { cle: "n-lampe", t1: "Observer les anneaux avec la lampe au sodium.", t2: SODIUM };
-      if (G.plan !== "infini" && !((c === "coherence" || c === "mercure") && G.plan === "miroirs")) return { cle: "n-infini", t1: "Les anneaux sont localisés à l'infini : l'œil accommode à l'infini (dépoli près de la lampe), ou on les recueille sur un écran dans le plan focal image de la lentille de 1 m.",
+      if (c === "coherence" && st.lampe === "hgb") return { cle: "h-pression", t1: TRAD("Repasser la lampe au mercure en haute pression : basse pression, la raie est si fine que les anneaux gardent leur contraste sur toute la course de C₃, le brouillage ne vient jamais."),
+        t2: TRAD("Lampe choisie (bandeau des réglages) : Pression, haute.") };
+      if (c === "coherence" && st.lampe !== "hg" && st.lampe !== "na") return { cle: "h-lampe", t1: TRAD("Observer les anneaux avec la lampe au mercure et son filtre vert : une seule raie, assez fine pour des anneaux loin du contact, assez large pour qu'ils finissent par se brouiller."),
+        t2: TRAD("Étagère, onglet Sources : un clic sur la carte Mercure + filtre vert, elle remplace la lampe.") };
+      if ((c === "doublet" || c === "rayons" || c === "rolecomp" || (c === "defilement" && st.lampe !== "hg") || L.type !== "spectrale") && st.lampe !== "na") return { cle: "n-lampe", t1: TRAD("Observer les anneaux avec la lampe au sodium."), t2: SODIUM };
+      if (G.plan !== "infini" && !((c === "coherence" || c === "mercure") && G.plan === "miroirs")) return { cle: "n-infini", t1: TRAD("Les anneaux sont localisés à l'infini : l'œil accommode à l'infini (dépoli près de la lampe), ou on les recueille sur un écran dans le plan focal image de la lentille de 1 m."),
         t2: gesteDetecteur(st, "infini") };
-      if (G.collimate || !m.nl) return { cle: "n-conv", t1: "Pour voir les anneaux, il faut un faisceau convergent vers les miroirs : dépoli près de la lampe, ou le condenseur, qui forme l'image de la lampe sur les miroirs.",
-        t2: !st.depoli && st.ent.cond == null ? "Poser le dépoli ou le condenseur : étagère, onglet Entrée." : st.iris != null ? "Ouvrir l'iris : molette vers le haut sur sa pastille, ou la glisser vers le haut." : "Retirer la lentille d'entrée : un clic sur sa carte (étagère, onglet Entrée), ou Suppr." };
-      if (c === "defilement" && st.det !== "ecran") return { cle: "p-ecran", t1: "La photodiode se pose sur l'écran, au foyer de la lentille de 1 m.", t2: "Étagère, onglet Sortie : un clic sur la carte Écran, puis le placer au foyer de la lentille 1 m." };
-      if (c === "rayons" && st.det !== "ecran") return { cle: "y-ecran", t1: APPLIS.rayons, t2: "Étagère, onglet Sortie : un clic sur la carte Écran, puis le placer au foyer de la lentille 1 m." };
+      if (G.collimate || !m.nl) return { cle: "n-conv", t1: TRAD("Pour voir les anneaux, il faut un faisceau convergent vers les miroirs : dépoli près de la lampe, ou le condenseur, qui forme l'image de la lampe sur les miroirs."),
+        t2: !st.depoli && st.ent.cond == null ? TRAD("Poser le dépoli ou le condenseur : étagère, onglet Entrée.") : st.iris != null ? TRAD("Ouvrir l'iris : molette vers le haut sur sa pastille, ou la glisser vers le haut.") : TRAD("Retirer la lentille d'entrée : un clic sur sa carte (étagère, onglet Entrée), ou Suppr.") };
+      if (c === "defilement" && st.det !== "ecran") return { cle: "p-ecran", t1: TRAD("La photodiode se pose sur l'écran, au foyer de la lentille de 1 m."), t2: TRAD("Étagère, onglet Sortie : un clic sur la carte Écran, puis le placer au foyer de la lentille 1 m.") };
+      if (c === "rayons" && st.det !== "ecran") return { cle: "y-ecran", t1: APPLIS.rayons, t2: TRAD("Étagère, onglet Sortie : un clic sur la carte Écran, puis le placer au foyer de la lentille 1 m.") };
       if (c !== "coherence" && m.V < 0.35) {
         return diagBrouille(st, CO, R, "n");
       }
-      if (c === "coherence" && G.plan === "miroirs" && R.Vgeom != null && R.Vgeom <= 0.25) return { cle: "h-iris", t1: "En coin d'air, la source étendue brouille aussi les franges quand l'épaisseur grandit : fermer le diaphragme, pour ne voir que l'effet de la largeur de la raie.",
-        t2: st.iris == null ? "Poser l'iris : étagère, onglet Entrée, un clic sur sa carte." : "Fermer l'iris : molette vers le bas sur sa pastille, ou la glisser vers le bas." };
-      if (c === "coherence") return { cle: "h", t1: APPLIS.coherence, t2: Math.abs(epaisseur(st)) < 0.3e-3 ? "Partir du contact et faire rouler C₃ toujours dans le même sens." : "Continuer de charioter dans le même sens, jusqu'au brouillage." };
-      if (c === "doublet") return { cle: "d", t1: APPLIS.doublet, t2: ((st.anti || []).length ? "Un brouillage est repéré : continuer de charioter dans le même sens, le contraste revient." : "Charioter lentement, et s'arrêter quand les anneaux disparaissent.") };
-      if (!m.centreDedans) return { cle: "n-centre", t1: "Les anneaux ne sont pas centrés : M₁ et M₂* sont encore inclinés l'un par rapport à l'autre ; corriger avec C₁ et C₂, puis A₁ et A₂.",
+      if (c === "coherence" && G.plan === "miroirs" && R.Vgeom != null && R.Vgeom <= 0.25) return { cle: "h-iris", t1: TRAD("En coin d'air, la source étendue brouille aussi les franges quand l'épaisseur grandit : fermer le diaphragme, pour ne voir que l'effet de la largeur de la raie."),
+        t2: st.iris == null ? TRAD("Poser l'iris : étagère, onglet Entrée, un clic sur sa carte.") : TRAD("Fermer l'iris : molette vers le bas sur sa pastille, ou la glisser vers le bas.") };
+      if (c === "coherence") return { cle: "h", t1: APPLIS.coherence, t2: Math.abs(epaisseur(st)) < 0.3e-3 ? TRAD("Partir du contact et faire rouler C₃ toujours dans le même sens.") : TRAD("Continuer de charioter dans le même sens, jusqu'au brouillage.") };
+      if (c === "doublet") return { cle: "d", t1: APPLIS.doublet, t2: ((st.anti || []).length ? TRAD("Un brouillage est repéré : continuer de charioter dans le même sens, le contraste revient.") : TRAD("Charioter lentement, et s'arrêter quand les anneaux disparaissent.")) };
+      if (!m.centreDedans) return { cle: "n-centre", t1: TRAD("Les anneaux ne sont pas centrés : M₁ et M₂* sont encore inclinés l'un par rapport à l'autre ; corriger avec C₁ et C₂, puis A₁ et A₂."),
         t2: gesteAlpha(st, Math.hypot(inclinaison(st).ax, inclinaison(st).ay) < 0.03e-3) };
       if (c === "defilement") return !(st.capteur && st.capteur.type === "photodiode")
-        ? { cle: "p-pose", t1: "Poser la photodiode sur l'écran, au centre des anneaux : elle y suit leur défilement quand on chariote.", t2: "Mesurer ▾, au-dessus de l'image : Photodiode ; puis la glisser au centre des anneaux." }
-        : { cle: "p-centre", t1: "La photodiode n'est pas au centre des anneaux : là seulement, un anneau naît ou disparaît à chaque frange.", t2: "Glisser la photodiode jusqu'au centre des anneaux." };
+        ? { cle: "p-pose", t1: TRAD("Poser la photodiode sur l'écran, au centre des anneaux : elle y suit leur défilement quand on chariote."), t2: TRAD("Mesurer ▾, au-dessus de l'image : Photodiode ; puis la glisser au centre des anneaux.") }
+        : { cle: "p-centre", t1: TRAD("La photodiode n'est pas au centre des anneaux : là seulement, un anneau naît ou disparaît à chaque frange."), t2: TRAD("Glisser la photodiode jusqu'au centre des anneaux.") };
       if (c === "rolecomp") {
-        if (Math.abs(G.e) >= 0.35e-3) return { cle: "q-loin", t1: "Se rapprocher du contact optique : c'est là que la forme des anneaux se juge le mieux.", t2: gesteC3(st, 0) };
-        if (m.nfr < 0.35) return { cle: "q-peu", t1: "Trop près du contact pour juger de la forme des anneaux : s'en éloigner un peu.", t2: geste("C3", epaisseur(st) >= 0 ? 1 : -1) };
-        return { cle: "q-B", t1: "Tourner la compensatrice : elle n'est plus parallèle à la séparatrice, les anneaux s'allongent en ellipses.", t2: "Faire rouler B₁ ou B₂, dans un sens ou dans l'autre." };
+        if (Math.abs(G.e) >= 0.35e-3) return { cle: "q-loin", t1: TRAD("Se rapprocher du contact optique : c'est là que la forme des anneaux se juge le mieux."), t2: gesteC3(st, 0) };
+        if (m.nfr < 0.35) return { cle: "q-peu", t1: TRAD("Trop près du contact pour juger de la forme des anneaux : s'en éloigner un peu."), t2: geste("C3", epaisseur(st) >= 0 ? 1 : -1) };
+        return { cle: "q-B", t1: TRAD("Tourner la compensatrice : elle n'est plus parallèle à la séparatrice, les anneaux s'allongent en ellipses."), t2: TRAD("Faire rouler B₁ ou B₂, dans un sens ou dans l'autre.") };
       }
-      if (c === "rayons") return { cle: "y", t1: APPLIS.rayons, t2: !(st.capteur && st.capteur.type === "barrette") ? "Poser la barrette sur l'écran : Mesurer ▾, au-dessus de l'image." : m.nfr < 5 ? "Charioter pour éloigner du contact : plus d'anneaux dans le champ." : "" };
+      if (c === "rayons") return { cle: "y", t1: APPLIS.rayons, t2: !(st.capteur && st.capteur.type === "barrette") ? TRAD("Poser la barrette sur l'écran : Mesurer ▾, au-dessus de l'image.") : m.nfr < 5 ? TRAD("Charioter pour éloigner du contact : plus d'anneaux dans le champ.") : "" };
     }
     return { cle: "?", t1: "", t2: "" };
   }
@@ -1579,15 +1595,15 @@
   }
   var EP_DOUBLET = 0.2894e-3;   // coïncidence du doublet du sodium : λ²/2Δλ
   var CONFIGS = [
-    { id: "auto", nom: "Autocollimation", f: function (st) { banc(st, "auto"); viser(st, epaisseur(st), 1.2e-3, 0.4e-3); } },
-    { id: "coin", nom: "Coin d'air", f: function (st) { banc(st, "coin"); compReglee(st); viser(st, 0, 0.06e-3, 0); } },
-    { id: "anneaux", nom: "Anneaux", f: function (st) { banc(st, "anneaux"); compReglee(st); viser(st, EP_DOUBLET, 0, 0); } },
+    { id: "auto", nom: TRAD("Autocollimation"), f: function (st) { banc(st, "auto"); viser(st, epaisseur(st), 1.2e-3, 0.4e-3); } },
+    { id: "coin", nom: TRAD("Coin d'air"), f: function (st) { banc(st, "coin"); compReglee(st); viser(st, 0, 0.06e-3, 0); } },
+    { id: "anneaux", nom: TRAD("Anneaux"), f: function (st) { banc(st, "anneaux"); compReglee(st); viser(st, EP_DOUBLET, 0, 0); } },
     // projection du TP : le condenseur (f = 6 cm, à 17 cm) forme l'image de la lampe nue sur les miroirs
-    { id: "condenseur", nom: "Anneaux au condenseur", f: function (st) {
+    { id: "condenseur", nom: TRAD("Anneaux au condenseur"), f: function (st) {
       banc(st, "anneaux"); st.depoli = false; st.iris = null; st.ent.cond = 0.17;
       st.ent.lampe = Math.round((0.17 + 1 / (1 / ELEMENTS.cond.f - 1 / (ARM + 0.17))) * 1e4) / 1e4;
       compReglee(st); viser(st, 2 * EP_DOUBLET, 0, 0); } },
-    { id: "contact", nom: "Contact", f: function (st) { banc(st, "anneaux"); compReglee(st); viser(st, 0, 0, 0); } },
+    { id: "contact", nom: TRAD("Contact"), f: function (st) { banc(st, "anneaux"); compReglee(st); viser(st, 0, 0, 0); } },
     // ----- situations des manipulations (manip: true, id = celui de MANIPS ; nom posé d'après MANIPS) : mode prof -----
     { id: "blanc", manip: true, f: function (st) { banc(st, "coin", "bl"); compReglee(st); viser(st, 0, 0.06e-3, 0); } },
     // mercure + filtre vert (raie de 1 nm du cœur) : contraste perdu dès 0,15 mm environ, géométrie encore bonne
@@ -1640,7 +1656,7 @@
   function dE(y) { return ((y - 52) / KE + 52) / 1000; }
   function xS(d) { return 52 + (d * 1000 - 52) * KS; }
   function dS(x) { return ((x - 52) / KS + 52) / 1000; }
-  function fmtNb(v, n) { return v.toFixed(n).replace(".", ","); }
+  function fmtNb(v, n) { return nb(v, n); }
 
   function creer(K) {
     var CO = root.VITRINE_MICHELSON, svg = K.svg, el = K.el;
@@ -1740,15 +1756,15 @@
       // ---- verre anticalorique ----
       svg("rect", { x: -24, y: 49, width: 48, height: 4, fill: "url(#plVerre)", stroke: "#9fd3e8", "stroke-opacity": .7 }, g);
       svg("rect", { x: -28, y: 48, width: 5, height: 7, fill: "#2a3037" }, g); svg("rect", { x: 23, y: 48, width: 5, height: 7, fill: "#2a3037" }, g);
-      txt(g, -30, 58, "verre anticalorique", "pl-lab", "end");      // à gauche : la droite du banc d'entrée porte les pastilles
+      txt(g, -30, 58, TRAD("verre anticalorique"), "pl-lab", "end");      // à gauche : la droite du banc d'entrée porte les pastilles
       // ---- séparatrice et compensatrice (lames parallèles à 45°) ----
       lame(g, 0, 0, "url(#plVerre)", 54);
       lame(g, -8, 8, "url(#plVerre)", 50);
       // monture de la compensatrice (B1, B2)
       svg("path", { d: "M -40 22 L -27 22 L -19 30 L -19 34 L -40 34 Z", fill: "url(#plMetX)", stroke: "#1d2228" }, g);
       // étiquettes parallèles aux lames (rotation de 45°), chacune du côté opposé à l'autre lame
-      txt(g, 0, 0, "séparatrice", "pl-lab", "middle").setAttribute("transform", "translate(5.5 -5.5) rotate(45)");
-      txt(g, 0, 0, "compensatrice", "pl-lab", "middle").setAttribute("transform", "translate(-15 15) rotate(45)");
+      txt(g, 0, 0, TRAD("séparatrice"), "pl-lab", "middle").setAttribute("transform", "translate(5.5 -5.5) rotate(45)");
+      txt(g, 0, 0, TRAD("compensatrice"), "pl-lab", "middle").setAttribute("transform", "translate(-15 15) rotate(45)");
       // ---- M1 (fixe) et sa monture ----
       var gm = svg("g", { "data-mir": "M1" }, g);
       svg("rect", { x: -160, y: -38, width: 36, height: 76, fill: "transparent" }, gm);
@@ -1811,12 +1827,12 @@
     // Ids : lampe, depoli, iris (sur le porte-dépoli d'une lampe spectrale, `porte` ; vissés sur la lanterne), cond, coll
     // (entrée), l20, l1, det (l'écran ou l'œil posé), et
     // hors des bancs comp, feuille, lamelle. st.sel = l'élément choisi (un seul), hors annulation.
-    var NOMS_EL = { depoli: "Dépoli", iris: "Iris", cond: "Condenseur", coll: "Lentille 20 cm", l20: "Lentille 20 cm", l1: "Lentille 1 m",
-      comp: "Compensatrice", feuille: "Feuille", lamelle: "Lamelle" };
+    var NOMS_EL = { depoli: TRAD("Dépoli"), iris: TRAD("Iris"), cond: TRAD("Condenseur"), coll: TRAD("Lentille 20 cm"), l20: TRAD("Lentille 20 cm"), l1: TRAD("Lentille 1 m"),
+      comp: TRAD("Compensatrice"), feuille: TRAD("Feuille"), lamelle: TRAD("Lamelle") };
     var MED_LAMPE = { na: "sodium", hg: "hgv", hgb: "hgv", hgc: "mercure", hgcb: "mercure", bl: "lanterne", laser: "laser" };
     function nomEl(id) {
       if (id === "lampe") return lampe(st).court.replace(" (blanche)", "");
-      if (id === "det") return st.det === "oeil" ? "Œil" : "Écran";
+      if (id === "det") return st.det === "oeil" ? TRAD("Œil") : TRAD("Écran");
       return NOMS_EL[id] || id;
     }
     function figureEl(id) {
@@ -1851,11 +1867,11 @@
     }
     // Réglage principal (pastille, molette, glisser vertical, flèches perpendiculaires au banc) : { lab, f(k, ev) } ou null.
     function reglage(id) {
-      if (id === "lampe" && condLanterne(st)) return { lab: "tirage du condenseur", f: function (k, ev) { reglerLanterne(st, lanterne(st).tirage + k * pasPos(ev)); } };
-      if (id === "iris" && present("iris")) return { lab: "diamètre", f: function (k, ev) {
+      if (id === "lampe" && condLanterne(st)) return { lab: TRAD("tirage du condenseur"), f: function (k, ev) { reglerLanterne(st, lanterne(st).tirage + k * pasPos(ev)); } };
+      if (id === "iris" && present("iris")) return { lab: TRAD("diamètre"), f: function (k, ev) {
         st.iris = clamp(st.iris * Math.pow(0.87, -k * (ev && ev.shiftKey ? ((ev.ctrlKey || ev.metaKey) ? 0.025 : 0.25) : ev && ev.ctrlKey ? 3 : 1)), IRIS_MIN, R_DEPOLI); } };
       if (id === "det" && st.det === "oeil") return { lab: "accommodation", f: function (k, ev) { accommoder(st, k, ev); sale.obs = true; } };   // comme la molette sur l'image
-      if (/^(cond|coll|l20|l1|det)$/.test(id)) return { lab: id === "cond" ? "position (son tirage)" : "position", f: function (k, ev) { bouger(id, k, ev); } };
+      if (/^(cond|coll|l20|l1|det)$/.test(id)) return { lab: id === "cond" ? TRAD("position (son tirage)") : "position", f: function (k, ev) { bouger(id, k, ev); } };
       return null;
     }
     // Retirer (ni la lampe, ni le détecteur, ni la compensatrice) : vrai si c'est fait.
@@ -2146,7 +2162,7 @@
       var L = st.lamelle, m1 = L.miroir === "M1", b = L.bord, gq = svg("g", { class: m1 ? "pl-glisse-v" : "pl-glisse-h", "data-el": "lamelle" }, g);
       if (m1) svg("rect", { x: -126.5, y: b, width: 1.6, height: 22 - b, fill: "#cfeaf5", "fill-opacity": .75, stroke: "#9fd3e8", "stroke-width": .4 }, gq);
       else svg("rect", { x: b, y: y2 + 3.2, width: 22 - b, height: 1.6, fill: "#cfeaf5", "fill-opacity": .75, stroke: "#9fd3e8", "stroke-width": .4 }, gq);
-      txt(gq, m1 ? -121 : 25, m1 ? 28 : y2 + 12, "lamelle", "pl-lab", m1 ? "middle" : "start");
+      txt(gq, m1 ? -121 : 25, m1 ? 28 : y2 + 12, TRAD("lamelle"), "pl-lab", m1 ? "middle" : "start");
       if (st.sel === "lamelle") svg("rect", m1 ? { x: -129, y: b - 2, width: 8, height: 26 - b, rx: 2, fill: "none", stroke: "#e0b84c" } : { x: b - 2, y: y2 + 1.5, width: 26 - b, height: 5, rx: 2, fill: "none", stroke: "#e0b84c" }, gq);
       // glisser : son bord le long du miroir ; la prendre la choisit (bandeau)
       K.glisser(gq, function (p, ev, G) {
@@ -2211,7 +2227,7 @@
         modifie("dessin optique obs");
       } else if (P.id === "feuille") {
         P.hors = Math.hypot(p.x - P.p0.x, p.y - P.p0.y) > 40;
-        K.texteGeste(P.hors ? "<b>Feuille</b> — lâchée ici : retirée du miroir" : null);
+        K.texteGeste(P.hors ? TRAD("<b>Feuille</b> — lâchée ici : retirée du miroir") : null);
         var gf = D.querySelector('[data-el="feuille"]'); if (gf) gf.classList.toggle("hors", P.hors);
       }
       if (P.hors) { var gh = D.querySelector('[data-el="' + P.id + '"]'); if (gh) gh.classList.add("hors"); }
@@ -2235,30 +2251,30 @@
       var mir = t.closest("[data-mir]"), bc = t.closest("[data-banc]"), it = [];
       if (id && id !== "comp") {
         choisir(id);
-        if (id === "lampe") it.push({ lab: "Remplacer par", sub: ORDRE_LAMPES.filter(function (k) { return k !== st.lampe; }).map(function (k) {
+        if (id === "lampe") it.push({ lab: TRAD("Remplacer par"), sub: ORDRE_LAMPES.filter(function (k) { return k !== st.lampe; }).map(function (k) {
           return { lab: LAMPES[k].court.replace(" (blanche)", ""), act: function () { changerLampe(k); } }; }) });
-        if (id === "det") it.push({ lab: "Remplacer par", sub: [{ lab: st.det === "ecran" ? "Œil" : "Écran", act: function () { changerDet(st.det === "ecran" ? "oeil" : "ecran"); } }] });
+        if (id === "det") it.push({ lab: TRAD("Remplacer par"), sub: [{ lab: st.det === "ecran" ? TRAD("Œil") : TRAD("Écran"), act: function () { changerDet(st.det === "ecran" ? "oeil" : "ecran"); } }] });
         if (/^(cond|coll|l20|l1)$/.test(id)) {
           var bl = bancDe(id), lis = bl === "ent" ? ["cond", "coll"] : ["l20", "l1"];
-          it.push({ lab: "Remplacer par", sub: lis.filter(function (k) { return k !== id; }).map(function (k) {
+          it.push({ lab: TRAD("Remplacer par"), sub: lis.filter(function (k) { return k !== id; }).map(function (k) {
             return { lab: nomEl(k), dis: present(k), act: function () {
               var pos = lirePos(st, bl, id); ecrirePos(st, bl, id, null); ecrirePos(st, bl, k, pos); deplacer(st, bl, k, pos);
               st.sel = k; TAPE = null; modifie("dessin optique loupe obs etagere"); } }; }) });
         }
-        if (bancDe(id)) it.push({ lab: "Position…", k: "clic sur le nombre", act: function () { taperPosition(id); } });
-        if (!/^(lampe|det)$/.test(id)) it.push({ lab: "Retirer", k: "Suppr", act: function () { retirer(id); modifie("dessin optique loupe obs etagere"); } });
+        if (bancDe(id)) it.push({ lab: TRAD("Position…"), k: TRAD("clic sur le nombre"), act: function () { taperPosition(id); } });
+        if (!/^(lampe|det)$/.test(id)) it.push({ lab: TRAD("Retirer"), k: TRAD("Suppr"), act: function () { retirer(id); modifie("dessin optique loupe obs etagere"); } });
       } else if (mir) {
         var m = mir.getAttribute("data-mir"), mn = m === "M1" ? "M₁" : "M₂";
-        it.push({ tit: "Miroir " + mn });
-        it.push(st.feuille === m ? { lab: "Retirer la feuille", act: function () { retirer("feuille"); modifie("dessin optique loupe obs etagere"); } }
-          : { lab: "Poser la feuille", act: function () { st.feuille = m; st.sel = "feuille"; modifie("dessin optique loupe obs etagere"); } });
-        it.push(st.lamelle && st.lamelle.miroir === m ? { lab: "Retirer la lamelle", act: function () { retirer("lamelle"); modifie("dessin optique loupe obs etagere"); } }
-          : { lab: "Poser la lamelle", act: function () { st.lamelle = { miroir: m, bord: 0 }; st.sel = "lamelle"; modifie("dessin optique loupe obs etagere"); } });
+        it.push({ tit: TRAD("Miroir {0}", [mn]) });
+        it.push(st.feuille === m ? { lab: TRAD("Retirer la feuille"), act: function () { retirer("feuille"); modifie("dessin optique loupe obs etagere"); } }
+          : { lab: TRAD("Poser la feuille"), act: function () { st.feuille = m; st.sel = "feuille"; modifie("dessin optique loupe obs etagere"); } });
+        it.push(st.lamelle && st.lamelle.miroir === m ? { lab: TRAD("Retirer la lamelle"), act: function () { retirer("lamelle"); modifie("dessin optique loupe obs etagere"); } }
+          : { lab: TRAD("Poser la lamelle"), act: function () { st.lamelle = { miroir: m, bord: 0 }; st.sel = "lamelle"; modifie("dessin optique loupe obs etagere"); } });
       } else if (bc) {
         var b = bc.getAttribute("data-banc"), p = K.ptSvg(ev), dd = b === "ent" ? dE(p.y) : dS(p.x);
         var libres = (b === "ent" ? ["cond", "coll"] : ["l20", "l1"]).filter(function (k) { return !present(k); });
-        it.push({ tit: (b === "ent" ? "Banc d'entrée" : "Banc de sortie") + " · " + fmtNb(dd * 100, 1) + " cm" });
-        it.push({ lab: "Poser ici", sub: libres.map(function (k) { return { lab: nomEl(k), act: function () {
+        it.push({ tit: (b === "ent" ? TRAD("Banc d'entrée") : TRAD("Banc de sortie")) + " · " + fmtNb(dd * 100, 1) + " cm" });
+        it.push({ lab: TRAD("Poser ici"), sub: libres.map(function (k) { return { lab: nomEl(k), act: function () {
           poser(st, k); deplacer(st, b, k, dd); st.sel = k; modifie("dessin optique loupe obs etagere"); } }; }) });
       }
       if (it.length) K.ouvrirCtx(ev.clientX, ev.clientY, it);
@@ -2299,11 +2315,11 @@
     function taperPosition(id) { if (!bancDe(id)) return; if (st.sel !== id) st.sel = id; TAPE = { val: fmtNb(posEl(id) * 100, 1) }; sale.etagere = true; majBandeau(true); }
     function blocPos(id) {
       var w = el("span", "bc-bd-pos", BD), b = bancDe(id);
-      [[1, "◂", "Vers l'appareil"], [-1, "▸", "Loin de l'appareil"]].forEach(function (q, k) {
+      [[1, "◂", TRAD("Vers l'appareil")], [-1, "▸", TRAD("Loin de l'appareil")]].forEach(function (q, k) {
         if (k === 1) {
           if (TAPE) {
-            var i = el("input", "bc-bd-tape", w); i.type = "text"; i.value = TAPE.val; i.setAttribute("aria-label", "Position en cm");
-            i.setAttribute("data-a3", "<b>Position en cm</b> — " + k_("Entrée") + " : valider · " + k_("Échap") + " : annuler");
+            var i = el("input", "bc-bd-tape", w); i.type = "text"; i.value = TAPE.val; i.setAttribute("aria-label", TRAD("Position en cm"));
+            i.setAttribute("data-a3", TRAD("<b>Position en cm</b> — <span class=\"k\">Entrée</span> : valider · <span class=\"k\">Échap</span> : annuler"));
             i.addEventListener("input", function () { if (TAPE) TAPE.val = i.value; });
             i.addEventListener("keydown", function (ev) {
               ev.stopPropagation();
@@ -2315,12 +2331,12 @@
             setTimeout(function () { if (i.isConnected) { try { i.focus(); i.select(); } catch (e1) {} } }, 0);
           } else {
             var n = el("b", "bc-bd-n pl-mi-pos", w, fmtNb(posEl(id) * 100, 1) + " cm");
-            n.setAttribute("data-a3", "<b>Position</b> sur le banc, comme sur sa règle — clic : la taper (en cm ; " + k_("Entrée") + " valide, " + k_("Échap") + " annule)");
+            n.setAttribute("data-a3", TRAD("<b>Position</b> sur le banc, comme sur sa règle — clic : la taper (en cm ; <span class=\"k\">Entrée</span> valide, <span class=\"k\">Échap</span> annule)"));
             n.addEventListener("click", function () { taperPosition(id); });
           }
         }
         var bt = el("button", "", w, q[1]); bt.type = "button";
-        bt.setAttribute("data-a3", "<b>" + q[2] + "</b> · 1 mm (Maj 0,1 mm · Ctrl+Maj 0,01 mm · Ctrl 1 cm) · " + (b === "ent" ? k_("↑ ↓") : k_("← →")));
+        bt.setAttribute("data-a3", TRAD("<b>{0}</b> · 1 mm (Maj 0,1 mm · Ctrl+Maj 0,01 mm · Ctrl 1 cm) · {1}", [q[2], (b === "ent" ? k_("↑ ↓") : k_("← →"))]));
         bt.addEventListener("click", function (ev) { deplacerEl(id, -q[0] * pasPos(ev)); modifie(); });
       });
     }
@@ -2330,7 +2346,7 @@
       if (G.length > 1) deplacerGroupe(st, b, G, dv); else deplacer(st, b, cleBanc(id), posEl(id) + dv);
     }
     function boutonBD(texte, a3, f, cls) { var x = K.bouton(BD, texte, f, cls || "pl-btn-p"); x.setAttribute("data-a3", a3); return x; }
-    function retirerBtn(id) { boutonBD("Retirer", "<b>Retirer</b> — " + k_("Suppr") + "", function () { retirer(id); modifie("dessin optique loupe obs etagere"); }); }
+    function retirerBtn(id) { boutonBD(TRAD("Retirer"), TRAD("<b>Retirer</b> — {0}", [k_(TRAD("Suppr"))]), function () { retirer(id); modifie("dessin optique loupe obs etagere"); }); }
     var cleBD = null, bdIris = null, bdLant = null;
     function majBandeau(force) {
       var id = st.sel && present(st.sel) ? st.sel : null;
@@ -2344,36 +2360,36 @@
         return;
       }
       cleBD = cle; BD.innerHTML = ""; bdIris = null; bdLant = null;
-      if (!id) { el("span", "bc-vide", BD, "Cliquer un élément d'un banc pour le régler (" + k_("Tab") + " : l'un après l'autre), ou en poser un depuis l'étagère"); return; }
+      if (!id) { el("span", "bc-vide", BD, TRAD("Cliquer un élément d'un banc pour le régler ({0} : l'un après l'autre), ou en poser un depuis l'étagère", [k_("Tab")])); return; }
       var nm = el("span", "bc-bd-nom", BD, K.Dessin.svgMini(figureEl(id)) + "<span></span>"); nm.lastChild.textContent = id === "lampe" ? lampe(st).nom.charAt(0).toUpperCase() + lampe(st).nom.slice(1) : nomEl(id);
       var nG = sels().filter(function (q) { return bancDe(q) === bancDe(id); }).length;
-      if (nG > 1) el("span", "bc-vide", BD, "+ " + (nG - 1) + " autre" + (nG > 2 ? "s" : "") + " choisi" + (nG > 2 ? "s" : "") + " : ils bougent ensemble").setAttribute("data-a3",
-        "<b>Groupe</b> — glisser, molette, flèches, ◂ ▸ : tous ensemble, écarts gardés · " + k_("Ctrl") + "+clic : ajouter ou retirer un élément · " + k_("Maj") + "+clic : tous ceux d'entre les deux · " + k_("Échap") + " : plus rien de choisi");
+      if (nG > 1) el("span", "bc-vide", BD, TRAD("+ {0} autre{1} choisi{1} : ils bougent ensemble", [nG - 1, nG > 2 ? "s" : ""])).setAttribute("data-a3",
+        TRAD("<b>Groupe</b> — glisser, molette, flèches, ◂ ▸ : tous ensemble, écarts gardés · {0}+clic : ajouter ou retirer un élément · {1}+clic : tous ceux d'entre les deux · {2} : plus rien de choisi", [k_("Ctrl"), k_(TRAD("Maj")), k_(TRAD("Échap"))]));
       if (id === "lampe") {
         blocPos("lampe");
-        K.seg(BD, ORDRE_LAMPES.map(function (k) { return [k, LAMPES[k].court.replace(" (blanche)", "").replace(" vert", ""), "Remplacer la lampe par : " + LAMPES[k].nom + " (même position)"]; }), { hgb: "hg", hgcb: "hgc" }[st.lampe] || st.lampe, changerLampe);
+        K.seg(BD, ORDRE_LAMPES.map(function (k) { return [k, LAMPES[k].court.replace(" (blanche)", "").replace(" vert", ""), TRAD("Remplacer la lampe par : {0} (même position)", [LAMPES[k].nom])]; }), { hgb: "hg", hgcb: "hgc" }[st.lampe] || st.lampe, changerLampe);
         var baseL = { hgb: "hg", hgcb: "hgc" }[st.lampe] || st.lampe, basseL = { hg: "hgb", hgc: "hgcb" }[baseL];
         if (basseL) {
           var a3P = baseL === "hg" ? [
-            "<b>Pression : haute</b> — l'arc dans une ampoule claire, à une trentaine de bar : les collisions élargissent la raie verte (∆λ ≈ 1 nm), d'où une longueur de cohérence ℓc ≈ 0,3 mm seulement : les anneaux finissent par se brouiller, à portée du tambour C₃ (c'est elle que demande la manipulation Longueur de cohérence)",
-            "<b>Pression : basse</b> — la décharge d'une vapeur rarefaite, la lampe spectrale des salles de TP : raie fine, presque limitée par l'effet Doppler (2 millièmes de nm), d'où ℓc ≈ 15 cm : les anneaux gardent leur contraste sur toute la course de C₃, le brouillage reste hors d'atteinte"] : [
-            "<b>Pression : haute</b> — l'arc dans une ampoule claire, à une trentaine de bar : chaque raie y est élargie par les collisions (∆λ ≈ 1 nm sur la verte) ; sans le filtre, les franges superposées des raies ensemble ne tiennent qu'au voisinage immédiat du contact optique",
-            "<b>Pression : basse</b> — la lampe spectrale : raies fines, presque limitées par l'effet Doppler ; loin du contact, chacune garde ses franges, d'interfrange propre : les teintes se décalent d'une raie à l'autre, des irisations bien au-delà du voisinage du contact, comme sur la paillasse"];
-          K.groupe(BD, "Pression", [["haute", "haute", a3P[0]], ["basse", "basse", a3P[1]]],
+            TRAD("<b>Pression : haute</b> — l'arc dans une ampoule claire, à une trentaine de bar : les collisions élargissent la raie verte (∆λ ≈ 1 nm), d'où une longueur de cohérence ℓc ≈ 0,3 mm seulement : les anneaux finissent par se brouiller, à portée du tambour C₃ (c'est elle que demande la manipulation Longueur de cohérence)"),
+            TRAD("<b>Pression : basse</b> — la décharge d'une vapeur rarefaite, la lampe spectrale des salles de TP : raie fine, presque limitée par l'effet Doppler (2 millièmes de nm), d'où ℓc ≈ 15 cm : les anneaux gardent leur contraste sur toute la course de C₃, le brouillage reste hors d'atteinte")] : [
+            TRAD("<b>Pression : haute</b> — l'arc dans une ampoule claire, à une trentaine de bar : chaque raie y est élargie par les collisions (∆λ ≈ 1 nm sur la verte) ; sans le filtre, les franges superposées des raies ensemble ne tiennent qu'au voisinage immédiat du contact optique"),
+            TRAD("<b>Pression : basse</b> — la lampe spectrale : raies fines, presque limitées par l'effet Doppler ; loin du contact, chacune garde ses franges, d'interfrange propre : les teintes se décalent d'une raie à l'autre, des irisations bien au-delà du voisinage du contact, comme sur la paillasse")];
+          K.groupe(BD, TRAD("Pression"), [["haute", TRAD("haute"), a3P[0]], ["basse", TRAD("basse"), a3P[1]]],
             function () { return st.pression === "basse" ? "basse" : "haute"; },
             function (v) { st.pression = v; changerLampe(baseL); });   // la pression est retenue : elle vaut pour les deux lampes mercure
         }
-        if (lampe(st).type === "point") K.seg(BD, [["nu", "faisceau nu", "Sans objectif : le faisceau nu, de moins d'un millimètre (deux taches sur l'écran)."]].concat([10, 20, 40].map(function (g) {
-          return [g, "×" + g, "Objectif de microscope ×" + g + " vissé sur le laser : le faisceau s'ouvre en un cône " + (g === 10 ? "étroit : une petite tache, peu d'anneaux" : g === 20 ? "moyen" : "large : il couvre toujours les miroirs, tous les anneaux") + "."]; })),
+        if (lampe(st).type === "point") K.seg(BD, [["nu", TRAD("faisceau nu"), TRAD("Sans objectif : le faisceau nu, de moins d'un millimètre (deux taches sur l'écran).")]].concat([10, 20, 40].map(function (g) {
+          return [g, "×" + g, TRAD("Objectif de microscope ×{0} vissé sur le laser : le faisceau s'ouvre en un cône {1}.", [g, (g === 10 ? TRAD("étroit : une petite tache, peu d'anneaux") : g === 20 ? TRAD("moyen") : TRAD("large : il couvre toujours les miroirs, tous les anneaux"))])]; })),
           st.lc === false ? "nu" : objectif(st), function (v) { if (v === "nu") st.lc = false; else { st.lc = true; st.obj = v; } modifie("dessin optique loupe obs etagere"); });
         if (st.lampe === "bl") {      // lanterne : condenseur intégré, son tirage
-          K.seg(BD, [["cond", "condenseur", "Condenseur de " + F_COND_L * 1000 + " mm à la sortie : il forme une image du filament ; dépoli et iris se posent devant lui."],
-            ["nu", "filament nu", "Sans condenseur : le filament éclaire dans toutes les directions ; dépoli et iris se posent devant lui."]],
+          K.seg(BD, [["cond", TRAD("condenseur"), TRAD("Condenseur de {0} mm à la sortie : il forme une image du filament ; dépoli et iris se posent devant lui.", [F_COND_L * 1000])],
+            ["nu", TRAD("filament nu"), TRAD("Sans condenseur : le filament éclaire dans toutes les directions ; dépoli et iris se posent devant lui.")]],
             condLanterne(st) ? "cond" : "nu", function (v) { reglerLanterne(st, lanterne(st).tirage, v === "cond"); modifie("dessin optique loupe obs etagere"); });
           if (condLanterne(st)) {
-            var ct = K.curseur(BD, "Tirage", TIRAGE_L[0] * 1000, TIRAGE_L[1] * 1000, 0.5, function () { return lanterne(st).tirage * 1000; },
+            var ct = K.curseur(BD, TRAD("Tirage"), TIRAGE_L[0] * 1000, TIRAGE_L[1] * 1000, 0.5, function () { return lanterne(st).tirage * 1000; },
               function (v) { reglerLanterne(st, v / 1000); }, function () { return fmtNb(lanterne(st).tirage * 1000, 1) + " mm"; }, function () { modifie(); });
-            ct.setAttribute("data-a3", "<b>Tirage du condenseur</b> — distance du filament au condenseur (focale " + F_COND_L * 1000 + " mm) : elle fixe où se forme l'image du filament · aussi : molette ou glisser vertical sur la pastille de la lanterne, " + k_("← →"));
+            ct.setAttribute("data-a3", TRAD("<b>Tirage du condenseur</b> — distance du filament au condenseur (focale {0} mm) : elle fixe où se forme l'image du filament · aussi : molette ou glisser vertical sur la pastille de la lanterne, {1}", [F_COND_L * 1000, k_("← →")]));
             var cti = ct.querySelector("input"), cto = ct.querySelector("output");
             bdLant = function () { if (!condLanterne(st)) return; if (document.activeElement !== cti) cti.value = lanterne(st).tirage * 1000; cto.textContent = fmtNb(lanterne(st).tirage * 1000, 1) + " mm"; };
           }
@@ -2381,39 +2397,39 @@
       } else if (id === "depoli" || id === "iris") {
         if (id === "iris") {
           var lmin = Math.log(IRIS_MIN), lmax = Math.log(R_DEPOLI);
-          var c = K.curseur(BD, "Diamètre", 0, 1000, 1, function () { return Math.round(1000 * (Math.log(st.iris) - lmin) / (lmax - lmin)); },
+          var c = K.curseur(BD, TRAD("Diamètre"), 0, 1000, 1, function () { return Math.round(1000 * (Math.log(st.iris) - lmin) / (lmax - lmin)); },
             function (v) { st.iris = Math.exp(lmin + v / 1000 * (lmax - lmin)); }, function () { return fmtNb(st.iris * 2000, st.iris < 0.005 ? 1 : 0) + " mm"; },
             function () { modifie(); });
-          c.setAttribute("data-a3", "<b>Diamètre de l'iris</b> — aussi : molette ou glisser vertical sur sa pastille, " + k_("← →"));
+          c.setAttribute("data-a3", TRAD("<b>Diamètre de l'iris</b> — aussi : molette ou glisser vertical sur sa pastille, {0}", [k_("← →")]));
           var ci = c.querySelector("input"), co = c.querySelector("output");
           bdIris = function () { if (st.iris == null) return; if (document.activeElement !== ci) ci.value = Math.round(1000 * (Math.log(st.iris) - lmin) / (lmax - lmin)); co.textContent = fmtNb(st.iris * 2000, st.iris < 0.005 ? 1 : 0) + " mm"; };
         }
         if (porte(st)) {     // porte-dépoli de la lampe spectrale : sa position, contre la lampe ou détaché
           blocPos(id);
-          el("span", "bc-vide", BD, ecDep == null ? "dépoli et iris : contre la lampe" : "dépoli et iris : à " + fmtNb(ecDep / 10, 1) + " cm du tube de la lampe");
-          if (ecDep == null) boutonBD("Détacher de la lampe", "<b>Détacher de la lampe</b> — le support du dépoli et de l'iris avance de 5 cm vers l'appareil (aussi : le glisser vers l'appareil sur le banc)",
+          el("span", "bc-vide", BD, ecDep == null ? TRAD("dépoli et iris : contre la lampe") : TRAD("dépoli et iris : à {0} cm du tube de la lampe", [fmtNb(ecDep / 10, 1)]));
+          if (ecDep == null) boutonBD(TRAD("Détacher de la lampe"), TRAD("<b>Détacher de la lampe</b> — le support du dépoli et de l'iris avance de 5 cm vers l'appareil (aussi : le glisser vers l'appareil sur le banc)"),
             function () { deplacer(st, "ent", "dep", posDep(st) - 0.05); modifie(TOUT); });
-          if (ecDep != null) boutonBD("Lampe contre eux", "<b>Lampe contre eux</b> — la lampe avance jusqu'au support du dépoli et de l'iris, qui ne bouge pas ; elle l'emmène ensuite",
+          if (ecDep != null) boutonBD(TRAD("Lampe contre eux"), TRAD("<b>Lampe contre eux</b> — la lampe avance jusqu'au support du dépoli et de l'iris, qui ne bouge pas ; elle l'emmène ensuite"),
             function () { deplacer(st, "ent", "lampe", posDep(st) + D_DEPOLI); modifie(TOUT); });
-        } else el("span", "bc-vide", BD, "sur la lanterne");
+        } else el("span", "bc-vide", BD, TRAD("sur la lanterne"));
         retirerBtn(id);
       } else if (/^(cond|coll|l20|l1)$/.test(id)) {
         blocPos(id); retirerBtn(id);
       } else if (id === "det") {
         blocPos("det");
-        K.seg(BD, [["ecran", "Écran"], ["oeil", "Œil"]], st.det, changerDet);
-        if (st.det === "oeil") el("span", "bc-vide", BD, "ses réglages : sous l'image");
+        K.seg(BD, [["ecran", TRAD("Écran")], ["oeil", TRAD("Œil")]], st.det, changerDet);
+        if (st.det === "oeil") el("span", "bc-vide", BD, TRAD("ses réglages : sous l'image"));
       } else if (id === "comp") {
-        boutonBD("Régler la compensatrice", "<b>Régler la compensatrice</b> — elle est mise exactement parallèle à la séparatrice ; l'étape 1 est sautée", function () {
+        boutonBD(TRAD("Régler la compensatrice"), TRAD("<b>Régler la compensatrice</b> — elle est mise exactement parallèle à la séparatrice ; l'étape 1 est sautée"), function () {
           compReglee(st); V.B1.dessiner(); V.B2.dessiner();
           if (!atteinte(st.etapes.comp)) st.etapes.comp = "sautee";
           majEtapes(); modifie();
         }, "pl-btn");
-        el("span", "bc-vide", BD, "B₁ l'oriente, B₂ règle son excentricité");
+        el("span", "bc-vide", BD, TRAD("B₁ l'oriente, B₂ règle son excentricité"));
       } else if (id === "feuille" || id === "lamelle") {
         var cur = id === "feuille" ? st.feuille : st.lamelle.miroir;
-        K.seg(BD, [["M1", "sur M₁"], ["M2", "sur M₂"]], cur, function (v) { if (id === "feuille") { st.feuille = v; } else st.lamelle.miroir = v; modifie("dessin optique loupe obs etagere"); });
-        if (id === "lamelle") el("span", "bc-vide", BD, "épaisseur au palmer : " + fmtNb(epLamelle(st) * 1000, 3) + " mm");
+        K.seg(BD, [["M1", TRAD("sur M₁")], ["M2", TRAD("sur M₂")]], cur, function (v) { if (id === "feuille") { st.feuille = v; } else st.lamelle.miroir = v; modifie("dessin optique loupe obs etagere"); });
+        if (id === "lamelle") el("span", "bc-vide", BD, TRAD("épaisseur au palmer : {0} mm", [fmtNb(epLamelle(st) * 1000, 3)]));
         retirerBtn(id);
       }
     }
@@ -2433,30 +2449,31 @@
     function nomMir(m) { return m === "M1" ? "M₁" : "M₂"; }
     function carte(cle, nom, fig, pose, a3, dis) { return { cle: cle, nom: nom, mini: K.Dessin.svgMini(fig), pose: !!pose, a3: a3, dis: !!dis }; }
     function cartesEt(T) {
-      var pt = lampe(st).type === "point", posez = "clic : le poser · glisser sur son banc : le poser où on le lâche", retire = "clic : le retirer · glisser sur son banc : le déplacer";
+      var pt = lampe(st).type === "point", posez = TRAD("clic : le poser · glisser sur son banc : le poser où on le lâche"), retire = TRAD("clic : le retirer · glisser sur son banc : le déplacer");
       function el_(k) { var p = present(k); return carte(k, nomEl(k), figureEl(k), p, "<b>" + nomEl(k) + "</b> — " + (p ? retire : posez)); }
       if (T.nom === "Sources") return ORDRE_LAMPES.map(function (k) {
         var L = LAMPES[k], nm = L.court.replace(" (blanche)", "").replace(" vert", ""), posee = st.lampe === k || k === "hg" && st.lampe === "hgb" || k === "hgc" && st.lampe === "hgcb";
         return carte("L" + k, nm, { med: MED_LAMPE[k] }, posee, "<b>" + K.esc(L.nom.charAt(0).toUpperCase() + L.nom.slice(1)) + "</b> — " +
-          (posee ? "la lampe posée" : "clic : remplace la lampe, même position · glisser sur le banc d'entrée : idem") +
-          (k === "hg" || k === "hgc" ? " · haute ou basse pression dans l'ampoule : bandeau de la lampe" : ""));
+          (posee ? TRAD("la lampe posée") : TRAD("clic : remplace la lampe, même position · glisser sur le banc d'entrée : idem")) +
+          (k === "hg" || k === "hgc" ? TRAD(" · haute ou basse pression dans l'ampoule : bandeau de la lampe") : ""));
       });
       if (T.nom === "Entrée") {
         var E = ["depoli", "iris"].map(function (k) {
-          var c = el_(k); if (pt) { c.dis = true; c.pose = false; c.a3 = "<b>" + nomEl(k) + "</b> — pas avec le laser : il éclaire par un point"; }
-          else c.a3 = "<b>" + nomEl(k) + "</b> — " + (lampe(st).type === "spectrale" ? "devant la lampe, sur le même support que " + (k === "iris" ? "le dépoli" : "l'iris") + " (glisser ce support vers l'appareil : il quitte la lampe)"
-            : "vissé sur la lanterne") + " · clic : " + (c.pose ? "le retirer" : "le poser");
+          var c = el_(k); if (pt) { c.dis = true; c.pose = false; c.a3 = TRAD("<b>{0}</b> — pas avec le laser : il éclaire par un point", [nomEl(k)]); }
+          else c.a3 = TRAD("<b>{0}</b> — {1} · clic : {2}", [nomEl(k), (lampe(st).type === "spectrale" ? TRAD("devant la lampe, sur le même support que {0} (glisser ce support vers l'appareil : il quitte la lampe)", [k === "iris" ? TRAD("le dépoli") : TRAD("l'iris")])
+            : TRAD("vissé sur la lanterne")), (c.pose ? TRAD("le retirer") : TRAD("le poser"))]);
           return c;
         }).concat([el_("cond"), el_("coll")]);
-        if (pt) E.push(carte("lc", "Objectif ×" + objectif(st), { med: "conv", mo: "×" + objectif(st) }, st.lc !== false, "<b>Objectif de microscope ×" + objectif(st) + "</b> vissé sur le laser — clic : " +
-          (st.lc !== false ? "le retirer (le faisceau nu, de moins d'un millimètre)" : "le visser (un cône de lumière)") + " · ×10, ×20, ×40 : au bandeau du laser"));
+        if (pt) E.push(carte("lc", TRAD("Objectif ×{0}", [objectif(st)]), { med: "conv", mo: "×" + objectif(st) }, st.lc !== false,
+          TRAD("<b>Objectif de microscope ×{0}</b> vissé sur le laser — clic : {1} · ×10, ×20, ×40 : au bandeau du laser", [objectif(st),
+            (st.lc !== false ? TRAD("le retirer (le faisceau nu, de moins d'un millimètre)") : TRAD("le visser (un cône de lumière)"))])));
         return E;
       }
       if (T.nom === "Sortie") return [el_("l20"), el_("l1"),
-        carte("ecran", "Écran", { med: "ecran" }, st.det === "ecran", "<b>Écran</b> — " + (st.det === "ecran" ? "le détecteur posé" : "clic : remplace l'œil · glisser sur le banc de sortie : le poser où on le lâche")),
-        carte("oeil", "Œil", { med: "oeil" }, st.det === "oeil", "<b>Œil</b> — " + (st.det === "oeil" ? "le détecteur posé" : "clic : remplace l'écran · glisser sur le banc de sortie : le poser où on le lâche"))];
-      return [carte("feuille", "Feuille", { med: "feuille" }, st.feuille, "<b>Feuille</b> de papier, elle cache un miroir — " + (st.feuille ? "clic : la retirer" : "clic : la poser sur M₂ (au bandeau : sur M₁ · sur M₂) · glisser sur un miroir : l'y poser")),
-        carte("lamelle", "Lamelle", { med: "lamelle" }, st.lamelle, "<b>Lamelle</b> couvre-objet devant une partie d'un miroir — " + (st.lamelle ? "clic : la retirer" : "clic : la poser sur M₂ (au bandeau : sur M₁ · sur M₂) · glisser sur un miroir : l'y poser"))];
+        carte("ecran", TRAD("Écran"), { med: "ecran" }, st.det === "ecran", TRAD("<b>Écran</b> — {0}", [st.det === "ecran" ? TRAD("le détecteur posé") : TRAD("clic : remplace l'œil · glisser sur le banc de sortie : le poser où on le lâche")])),
+        carte("oeil", TRAD("Œil"), { med: "oeil" }, st.det === "oeil", TRAD("<b>Œil</b> — {0}", [st.det === "oeil" ? TRAD("le détecteur posé") : TRAD("clic : remplace l'écran · glisser sur le banc de sortie : le poser où on le lâche")]))];
+      return [carte("feuille", TRAD("Feuille"), { med: "feuille" }, st.feuille, TRAD("<b>Feuille</b> de papier, elle cache un miroir — {0}", [st.feuille ? TRAD("clic : la retirer") : TRAD("clic : la poser sur M₂ (au bandeau : sur M₁ · sur M₂) · glisser sur un miroir : l'y poser")])),
+        carte("lamelle", TRAD("Lamelle"), { med: "lamelle" }, st.lamelle, TRAD("<b>Lamelle</b> couvre-objet devant une partie d'un miroir — {0}", [st.lamelle ? TRAD("clic : la retirer") : TRAD("clic : la poser sur M₂ (au bandeau : sur M₁ · sur M₂) · glisser sur un miroir : l'y poser")]))];
     }
     var TOUT = "dessin optique loupe obs etagere";
     function clicCarte(k) {
@@ -2472,33 +2489,38 @@
     }
     // Ce que ferait la carte lâchée au point p du dessin : { texte, f } ou null (rien : elle retourne sur l'étagère).
     function poseCarte(k, p) {
-      var src = k.charAt(0) === "L" && LAMPES[k.slice(1)], nm = src ? LAMPES[k.slice(1)].court.replace(" (blanche)", "") : k === "ecran" ? "Écran" : k === "oeil" ? "Œil" : nomEl(k);
-      if (src) return surBanc(p, "ent") ? { texte: "<b>" + K.esc(nm) + "</b> — lâchée ici : elle remplace la lampe, même position", f: function () { clicCarte(k); } } : null;
+      var src = k.charAt(0) === "L" && LAMPES[k.slice(1)], nm = src ? LAMPES[k.slice(1)].court.replace(" (blanche)", "") : k === "ecran" ? TRAD("Écran") : k === "oeil" ? TRAD("Œil") : nomEl(k);
+      if (src) return surBanc(p, "ent") ? { texte: TRAD("<b>{0}</b> — lâchée ici : elle remplace la lampe, même position", [K.esc(nm)]), f: function () { clicCarte(k); } } : null;
       if (k === "feuille" || k === "lamelle") {
         var m = miroirPres(p); if (!m) return null;
-        return { texte: "<b>" + nm + "</b> — lâchée ici : sur " + nomMir(m), f: function () {
+        return { texte: TRAD("<b>{0}</b> — lâchée ici : sur {1}", [nm, nomMir(m)]), f: function () {
           if (k === "feuille") st.feuille = m; else st.lamelle = { miroir: m, bord: st.lamelle ? st.lamelle.bord : 0 };
           st.sel = k; modifie(TOUT); } };
       }
       if (k === "depoli" || k === "iris" || k === "lc") {          // sur la lampe (l'objectif : sur le laser)
         var pose = k === "lc" ? st.lc !== false : present(k), ok = (k === "lc") === (lampe(st).type === "point");
-        return surBanc(p, "ent") && ok && !pose ? { texte: "<b>" + nm + "</b> — lâché ici : posé sur la lampe", f: function () { clicCarte(k); } } : null;
+        return surBanc(p, "ent") && ok && !pose ? { texte: TRAD("<b>{0}</b> — lâché ici : posé sur la lampe", [nm]), f: function () { clicCarte(k); } } : null;
       }
       var b = k === "ecran" || k === "oeil" ? "sor" : ELEMENTS[k] && ELEMENTS[k].banc;
       if (!b || !surBanc(p, b)) return null;
       var d = b === "ent" ? dE(p.y) : dS(p.x);
-      return { texte: "<b>" + nm + "</b> — lâché ici : " + fmtNb(clamp(d, BORNES[b][0], BORNES[b][1]) * 100, 1) + " cm", f: function () {
+      return { texte: TRAD("<b>{0}</b> — lâché ici : {1} cm", [nm, fmtNb(clamp(d, BORNES[b][0], BORNES[b][1]) * 100, 1)]), f: function () {
         if (k === "ecran" || k === "oeil") { if (st.det !== k) { detecteur(st, k); st.vue = "det"; } deplacer(st, "sor", k, d); st.sel = "det"; }
         else { if (!present(k)) poser(st, k); deplacer(st, b, k, d); st.sel = k; }
         TAPE = null; modifie(TOUT);
       } };
     }
-    var ETG = K.etagere(SCENE, { flottante: true, fixe: true, memoire: "paillasse-michelson-etagere", titre: "Éléments", defaut: "Sources",
-      onglets: function () { return [{ nom: "Sources", a3: "<b>Sources</b> — sodium, mercure, lumière blanche, laser : une seule à la fois" },
-        { nom: "Entrée", a3: "<b>Banc d'entrée</b> — dépoli et iris sur la lampe, condenseur, lentille" }, { nom: "Sortie", a3: "<b>Banc de sortie</b> — lentilles, écran ou œil" },
-        { nom: "Accessoires", a3: "<b>Accessoires</b> — feuille et lamelle, posées sur un miroir" }]; },
+    // L'onglet du banc d'entrée s'appelle « Entrée », comme la touche du clavier nommée dans les
+    // infobulles : deux sens pour une même phrase française, et le dictionnaire n'en tient qu'un. Les
+    // infobulles portent donc le nom de la touche dans leur propre phrase, et l'étiquette de l'onglet
+    // passe par une clé propre — un span autour du mot, sans effet sur l'affichage : « Entrée ».
+    var ETG = K.etagere(SCENE, { flottante: true, fixe: true, memoire: "paillasse-michelson-etagere", titre: TRAD("Éléments"), defaut: "Sources",
+      onglets: function () { return [{ nom: "Sources", lab: TRAD("Sources"), a3: TRAD("<b>Sources</b> — sodium, mercure, lumière blanche, laser : une seule à la fois") },
+        { nom: "Entrée", lab: TRAD("<span>Entrée</span>"), a3: TRAD("<b>Banc d'entrée</b> — dépoli et iris sur la lampe, condenseur, lentille") },
+        { nom: "Sortie", lab: TRAD("Sortie"), a3: TRAD("<b>Banc de sortie</b> — lentilles, écran ou œil") },
+        { nom: "Accessoires", lab: TRAD("Accessoires"), a3: TRAD("<b>Accessoires</b> — feuille et lamelle, posées sur un miroir") }]; },
       cartes: cartesEt,
-      glisse: function (k, ev) { var q = poseCarte(k, K.ptSvg(ev)); return { fantome: true, texte: q ? q.texte : "Lâcher sur " + (k === "feuille" || k === "lamelle" ? "un miroir" : "son banc") + " pour poser ; ailleurs : rien" }; },
+      glisse: function (k, ev) { var q = poseCarte(k, K.ptSvg(ev)); return { fantome: true, texte: q ? q.texte : TRAD("Lâcher sur {0} pour poser ; ailleurs : rien", [k === "feuille" || k === "lamelle" ? TRAD("un miroir") : TRAD("son banc")]) }; },
       lache: function (k, ev, bouge) {
         if (ev.type === "pointercancel") return;
         if (!bouge) { clicCarte(k); return; }
@@ -2514,8 +2536,8 @@
     var MOT = null;
     // Qualité de l'aperçu calculé pendant un geste (une passe par image ; l'image fine suit 150 ms après le dernier
     // mouvement). Réglage du poste, pas de l'état : gardé dans le navigateur (mode prof), « normale » par défaut.
-    var GESTE = { rapide: { res: 192, k: 0.6, nom: "Rapide" }, normale: { res: 256, k: 1, nom: "Normale" },
-      fine: { res: 352, k: 1.6, nom: "Fine" }, tresfine: { res: 440, k: 2.5, nom: "Très fine" } };
+    var GESTE = { rapide: { res: 192, k: 0.6, nom: TRAD("Rapide") }, normale: { res: 256, k: 1, nom: TRAD("Normale") },
+      fine: { res: 352, k: 1.6, nom: TRAD("Fine") }, tresfine: { res: 440, k: 2.5, nom: TRAD("Très fine") } };
     var CLE_GESTE = "paillasse-michelson-qualite-geste", gesteQ = "normale";
     try { var gq = root.localStorage.getItem(CLE_GESTE); if (GESTE[gq]) gesteQ = gq; } catch (e) { /* stockage absent */ }
     // cadence des aperçus pendant le dernier geste (images par seconde), affichée au mode prof pour régler GESTE
@@ -2554,7 +2576,7 @@
       else if (ctx2 && vue(st) === "ecran") {
         ctx2.fillStyle = "#000"; ctx2.fillRect(0, 0, 440, 440);
         ctx2.fillStyle = "#020203"; ctx2.fillRect(8, 8, 424, 424);
-        ctx2.fillStyle = "#7b848e"; ctx2.font = "15px sans-serif"; ctx2.textAlign = "center"; ctx2.fillText("Pas assez de lumière", 220, 224);
+        ctx2.fillStyle = "#7b848e"; ctx2.font = "15px sans-serif"; ctx2.textAlign = "center"; ctx2.fillText(TRAD("Pas assez de lumière"), 220, 224);
       }
       else if (ctx2) { ctx2.fillStyle = "#000"; ctx2.fillRect(0, 0, 440, 440); }
     }
@@ -2708,7 +2730,7 @@
     }
 
     // ---- capteurs posés sur l'écran (barrette, photodiode, fibre), au-dessus de l'image ----
-    var NOMS_CAPTEUR = { barrette: "Barrette CCD", photodiode: "Photodiode", fibre: "Fibre du spectromètre" };
+    var NOMS_CAPTEUR = { barrette: TRAD("Barrette CCD"), photodiode: "Photodiode", fibre: TRAD("Fibre du spectromètre") };
     function placerCapteur(g, c) {
       var k = 220 / W_VUE.ecran;
       g.setAttribute("transform", "translate(" + (220 + c.x * k) + " " + (220 - c.y * k) + ") rotate(" + (-(c.ang || 0)) + ")");
@@ -2759,11 +2781,11 @@
 
     // ---- affichage du capteur : panneau flottant, gardé à côté du cahier ----
     var CAP = { sale: true, fin: false, t: 0, pd: null, echelle: 0, tDessin: 0, donnees: null };
-    CAP.panneau = K.panneau("pl-capteur", "Capteur", { libre: true });
+    CAP.panneau = K.panneau("pl-capteur", TRAD("Capteur"), { libre: true });
     (function () {
       var C = CAP.panneau.corps;
       CAP.titre = CAP.panneau.el.querySelector(".pl-pan-t span");
-      CAP.panneau.el.querySelector(".pl-pan-x").title = "Fermer : retire le capteur de l'écran";
+      CAP.panneau.el.querySelector(".pl-pan-x").title = TRAD("Fermer : retire le capteur de l'écran");
       CAP.cv = el("canvas", "pl-cap-cv", C);
       CAP.pied = el("div", "pl-cap-pied", C);
       CAP.panneau.surBascule = function (o) { if (!o && st.capteur) { st.capteur = null; CAP.nouveau(); modifie("obs"); } };
@@ -2803,7 +2825,7 @@
     };
     function grand(v) {
       CAP.grand = v; CAP.panneau.el.classList.toggle("pl-cap-grand", v);
-      if (CAP.bGrand) CAP.bGrand.innerHTML = v ? "Réduire" : "Agrandir";
+      if (CAP.bGrand) CAP.bGrand.innerHTML = v ? TRAD("Réduire") : TRAD("Agrandir");
       CAP.tDessin = 0; CAP.redessiner();
     }
     var FEN_PD = [1, 2, 5, 10, 20, 50, 100, 200, 500, 1000, 2000];   // largeur de la fenêtre de la photodiode, µm de chariot
@@ -2828,29 +2850,29 @@
       if (ouvert !== CAP.panneau.ouvert()) { var sb = CAP.panneau.surBascule; CAP.panneau.surBascule = null; CAP.panneau.basculer(ouvert); CAP.panneau.surBascule = sb; }
       CAP.pied.innerHTML = "";
       if (!c) return;
-      CAP.bGrand = K.bouton(CAP.pied, "Agrandir", function () { grand(!CAP.grand); }, "pl-btn-p");
+      CAP.bGrand = K.bouton(CAP.pied, TRAD("Agrandir"), function () { grand(!CAP.grand); }, "pl-btn-p");
       grand(c.type === "barrette");
       if (c.type === "photodiode") {
-        K.bouton(CAP.pied, "Effacer la trace", function () { CAP.pd = null; CAP.tDessin = 0; }, "pl-btn-p");
-        el("span", "pl-cap-n", CAP.pied, "Charioter : l'éclairement s'inscrit selon le déplacement du chariot. Molette sur le graphe : largeur de la fenêtre.");
+        K.bouton(CAP.pied, TRAD("Effacer la trace"), function () { CAP.pd = null; CAP.tDessin = 0; }, "pl-btn-p");
+        el("span", "pl-cap-n", CAP.pied, TRAD("Charioter : l'éclairement s'inscrit selon le déplacement du chariot. Molette sur le graphe : largeur de la fenêtre."));
       } else if (c.type === "fibre") {
-        K.bouton(CAP.pied, "Fenêtre de la lampe", function () { c.fen = null; CAP.sale = true; K.modifie(); }, "pl-btn-p");
-        K.bouton(CAP.pied, "Tout le visible", function () { c.fen = [380, 720]; c.fenLampe = st.lampe; CAP.sale = true; K.modifie(); }, "pl-btn-p");
+        K.bouton(CAP.pied, TRAD("Fenêtre de la lampe"), function () { c.fen = null; CAP.sale = true; K.modifie(); }, "pl-btn-p");
+        K.bouton(CAP.pied, TRAD("Tout le visible"), function () { c.fen = [380, 720]; c.fenLampe = st.lampe; CAP.sale = true; K.modifie(); }, "pl-btn-p");
         boutonReel(c);
-        el("span", "pl-cap-n", CAP.pied, "Molette sur le spectre : zoomer autour du pointeur. " + majuscule(capteurs(st).fibre) + "." +
-          (st.capReels ? " Le spectromètre parfait (résolution 0,02 nm, fibre de 50 µm) sépare le doublet du sodium (0,6 nm), que celui-ci ne résout pas." : ""));
+        el("span", "pl-cap-n", CAP.pied, TRAD("Molette sur le spectre : zoomer autour du pointeur. {0}.{1}", [majuscule(capteurs(st).fibre),
+          (st.capReels ? TRAD(" Le spectromètre parfait (résolution 0,02 nm, fibre de 50 µm) sépare le doublet du sodium (0,6 nm), que celui-ci ne résout pas.") : "")]));
       } else {
-        K.bouton(CAP.pied, "Barrette entière", function () { c.zb = null; CAP.sale = true; CAP.donnees = null; K.modifie(); }, "pl-btn-p");
+        K.bouton(CAP.pied, TRAD("Barrette entière"), function () { c.zb = null; CAP.sale = true; CAP.donnees = null; K.modifie(); }, "pl-btn-p");
         boutonReel(c);
-        el("span", "pl-cap-n", CAP.pied, majuscule(capteurs(st).barrette) + "." +
-          (st.capReels ? " La barrette parfaite est bien plus longue (15 cm au lieu de 2,9 cm) : elle couvre beaucoup plus d'anneaux." : "") + " Molette sur le profil : zoomer autour du pointeur, qui donne la position. Molette sur la barrette (écran) : la tourner.");
+        el("span", "pl-cap-n", CAP.pied, TRAD("{0}.{1} Molette sur le profil : zoomer autour du pointeur, qui donne la position. Molette sur la barrette (écran) : la tourner.", [majuscule(capteurs(st).barrette),
+          (st.capReels ? TRAD(" La barrette parfaite est bien plus longue (15 cm au lieu de 2,9 cm) : elle couvre beaucoup plus d'anneaux.") : "")]));
       }
-      var bx = K.bouton(CAP.pied, "Exporter (CSV)", function () {
+      var bx = K.bouton(CAP.pied, TRAD("Exporter (CSV)"), function () {
         var o = CAP.csv();
-        if (!o) { bx.title = "Pas encore de courbe à exporter."; return; }
-        if (!K.exporterCsv(o.nom, o.entetes, o.lignes)) bx.title = "Export impossible dans ce navigateur.";
+        if (!o) { bx.title = TRAD("Pas encore de courbe à exporter."); return; }
+        if (!K.exporterCsv(o.nom, o.entetes, o.lignes)) bx.title = TRAD("Export impossible dans ce navigateur.");
       }, "pl-btn-p");
-      bx.title = "Les valeurs calculées de la courbe (fenêtre affichée), en fichier .csv à lire avec Python (point décimal, séparateur virgule).";
+      bx.title = TRAD("Les valeurs calculées de la courbe (fenêtre affichée), en fichier .csv à lire avec Python (point décimal, séparateur virgule).");
     };
     // Courbe du capteur en table : { nom, entetes, lignes } ; les valeurs calculées, pas le dessin. null s'il n'y a rien.
     CAP.csv = function () {
@@ -2884,7 +2906,7 @@
     function majuscule(t) { return t.charAt(0).toUpperCase() + t.slice(1); }
     // Capteur réel ou parfait (st.capReels, commun à la barrette et au spectromètre) : on repart de zéro.
     function boutonReel(c) {
-      K.bouton(CAP.pied, st.capReels ? "Capteur parfait" : "Capteur réel", function () {
+      K.bouton(CAP.pied, st.capReels ? TRAD("Capteur parfait") : TRAD("Capteur réel"), function () {
         st.capReels = !st.capReels; c.zb = null; CAP.nouveau(); dessinerSurc(); K.modifie();
       }, "pl-btn-p");
     }
@@ -2942,7 +2964,7 @@
       var n = d ? d.length / 3 : 0, mx = 0, i;
       for (i = 0; i < n; i++) mx = Math.max(mx, d[3 * i + 1]);
       var E = echelle(mx), fb = CAP.fenDonnees || fenBarrette();
-      axes(G, fb[0], fb[1], "position le long de la barrette (mm)", 0, null, "éclairement");
+      axes(G, fb[0], fb[1], TRAD("position le long de la barrette (mm)"), 0, null, TRAD("éclairement"));
       if (!n) { curseur(" mm", 2); return; }
       var x = G.x, dx = (G.x1 - G.x0) / n;
       for (i = 0; i < n; i++) {
@@ -2974,8 +2996,8 @@
       var n = d ? d.l.length : 0, mx = 0, i;
       for (i = 0; i < n; i++) mx = Math.max(mx, d.I0[i]);
       var E = 2 * (mx || 1);
-      axes(G, f[0], f[1], "longueur d'onde (nm)", 0, null, "densité spectrale", function (v, pas) { return fmtNb(v, pas < 1 ? Math.min(3, Math.ceil(-Math.log10(pas) - 1e-9)) : 0); });
-      if (!n || !(mx > 0)) { if (n) { G.x.fillStyle = "#7f8996"; G.x.textAlign = "center"; G.x.fillText("pas de lumière sur la fibre", (G.x0 + G.x1) / 2, (G.y0 + G.y1) / 2); } return; }
+      axes(G, f[0], f[1], TRAD("longueur d'onde (nm)"), 0, null, TRAD("densité spectrale"), function (v, pas) { return fmtNb(v, pas < 1 ? Math.min(3, Math.ceil(-Math.log10(pas) - 1e-9)) : 0); });
+      if (!n || !(mx > 0)) { if (n) { G.x.fillStyle = "#7f8996"; G.x.textAlign = "center"; G.x.fillText(TRAD("pas de lumière sur la fibre"), (G.x0 + G.x1) / 2, (G.y0 + G.y1) / 2); } return; }
       var x = G.x, dx = (G.x1 - G.x0) / n;
       for (i = 0; i < n; i++) {
         var py = G.y0 - Math.min(1, Math.max(0, d.I[i]) / E) * (G.y0 - G.y1);
@@ -2991,12 +3013,12 @@
       var G = prepCv(), pd = CAP.pd, c = st.capteur;
       if (!G) return;
       var fen = c.fen || 10, mil = c3Vu, demi = fen / 2000, xa = (mil - demi - (pd ? pd.origine : mil)) * 1000, xb = xa + fen;
-      axes(G, xa, xb, "déplacement du chariot (µm)", 0, 2, "I / I moyen");
+      axes(G, xa, xb, TRAD("déplacement du chariot (µm)"), 0, 2, TRAD("I / I moyen"));
       var x = G.x;
       x.strokeStyle = "#2c323b"; x.setLineDash([3, 3]); x.beginPath(); var ym = (G.y0 + G.y1) / 2; x.moveTo(G.x0, ym); x.lineTo(G.x1, ym); x.stroke(); x.setLineDash([]);
       var xc = (G.x0 + G.x1) / 2; x.strokeStyle = "#e8c45a"; x.globalAlpha = .6; x.beginPath(); x.moveTo(xc + .5, G.y0); x.lineTo(xc + .5, G.y1); x.stroke(); x.globalAlpha = 1;
       if (!pd || !pd.bins.size) return;
-      if (!(pd.I0 > 0)) { x.fillStyle = "#7f8996"; x.textAlign = "center"; x.fillText("pas de lumière sur la photodiode", xc, (G.y0 + G.y1) / 2); return; }
+      if (!(pd.I0 > 0)) { x.fillStyle = "#7f8996"; x.textAlign = "center"; x.fillText(TRAD("pas de lumière sur la photodiode"), xc, (G.y0 + G.y1) / 2); return; }
       var kA = Math.ceil((mil - demi) * 1e5), kB = Math.floor((mil + demi) * 1e5), nb = kB - kA + 1, w = G.x1 - G.x0;
       function Y(v) { return G.y0 - clamp(v / 2, 0, 1) * (G.y0 - G.y1); }
       function X(k) { return G.x0 + (k - kA) / Math.max(1, nb - 1) * w; }
@@ -3094,9 +3116,9 @@
     function oeilActif() { return vue(st) === "oeil" && !laserOeil(); }
     function texteOeil() {
       var x = (st.oeilX || 0) * 1000, y = (st.oeilY || 0) * 1000, f = function (v) { return fmtNb(Math.abs(v), 1); }, t = [];
-      if (Math.abs(x) >= 0.05) t.push(f(x) + " mm " + (x > 0 ? "à droite" : "à gauche"));
-      if (Math.abs(y) >= 0.05) t.push(f(y) + " mm " + (y > 0 ? "vers le haut" : "vers le bas"));
-      return t.length ? "Œil décalé de " + t.join(", ") + " (double-clic : recentrer)" : "";
+      if (Math.abs(x) >= 0.05) t.push(f(x) + " mm " + (x > 0 ? TRAD("à droite") : TRAD("à gauche")));
+      if (Math.abs(y) >= 0.05) t.push(f(y) + " mm " + (y > 0 ? TRAD("vers le haut") : TRAD("vers le bas")));
+      return t.length ? TRAD("Œil décalé de {0} (double-clic : recentrer)", [t.join(", ")]) : "";
     }
     function poserOeil(x, y) {
       var d = Math.hypot(x, y);
@@ -3137,60 +3159,60 @@
     OE.sync = function () { cvWrap.classList.toggle("pl-cv-oeil", oeilActif()); };
 
     // ---- tête et pied de l'observation ----
-    var NOMS_VUE = { ecran: "Sur l'écran", oeil: "À l'œil, à travers l'appareil", feuille: "La feuille posée sur M", iris: "La face de l'iris, côté appareil" };
+    var NOMS_VUE = { ecran: TRAD("Sur l'écran"), oeil: TRAD("À l'œil, à travers l'appareil"), feuille: TRAD("La feuille posée sur M"), iris: TRAD("La face de l'iris, côté appareil") };
     function dessinerObs() {
       var T = K.obsTete, Pd = K.obsPied, v = vue(st);
       T.innerHTML = ""; Pd.innerHTML = "";
-      el("span", "pl-obs-t", T, v === "feuille" ? "La feuille posée sur " + (st.feuille === "M1" ? "M₁" : "M₂") : NOMS_VUE[v]);
+      el("span", "pl-obs-t", T, v === "feuille" ? TRAD("La feuille posée sur {0}", [st.feuille === "M1" ? "M₁" : "M₂"]) : NOMS_VUE[v]);
       // Vues en pastilles, comme les récepteurs du banc : le détecteur posé,
       // la face de l'iris, la feuille ; puis Mesurer ▾ (sur l'écran seulement).
-      var vues = [["det", st.det === "oeil" ? "Œil" : "Écran", "<b>" + (st.det === "oeil" ? "À l'œil" : "Sur l'écran") + "</b> — ce que reçoit le détecteur posé au bout du banc de sortie"]];
-      if (irisVisible(st)) vues.push(["iris", "Face de l'iris", "<b>Face de l'iris</b>, côté appareil — la lumière renvoyée par les miroirs revient sur l'iris : son image y est nette quand l'iris est au foyer de la lentille d'entrée (autocollimation)"]);
-      if (st.feuille) vues.push(["feuille", "Feuille", "<b>Feuille</b> — la feuille posée sur " + (st.feuille === "M1" ? "M₁" : "M₂") + " et les taches de lumière qu'elle reçoit"]);
+      var vues = [["det", st.det === "oeil" ? TRAD("Œil") : TRAD("Écran"), TRAD("<b>{0}</b> — ce que reçoit le détecteur posé au bout du banc de sortie", [(st.det === "oeil" ? TRAD("À l'œil") : TRAD("Sur l'écran"))])]];
+      if (irisVisible(st)) vues.push(["iris", TRAD("Face de l'iris"), TRAD("<b>Face de l'iris</b>, côté appareil — la lumière renvoyée par les miroirs revient sur l'iris : son image y est nette quand l'iris est au foyer de la lentille d'entrée (autocollimation)")]);
+      if (st.feuille) vues.push(["feuille", TRAD("Feuille"), TRAD("<b>Feuille</b> — la feuille posée sur {0} et les taches de lumière qu'elle reçoit", [st.feuille === "M1" ? "M₁" : "M₂"])]);
       var rv = el("span", "bc-recs", T), vc = v === "feuille" || v === "iris" ? v : "det";
       vues.forEach(function (q) {
         var b = el("button", "", rv, q[1]); b.type = "button"; b.setAttribute("aria-pressed", q[0] === vc ? "true" : "false"); b.setAttribute("data-a3", q[2]);
         b.addEventListener("click", function () { if (st.vue !== q[0]) { st.vue = q[0]; modifie("optique obs"); } });
       });
-      var bMes = K.bouton(T, "Mesurer ▾", function () {}, "bc-dm-b pl-btn-p");
+      var bMes = K.bouton(T, TRAD("Mesurer ▾"), function () {}, "bc-dm-b pl-btn-p");
       bMes.disabled = v !== "ecran";
-      bMes.setAttribute("data-a3", v === "ecran" ? "<b>Mesurer</b> — poser sur l'écran une barrette CCD, une photodiode, la fibre d'un spectromètre"
-        : "<b>Mesurer</b> — sur l'écran seulement (vue « " + (st.det === "oeil" ? "Œil" : "Écran") + " » avec l'écran posé)");
+      bMes.setAttribute("data-a3", v === "ecran" ? TRAD("<b>Mesurer</b> — poser sur l'écran une barrette CCD, une photodiode, la fibre d'un spectromètre")
+        : TRAD("<b>Mesurer</b> — sur l'écran seulement (vue « {0} » avec l'écran posé)", [(st.det === "oeil" ? TRAD("Œil") : TRAD("Écran"))]));
       K.deroulant(bMes, function () {
         var c = st.capteur;
-        return [["barrette", "Barrette CCD", "profil d'éclairement le long de la barrette"],
-          ["photodiode", "Photodiode", "éclairement en fonction du déplacement du chariot"],
-          ["fibre", "Fibre (spectromètre)", "spectre de la lumière en ce point"]].map(function (q) {
+        return [["barrette", TRAD("Barrette CCD"), TRAD("profil d'éclairement le long de la barrette")],
+          ["photodiode", "Photodiode", TRAD("éclairement en fonction du déplacement du chariot")],
+          ["fibre", TRAD("Fibre (spectromètre)"), TRAD("spectre de la lumière en ce point")]].map(function (q) {
           return { lab: q[1], coche: !!(c && c.type === q[0]), a3: "<b>" + q[1] + "</b> — " + q[2], act: function () { poserCapteur(q[0]); } };
-        }).concat([{ sep: true }, { lab: "Retirer le capteur", dis: !c, act: function () { st.capteur = null; CAP.nouveau(); modifie("obs"); } }]);
+        }).concat([{ sep: true }, { lab: TRAD("Retirer le capteur"), dis: !c, act: function () { st.capteur = null; CAP.nouveau(); modifie("obs"); } }]);
       });
-      if (laserOeil()) el("span", "pl-alerte", Pd, "⚠ Laser : ne jamais regarder le faisceau, même à travers l'appareil. L'œil le concentre en un point de la rétine et la brûle, sans douleur et sans retour. Observer sur l'écran.");
+      if (laserOeil()) el("span", "pl-alerte", Pd, TRAD("⚠ Laser : ne jamais regarder le faisceau, même à travers l'appareil. L'œil le concentre en un point de la rétine et la brûle, sans douleur et sans retour. Observer sur l'écran."));
       else if (v === "oeil") {
         var ma = modeAcc(st), sg = K.seg(Pd, [["infini", NOM_ACC.infini], ["miroirs", NOM_ACC.miroirs], ["main", NOM_ACC.main]], ma, function (m) {
           if (m === "main") st.acc = accommodation(st);
           st.accMode = m; modifie("optique obs");
         });
         sg.classList.add("pl-acc-mode");
-        [["infini", "l'œil accommode à l'infini (ou sur son image par la lentille de sortie)"], ["miroirs", "l'œil accommode sur le plan des miroirs (ou sur son image par la lentille de sortie)"],
-          ["main", "l'accommodation se règle au curseur ou à la molette sur l'image"]].forEach(function (q, i) {
+        [["infini", TRAD("l'œil accommode à l'infini (ou sur son image par la lentille de sortie)")], ["miroirs", TRAD("l'œil accommode sur le plan des miroirs (ou sur son image par la lentille de sortie)")],
+          ["main", TRAD("l'accommodation se règle au curseur ou à la molette sur l'image")]].forEach(function (q, i) {
           var b = sg.querySelectorAll("button")[i]; if (b) b.setAttribute("data-a3", "<b>" + NOM_ACC[q[0]] + "</b> — " + q[1]);
         });
         if (ma === "main") {
-          el("span", "pl-acc-l", Pd, "près");
+          el("span", "pl-acc-l", Pd, TRAD("près"));
           var s = el("input", "pl-acc", Pd); s.type = "range"; s.min = -ACC_MAX; s.max = 0; s.step = 0.01; s.value = -(st.acc || 0);
-          s.setAttribute("aria-label", "Accommodation de l'œil, de 25 cm à l'infini");
-          s.setAttribute("data-a3", "<b>Accommodation</b> de l'œil, de 25 cm à l'infini — glisser, ou molette dessus ou sur l'image (Maj : fin · Ctrl+Maj : ultrafin · Ctrl : gros)");
+          s.setAttribute("aria-label", TRAD("Accommodation de l'œil, de 25 cm à l'infini"));
+          s.setAttribute("data-a3", TRAD("<b>Accommodation</b> de l'œil, de 25 cm à l'infini — glisser, ou molette dessus ou sur l'image (Maj : fin · Ctrl+Maj : ultrafin · Ctrl : gros)"));
           s.addEventListener("input", function () { st.acc = -parseFloat(s.value); sale.optique = true; K.modifie(); });
-          el("span", "pl-acc-l", Pd, "loin");
+          el("span", "pl-acc-l", Pd, TRAD("loin"));
         } else {
           var hp = accPour(st, ma);
-          if (!(hp.u > 0) || hp.acc > ACC_MAX) el("span", "pl-obs-n", Pd, hp.u > 0 ? "Trop près pour l'œil (moins de 25 cm) : image floue." : "Le faisceau converge derrière l'œil : image floue.");
+          if (!(hp.u > 0) || hp.acc > ACC_MAX) el("span", "pl-obs-n", Pd, hp.u > 0 ? TRAD("Trop près pour l'œil (moins de 25 cm) : image floue.") : TRAD("Le faisceau converge derrière l'œil : image floue."));
         }
         OE.info = el("span", "pl-obs-n pl-oeil-info", Pd, texteOeil());
-      } else if (v === "ecran") el("span", "pl-obs-n", Pd, st.capteur ? "Glisser le capteur à la souris" + (st.capteur.type === "barrette" ? " ; molette sur la barrette : la tourner." : ".") : "");
-      else if (v === "iris") el("span", "pl-obs-n", Pd, "Au centre, le trou de l'iris ; autour, sur ses lames, la lumière renvoyée par les miroirs.");
-      else el("span", "pl-obs-n", Pd, "La feuille cache ce miroir : un seul faisceau revient vers la sortie.");
-      if (!MOT) el("span", "pl-alerte", Pd, "Ce navigateur n'a pas WebGL2 : calcul sur le processeur, image grossière.");
+      } else if (v === "ecran") el("span", "pl-obs-n", Pd, st.capteur ? TRAD("Glisser le capteur à la souris{0}", [st.capteur.type === "barrette" ? TRAD(" ; molette sur la barrette : la tourner.") : "."]) : "");
+      else if (v === "iris") el("span", "pl-obs-n", Pd, TRAD("Au centre, le trou de l'iris ; autour, sur ses lames, la lumière renvoyée par les miroirs."));
+      else el("span", "pl-obs-n", Pd, TRAD("La feuille cache ce miroir : un seul faisceau revient vers la sortie."));
+      if (!MOT) el("span", "pl-alerte", Pd, TRAD("Ce navigateur n'a pas WebGL2 : calcul sur le processeur, image grossière."));
       dessinerSurc(); CAP.sync(); OE.sync();
     }
 
@@ -3227,14 +3249,14 @@
       }
       svg("rect", { x: xBord, y: 6, width: 3, height: 132, fill: "#6f7780" }, g);
       svg("rect", { x: 4, y: 4, width: 432, height: 128, rx: 10, fill: "none", stroke: "#3a414a", "stroke-width": 2 }, LP);
-      svg("text", { x: 8, y: 146, class: "pl-loupe-l" }, LP).textContent = "Loupe sur C₃ : manchon en mm et demi-mm, tambour de 50 divisions (un tour = 0,5 mm)";
+      svg("text", { x: 8, y: 146, class: "pl-loupe-l" }, LP).textContent = TRAD("Loupe sur C₃ : manchon en mm et demi-mm, tambour de 50 divisions (un tour = 0,5 mm)");
     }
     K.lectureVerif(K.lecture, {
-      label: "Lecture de C₃ :", unite: "mm", exemple: "ex. 7,385", aideSaisie: "Taper une lecture en mm, par exemple 7,385.",
+      label: TRAD("Lecture de C₃ :"), unite: "mm", exemple: TRAD("ex. 7,385"), aideSaisie: TRAD("Taper une lecture en mm, par exemple 7,385."),
       verifier: function (v) {
         var ecart = Math.round((v - st.C3) * 1000);
-        if (Math.abs(ecart) <= 3) return "Lecture juste.";
-        return "Écart de " + Math.abs(ecart) + " µm : lecture trop " + (ecart > 0 ? "grande." : "petite.");
+        if (Math.abs(ecart) <= 3) return TRAD("Lecture juste.");
+        return TRAD("Écart de {0} µm : lecture trop {1}", [Math.abs(ecart), (ecart > 0 ? TRAD("grande.") : TRAD("petite."))]);
       }
     });
 
@@ -3244,125 +3266,127 @@
     // dérèglement » et son numéro. Les textes des gestes vivent ici (GESTES, survol), un seul endroit à réécrire.
     var k_ = K.k, BH = K.bandeau(), L1 = BH.l1;
     BH.l2.hidden = true;        // pas d'autre aide en bascule que le faisceau, rangé en ligne 1
-    var bLum = K.boutonAide(L1, { cle: "faisceau", nom: "Faisceau", lettre: "F", on: st.lumiere,
-      titre: "la lumière à travers l'appareil, à l'échelle des bancs : toute la lumière utile, et le pinceau issu du centre de la source" }, basculerFaisceau);
+    var bLum = K.boutonAide(L1, { cle: "faisceau", nom: TRAD("Faisceau"), lettre: "F", on: st.lumiere,
+      titre: TRAD("la lumière à travers l'appareil, à l'échelle des bancs : toute la lumière utile, et le pinceau issu du centre de la source") }, basculerFaisceau);
     function majFaisceau() { bLum.setAttribute("aria-pressed", st.lumiere ? "true" : "false"); }
     function basculerFaisceau() { st.lumiere = !st.lumiere; majFaisceau(); modifie("dessin"); }
     // Œil simulé (avec = luminosité réelle, sans = toujours visible) pour l'écran, l'œil et la feuille ;
     // gardé d'un dérèglement à l'autre, hors annulation.
-    K.groupe(L1, "Œil simulé", [
-      ["reelle", "avec", "<b>Œil simulé : avec</b> — luminosité réelle : réponse à la luminance du champ regardé, pupille, vision de nuit, sans fond de salle ajouté : le noir reste noir ; une figure faible paraît faible, ou ne se voit pas du tout"],
-      ["visible", "sans", "<b>Œil simulé : sans</b> — l'image est exposée pour être bien visible, quelle que soit la lumière reçue"]],
+    K.groupe(L1, TRAD("Œil simulé"), [
+      ["reelle", TRAD("avec"), TRAD("<b>Œil simulé : avec</b> — luminosité réelle : réponse à la luminance du champ regardé, pupille, vision de nuit, sans fond de salle ajouté : le noir reste noir ; une figure faible paraît faible, ou ne se voit pas du tout")],
+      ["visible", TRAD("sans"), TRAD("<b>Œil simulé : sans</b> — l'image est exposée pour être bien visible, quelle que soit la lumière reçue")]],
       function () { return reelle(st) ? "reelle" : "visible"; }, function (v) { st.luminosite = v; modifie("optique obs"); });
     el("span", "bc-pousse", L1);
     var CA = K.cahier({ fichier: "cahier-michelson.csv", lire: function () { return st.cahier; }, ecrire: function (L) { st.cahier = L; K.modifie(); } });
     var bProf = K.boutonsFin(L1, { cahier: CA, gestes: function () { return GESTES; },
-      prof: { lab: "Prof", f: function () { PR.panneau.basculer(); }, visible: K.estProf(), a3: "<b>Mode prof</b> — valeurs cachées, configurations types, projection, réglage à transmettre" } }).prof;
+      prof: { lab: TRAD("Prof"), f: function () { PR.panneau.basculer(); }, visible: K.estProf(), a3: TRAD("<b>Mode prof</b> — valeurs cachées, configurations types, projection, réglage à transmettre") } }).prof;
 
     // ----- ligne des gestes : ce que font la souris et le clavier sur ce que survole le pointeur -----
     var PT = null;      // dernier point du pointeur sur le dessin : zones sans élément (chariot, lames)
     D.addEventListener("mousemove", function (ev) { PT = K.ptSvg(ev); });
-    var VIS_FINE = "glisser : la faire rouler (Maj : dix fois plus fin · Ctrl+Maj : cent fois) · molette : 1/40 de tour par cran (Maj 1/400 · Ctrl+Maj 1/4000 · Ctrl 1/4)";
+    var VIS_FINE = TRAD("glisser : la faire rouler (Maj : dix fois plus fin · Ctrl+Maj : cent fois) · molette : 1/40 de tour par cran (Maj 1/400 · Ctrl+Maj 1/4000 · Ctrl 1/4)");
     var TXT_VIS = {
-      C3: "<b>C₃</b>, vis micrométrique du chariot de M₂ — glisser : la faire rouler (lancée, elle tourne plus vite ; tout doucement, moins vite que la main · Maj : dix fois plus fin · Ctrl+Maj : cent fois) · molette : une division (10 µm) par cran, Maj 1 µm, Ctrl+Maj 0,1 µm, Ctrl 0,1 mm · lecture : loupe sous l'image",
-      C1: "<b>C₁</b>, vis d'inclinaison de M₂, grossière — glisser : la faire rouler (lancée, elle tourne plus vite) · molette : 1/40 de tour par cran (Ctrl : un tour, pour amener vite les taches l'une sur l'autre) · on affine avec A₁, A₂",
-      A1: "<b>A₁</b>, vis d'inclinaison de M₁, fine — " + VIS_FINE,
-      B1: "<b>B₁</b>, vis de la compensatrice : l'oriente — " + VIS_FINE,
-      B2: "<b>B₂</b>, vis de la compensatrice : règle son excentricité — " + VIS_FINE
+      C3: TRAD("<b>C₃</b>, vis micrométrique du chariot de M₂ — glisser : la faire rouler (lancée, elle tourne plus vite ; tout doucement, moins vite que la main · Maj : dix fois plus fin · Ctrl+Maj : cent fois) · molette : une division (10 µm) par cran, Maj 1 µm, Ctrl+Maj 0,1 µm, Ctrl 0,1 mm · lecture : loupe sous l'image"),
+      C1: TRAD("<b>C₁</b>, vis d'inclinaison de M₂, grossière — glisser : la faire rouler (lancée, elle tourne plus vite) · molette : 1/40 de tour par cran (Ctrl : un tour, pour amener vite les taches l'une sur l'autre) · on affine avec A₁, A₂"),
+      A1: TRAD("<b>A₁</b>, vis d'inclinaison de M₁, fine — {0}", [VIS_FINE]),
+      B1: TRAD("<b>B₁</b>, vis de la compensatrice : l'oriente — {0}", [VIS_FINE]),
+      B2: TRAD("<b>B₂</b>, vis de la compensatrice : règle son excentricité — {0}", [VIS_FINE])
     };
     TXT_VIS.C2 = TXT_VIS.C1.replace("C₁", "C₂"); TXT_VIS.A2 = TXT_VIS.A1.replace("A₁", "A₂");
     // Élément des bancs : glisser, molette et flèches dans le sens de l'écran ; la paire de flèches parallèle au
     // banc déplace, l'autre règle la pastille.
     function texteEl(id) {
       var nm = K.esc(nomEl(id)), b = bancDe(id), R2 = reglage(id);
-      if (id === "comp") return "<b>Compensatrice</b> — clic : la choisir (au bandeau, « Régler la compensatrice ») · B₁ l'oriente, B₂ règle son excentricité";
-      if (id === "feuille") return "<b>Feuille</b> sur " + (st.feuille === "M1" ? "M₁" : "M₂") + " — elle cache ce miroir · clic : la choisir (bandeau : sur M₁ · sur M₂, Retirer) · glisser hors du miroir, " + k_("Suppr") + " : la retirer · sa vue : pastille « Feuille » au-dessus de l'image";
-      if (id === "lamelle") return "<b>Lamelle</b> — glisser : son bord le long du miroir · clic : la choisir (bandeau : miroir, épaisseur au palmer, Retirer) · " + k_("Suppr") + " : la retirer";
+      if (id === "comp") return TRAD("<b>Compensatrice</b> — clic : la choisir (au bandeau, « Régler la compensatrice ») · B₁ l'oriente, B₂ règle son excentricité");
+      if (id === "feuille") return TRAD("<b>Feuille</b> sur {0} — elle cache ce miroir · clic : la choisir (bandeau : sur M₁ · sur M₂, Retirer) · glisser hors du miroir, {1} : la retirer · sa vue : pastille « Feuille » au-dessus de l'image", [(st.feuille === "M1" ? "M₁" : "M₂"), k_(TRAD("Suppr"))]);
+      if (id === "lamelle") return TRAD("<b>Lamelle</b> — glisser : son bord le long du miroir · clic : la choisir (bandeau : miroir, épaisseur au palmer, Retirer) · {0} : la retirer", [k_(TRAD("Suppr"))]);
       if (!b) return null;
       var dep = b === "ent" ? k_("↑ ↓") : k_("← →"), reg = b === "ent" ? k_("← →") : k_("↑ ↓");
-      var avec = id === "depoli" || id === "iris" ? (porte(st) ? " (avec " + (id === "iris" ? "le dépoli" : "l'iris") + " ; contre la lampe, vers l'appareil : il la quitte, loin de l'appareil : il la pousse)" : " (avec la lanterne)")
-        : id === "lampe" && porte(st) && st.ent.dep == null ? " (avec dépoli et iris, contre elle)" : "";
-      if (sels().length > 1 && estSel(id)) avec += sels().length > 2 ? " — avec les " + (sels().length - 1) + " autres éléments choisis" : " — avec l'autre élément choisi";
-      var sens = b === "ent" ? "molette vers le haut : vers l'appareil" : "molette vers le haut : vers la droite";
-      return "<b>" + nm + "</b> — glisser, molette, " + dep + " : le long du banc" + avec + " (" + sens + " ; 1 mm par cran, Maj 0,1 · Ctrl+Maj 0,01 · Ctrl 1 cm)" +
-        (R2 && R2.lab !== "position" && R2.lab.indexOf("position") ? " · " + reg + " : " + R2.lab : "") +
-        " · clic droit : " + (id === "lampe" || id === "det" ? "remplacer, position" : "position, retirer") + (id === "det" && st.det === "oeil" ? " · l'accommoder, le déplacer de côté : sur l'image" : "");
+      var avec = id === "depoli" || id === "iris" ? (porte(st) ? TRAD(" (avec {0} ; contre la lampe, vers l'appareil : il la quitte, loin de l'appareil : il la pousse)", [id === "iris" ? TRAD("le dépoli") : TRAD("l'iris")]) : TRAD(" (avec la lanterne)"))
+        : id === "lampe" && porte(st) && st.ent.dep == null ? TRAD(" (avec dépoli et iris, contre elle)") : "";
+      if (sels().length > 1 && estSel(id)) avec += sels().length > 2 ? TRAD(" — avec les {0} autres éléments choisis", [sels().length - 1]) : TRAD(" — avec l'autre élément choisi");
+      var sens = b === "ent" ? TRAD("molette vers le haut : vers l'appareil") : TRAD("molette vers le haut : vers la droite");
+      return TRAD("<b>{0}</b> — glisser, molette, {1} : le long du banc{2} ({3} ; 1 mm par cran, Maj 0,1 · Ctrl+Maj 0,01 · Ctrl 1 cm)", [nm, dep, avec, sens]) +
+        (R2 && R2.lab !== "position" && R2.lab.indexOf("position") ? TRAD(" · {0} : {1}", [reg, R2.lab]) : "") +
+        TRAD(" · clic droit : {0}", [id === "lampe" || id === "det" ? TRAD("remplacer, position") : TRAD("position, retirer")]) + (id === "det" && st.det === "oeil" ? TRAD(" · l'accommoder, le déplacer de côté : sur l'image") : "");
     }
     function textePast(id) {
       var R2 = reglage(id), nm = K.esc(nomEl(id));
-      return R2 ? "Pastille de <b>" + nm + "</b> — molette ou glisser vertical : " + R2.lab + " (" + k_("Maj") + " fin · " + k_("Ctrl") + " gros) · clic : le choisir"
-        : "Pastille de <b>" + nm + "</b> — clic : le choisir" + (id === "lampe" ? " (au bandeau : changer de lampe)" : "") + " · pas de réglage";
+      return R2 ? TRAD("Pastille de <b>{0}</b> — molette ou glisser vertical : {1} ({2} fin · {3} gros) · clic : le choisir", [nm, R2.lab, k_(TRAD("Maj")), k_("Ctrl")])
+        : TRAD("Pastille de <b>{0}</b> — clic : le choisir{1} · pas de réglage", [nm, (id === "lampe" ? TRAD(" (au bandeau : changer de lampe)") : "")]);
     }
     function survolDessin(t) {
       var v = t.closest("[data-vis]"); if (v) return TXT_VIS[v.getAttribute("data-vis")];
       var pa = t.closest("[data-past]"); if (pa) return textePast(pa.getAttribute("data-past"));
       var e = t.closest("[data-el]"), s = e && texteEl(e.getAttribute("data-el")); if (s) return s;
       var mi = t.closest("[data-mir]");
-      if (mi) return "<b>Miroir " + (mi.getAttribute("data-mir") === "M1" ? "M₁</b> (fixe)" : "M₂</b> (sur le chariot ; molette : C₃)") + " — clic droit : poser ou retirer la feuille, la lamelle";
+      if (mi) return mi.getAttribute("data-mir") === "M1" ? TRAD("<b>Miroir {0}</b> (fixe) — clic droit : poser ou retirer la feuille, la lamelle", ["M₁"])
+        : TRAD("<b>Miroir {0}</b> (sur le chariot ; molette : C₃) — clic droit : poser ou retirer la feuille, la lamelle", ["M₂"]);
       var bc = t.closest("[data-banc]");
-      if (bc) return "<b>Banc " + (bc.getAttribute("data-banc") === "ent" ? "d'entrée</b> (vertical : lampe en bas, appareil en haut)" : "de sortie</b> (horizontal : appareil à gauche)") + " — clic : plus rien de choisi · clic droit : poser ici";
+      if (bc) return bc.getAttribute("data-banc") === "ent" ? TRAD("<b>Banc d'entrée</b> (vertical : lampe en bas, appareil en haut) — clic : plus rien de choisi · clic droit : poser ici")
+        : TRAD("<b>Banc de sortie</b> (horizontal : appareil à gauche) — clic : plus rien de choisi · clic droit : poser ici");
       var p = PT;
       if (p) {
-        if (Math.abs(p.x) < 34 && p.y > -285 && p.y < posM2() + 4) return "<b>Chariot de M₂</b> — molette : comme C₃, une division (10 µm) par cran (Maj 1 µm · Ctrl+Maj 0,1 µm · Ctrl 0,1 mm)";
+        if (Math.abs(p.x) < 34 && p.y > -285 && p.y < posM2() + 4) return TRAD("<b>Chariot de M₂</b> — molette : comme C₃, une division (10 µm) par cran (Maj 1 µm · Ctrl+Maj 0,1 µm · Ctrl 0,1 mm)");
         if (Math.abs(p.y - p.x - 16) / Math.SQRT2 < 5 && Math.abs(p.x + 8) < 24 || (p.x > -42 && p.x < -18 && p.y > 20 && p.y < 36))
           return texteEl("comp");
-        if (Math.abs(p.y - p.x) / Math.SQRT2 < 4 && Math.abs(p.x) < 22) return "<b>Séparatrice</b> — fixe";
+        if (Math.abs(p.y - p.x) / Math.SQRT2 < 4 && Math.abs(p.x) < 22) return TRAD("<b>Séparatrice</b> — fixe");
       }
-      return "<b>Michelson</b> vu de dessus — clic : plus rien de choisi · vis : glisser ou molette · éléments des bancs : clic pour les choisir, glisser ou molette le long du banc · " + k_("?") + " : tous les gestes";
+      return TRAD("<b>Michelson</b> vu de dessus — clic : plus rien de choisi · vis : glisser ou molette · éléments des bancs : clic pour les choisir, glisser ou molette le long du banc · {0} : tous les gestes", [k_("?")]);
     }
     function survolImage(t) {
       var c = st.capteur, v = vue(st);
-      if (t.closest(".pl-capteur-t") && c) return "<b>" + { barrette: "Barrette CCD", photodiode: "Photodiode", fibre: "Fibre du spectromètre" }[c.type] +
-        "</b> — glisser : la déplacer sur l'écran" + (c.type === "barrette" ? " · molette : la tourner, 5° par cran (Maj 1° · Ctrl+Maj 0,1° · Ctrl 15°)" : "");
-      if (laserOeil()) return "<b>Laser</b> — ne jamais le regarder, même à travers l'appareil : observer sur l'écran";
-      if (v === "oeil") return "<b>Image à l'œil</b> — glisser : déplacer l'œil (Maj : fin · Ctrl+Maj : ultrafin) · molette (« À la main ») : accommoder, vers le haut = plus loin (Maj : fin · Ctrl+Maj : ultrafin · Ctrl : gros) · double-clic : œil recentré · " + k_("← → ↑ ↓") + " : déplacer l'œil";
-      if (v === "ecran") return "<b>Image sur l'écran</b> — " + (c ? "glisser le capteur : le déplacer · " : "") + "Mesurer ▾ : y poser une barrette, une photodiode, la fibre d'un spectromètre";
-      if (v === "iris") return "<b>Face de l'iris</b>, côté appareil — au centre, le trou ; autour, sur ses lames, la lumière renvoyée par les miroirs";
-      return "<b>Feuille</b> — elle cache son miroir : un seul faisceau revient vers la sortie";
+      if (t.closest(".pl-capteur-t") && c) return TRAD("<b>{0}</b> — glisser : la déplacer sur l'écran{1}", [{ barrette: TRAD("Barrette CCD"), photodiode: "Photodiode", fibre: TRAD("Fibre du spectromètre") }[c.type],
+        (c.type === "barrette" ? TRAD(" · molette : la tourner, 5° par cran (Maj 1° · Ctrl+Maj 0,1° · Ctrl 15°)") : "")]);
+      if (laserOeil()) return TRAD("<b>Laser</b> — ne jamais le regarder, même à travers l'appareil : observer sur l'écran");
+      if (v === "oeil") return TRAD("<b>Image à l'œil</b> — glisser : déplacer l'œil (Maj : fin · Ctrl+Maj : ultrafin) · molette (« À la main ») : accommoder, vers le haut = plus loin (Maj : fin · Ctrl+Maj : ultrafin · Ctrl : gros) · double-clic : œil recentré · {0} : déplacer l'œil", [k_("← → ↑ ↓")]);
+      if (v === "ecran") return TRAD("<b>Image sur l'écran</b> — {0}Mesurer ▾ : y poser une barrette, une photodiode, la fibre d'un spectromètre", [(c ? TRAD("glisser le capteur : le déplacer · ") : "")]);
+      if (v === "iris") return TRAD("<b>Face de l'iris</b>, côté appareil — au centre, le trou ; autour, sur ses lames, la lumière renvoyée par les miroirs");
+      return TRAD("<b>Feuille</b> — elle cache son miroir : un seul faisceau revient vers la sortie");
     }
     function survol(t) {
       if (D.contains(t)) return survolDessin(t);
       if (cvWrap.contains(t)) return survolImage(t);
-      if (t === CAP.cv) return "<b>Graphe du capteur</b> — pointeur : lire une abscisse · molette : resserrer ou élargir la fenêtre";
+      if (t === CAP.cv) return TRAD("<b>Graphe du capteur</b> — pointeur : lire une abscisse · molette : resserrer ou élargir la fenêtre");
       var et = t.closest(".pl-et[data-etape]");
       if (et) { var d = ETAPES.filter(function (x) { return x.id === et.getAttribute("data-etape"); })[0];
-        if (d) return "<b>" + K.esc(d.nom) + "</b> — coché quand " + K.esc(d.titre || "") + " · clic : les indices visent ce réglage ; un second clic : choix automatique"; }
+        if (d) return TRAD("<b>{0}</b> — coché quand {1} · clic : les indices visent ce réglage ; un second clic : choix automatique", [K.esc(d.nom), K.esc(d.titre || "")]); }
       return null;
     }
     K.gestes({ survol: survol, suivre: function (t) { return D.contains(t); }, defaut: function () {
       if (st.sel && present(st.sel)) return texteEl(st.sel);
-      return "<b>Michelson</b> — rien de choisi : cliquer un élément d'un banc pour le régler (" + k_("Tab") + " : l'un après l'autre)" + (oeilActif() ? " · " + k_("← → ↑ ↓") + " : déplacer l'œil" : "") +
-        " · survoler un organe : ses gestes · " + k_("?") + " : tous les gestes et raccourcis · " + k_("Ctrl+Z") + " : annuler";
+      return TRAD("<b>Michelson</b> — rien de choisi : cliquer un élément d'un banc pour le régler ({0} : l'un après l'autre){1} · survoler un organe : ses gestes · {2} : tous les gestes et raccourcis · {3} : annuler",
+        [k_("Tab"), (oeilActif() ? TRAD(" · {0} : déplacer l'œil", [k_("← → ↑ ↓")]) : ""), k_("?"), k_(TRAD("Ctrl+Z"))]);
     } });
-    LP.setAttribute("data-a3", "<b>Loupe sur C₃</b> — manchon en mm et demi-mm, tambour de 50 divisions (un tour = 0,5 mm) : lire, taper la lecture, puis « Vérifier ma lecture »");
-    K.lecture.setAttribute("data-a3", "<b>Lecture de C₃</b> — taper la lecture en mm (ex. 7,385), puis Entrée ou « Vérifier ma lecture » : jamais la valeur, seulement l'écart");
+    LP.setAttribute("data-a3", TRAD("<b>Loupe sur C₃</b> — manchon en mm et demi-mm, tambour de 50 divisions (un tour = 0,5 mm) : lire, taper la lecture, puis « Vérifier ma lecture »"));
+    K.lecture.setAttribute("data-a3", TRAD("<b>Lecture de C₃</b> — taper la lecture en mm (ex. 7,385), puis Entrée ou « Vérifier ma lecture » : jamais la valeur, seulement l'écart"));
     // Panneau « ? » (bouton et touche), rangé par zone : les mêmes textes que la ligne des gestes.
     var GESTES = {
-      "Appareil": [["vis : glisser", "la faire rouler (Maj : dix fois plus fin · Ctrl+Maj : cent fois) ; C₁, C₂ grossières, sans Maj (lancées, elles tournent plus vite), A₁, A₂ fines"],
-        ["vis : molette", "1/40 de tour par cran (Maj 1/400 · Ctrl+Maj 1/4000 · Ctrl 1/4) (C₁, C₂ : Ctrl = un tour) ; C₃ et tout le chariot : une division (10 µm), Maj 1 µm, Ctrl+Maj 0,1 µm, Ctrl 0,1 mm"],
-        ["lamelle", "glisser : son bord le long du miroir"], ["clic sur la compensatrice", "la choisir ; au bandeau, « Régler la compensatrice » : mise parallèle à la séparatrice, l'étape 1 sautée"],
-        ["clic droit sur M₁, M₂", "poser ou retirer la feuille, la lamelle"], ["clic ailleurs sur l'appareil, sur une vis", "plus rien de choisi"]],
-      "Bancs": [["clic", "choisir l'élément (cavalier doré, bandeau sous les bancs) ; sur le fond : plus rien de choisi"],
-        ["glisser un élément", "le long de son banc (la lampe emporte dépoli et iris ; Maj : dix fois plus fin) ; lâché hors du banc, il reste au bout du banc"],
-        ["molette sur un élément", "1 mm par cran (Maj 0,1 mm · Ctrl+Maj 0,01 mm · Ctrl 1 cm), dans le sens de l'écran : entrée, vers le haut = vers l'appareil ; sortie, vers le haut = vers la droite"],
-        ["pastille", "molette ou glisser vertical : son réglage (iris : diamètre ; lanterne : tirage du condenseur ; lentilles, écran : position ; œil : accommodation ; Maj : fin · Ctrl : gros) ; clic : choisir l'élément"],
-        ["bandeau", "◂ ▸ : déplacer ; clic sur la position : la taper, en cm ; lampe, détecteur : en changer ; Retirer"],
-        ["clic droit", "sur un élément : Remplacer par, Position…, Retirer ; sur un banc : Poser ici"],
-        ["Faisceau", "la lumière à l'échelle des bancs"]],
-      "Étagère": [["carte : clic", "poser ou retirer l'élément (un seul de chaque ; carte surlignée : posé) ; une source remplace la source, l'écran et l'œil se remplacent ; feuille, lamelle : posées sur M₂ (au bandeau : sur M₁ · sur M₂)"],
-        ["carte : glisser", "sur son banc : la poser où on la lâche (une source sur le banc d'entrée : remplace la lampe) ; feuille, lamelle : sur un miroir ; ailleurs : rien"],
-        ["onglets", "Sources · Entrée · Sortie · Accessoires"], ["clic droit sur une lentille", "Remplacer par l'autre lentille du banc (même position)"]],
-      "Image": [["vues", "pastilles au-dessus de l'image : le détecteur, la face de l'iris, la feuille"], ["à l'œil : glisser", "déplacer l'œil (Maj : fin · Ctrl+Maj : ultrafin)"],
-        ["à l'œil : sous l'image", "« À l'infini » ou « Sur les miroirs » : l'œil accommode seul sur ce plan ; « À la main » : curseur"],
-        ["à l'œil : molette", "« À la main » seulement : accommoder, vers le haut = plus loin (Maj : fin · Ctrl+Maj : ultrafin · Ctrl : gros)"], ["à l'œil : double-clic", "œil recentré"],
-        ["Mesurer ▾", "sur l'écran : barrette, photodiode, fibre ; glisser le capteur : le déplacer ; molette sur la barrette : la tourner ; × de la fenêtre Capteur : retirer le capteur"],
-        ["graphe du capteur", "molette : resserrer ou élargir la fenêtre ; « Capteur réel » : barrette de 2,9 cm, spectromètre de 1,5 nm (le parfait est plus long, et sépare le doublet du sodium)"], ["loupe de C₃", "lire le manchon et le tambour, taper la lecture, « Vérifier ma lecture »"],
-        ["étapes", "clic : les indices visent cette étape ; un second clic : choix automatique"], ["Un indice", "ce qu'il faut regarder, et pourquoi ; un second clic : l'organe et le sens du geste ; jamais de valeur"]],
-      "Clavier": [["↑ ↓ (entrée)", "déplacer l'élément choisi (↑ = vers l'appareil) ; ← → : son réglage (→ = comme la molette vers le haut)"],
-        ["← → (sortie)", "déplacer l'élément choisi (→ = loin de l'appareil) ; ↑ ↓ : son réglage"],
-        ["flèches, rien de choisi", "à l'œil : déplacer l'œil (Maj : fin), même pendant la molette sur A₁, A₂"],
-        ["Tab, Maj+Tab", "l'élément suivant, précédent, dans l'ordre de la lumière"], ["Suppr", "retirer l'élément choisi (ni la lampe, ni le détecteur)"],
-        ["F", "aide « Faisceau »"], ["?", "ce panneau"], ["Échap", "fermer ce panneau ou un menu, puis plus rien de choisi"], ["Ctrl+Z, Ctrl+Maj+Z", "annuler, rétablir (un glisser ou un tour de molette d'un coup ; le cahier n'est jamais annulé)"]]
+      [TRAD("Appareil")]: [[TRAD("vis : glisser"), TRAD("la faire rouler (Maj : dix fois plus fin · Ctrl+Maj : cent fois) ; C₁, C₂ grossières, sans Maj (lancées, elles tournent plus vite), A₁, A₂ fines")],
+        [TRAD("vis : molette"), TRAD("1/40 de tour par cran (Maj 1/400 · Ctrl+Maj 1/4000 · Ctrl 1/4) (C₁, C₂ : Ctrl = un tour) ; C₃ et tout le chariot : une division (10 µm), Maj 1 µm, Ctrl+Maj 0,1 µm, Ctrl 0,1 mm")],
+        [TRAD("lamelle"), TRAD("glisser : son bord le long du miroir")], [TRAD("clic sur la compensatrice"), TRAD("la choisir ; au bandeau, « Régler la compensatrice » : mise parallèle à la séparatrice, l'étape 1 sautée")],
+        [TRAD("clic droit sur M₁, M₂"), TRAD("poser ou retirer la feuille, la lamelle")], [TRAD("clic ailleurs sur l'appareil, sur une vis"), TRAD("plus rien de choisi")]],
+      [TRAD("Bancs")]: [[TRAD("clic"), TRAD("choisir l'élément (cavalier doré, bandeau sous les bancs) ; sur le fond : plus rien de choisi")],
+        [TRAD("glisser un élément"), TRAD("le long de son banc (la lampe emporte dépoli et iris ; Maj : dix fois plus fin) ; lâché hors du banc, il reste au bout du banc")],
+        [TRAD("molette sur un élément"), TRAD("1 mm par cran (Maj 0,1 mm · Ctrl+Maj 0,01 mm · Ctrl 1 cm), dans le sens de l'écran : entrée, vers le haut = vers l'appareil ; sortie, vers le haut = vers la droite")],
+        [TRAD("pastille"), TRAD("molette ou glisser vertical : son réglage (iris : diamètre ; lanterne : tirage du condenseur ; lentilles, écran : position ; œil : accommodation ; Maj : fin · Ctrl : gros) ; clic : choisir l'élément")],
+        [TRAD("bandeau"), TRAD("◂ ▸ : déplacer ; clic sur la position : la taper, en cm ; lampe, détecteur : en changer ; Retirer")],
+        [TRAD("clic droit"), TRAD("sur un élément : Remplacer par, Position…, Retirer ; sur un banc : Poser ici")],
+        [TRAD("Faisceau"), TRAD("la lumière à l'échelle des bancs")]],
+      [TRAD("Étagère")]: [[TRAD("carte : clic"), TRAD("poser ou retirer l'élément (un seul de chaque ; carte surlignée : posé) ; une source remplace la source, l'écran et l'œil se remplacent ; feuille, lamelle : posées sur M₂ (au bandeau : sur M₁ · sur M₂)")],
+        [TRAD("carte : glisser"), TRAD("sur son banc : la poser où on la lâche (une source sur le banc d'entrée : remplace la lampe) ; feuille, lamelle : sur un miroir ; ailleurs : rien")],
+        [TRAD("onglets"), TRAD("Sources · Entrée · Sortie · Accessoires")], [TRAD("clic droit sur une lentille"), TRAD("Remplacer par l'autre lentille du banc (même position)")]],
+      [TRAD("Image")]: [[TRAD("vues"), TRAD("pastilles au-dessus de l'image : le détecteur, la face de l'iris, la feuille")], [TRAD("à l'œil : glisser"), TRAD("déplacer l'œil (Maj : fin · Ctrl+Maj : ultrafin)")],
+        [TRAD("à l'œil : sous l'image"), TRAD("« À l'infini » ou « Sur les miroirs » : l'œil accommode seul sur ce plan ; « À la main » : curseur")],
+        [TRAD("à l'œil : molette"), TRAD("« À la main » seulement : accommoder, vers le haut = plus loin (Maj : fin · Ctrl+Maj : ultrafin · Ctrl : gros)")], [TRAD("à l'œil : double-clic"), TRAD("œil recentré")],
+        [TRAD("Mesurer ▾"), TRAD("sur l'écran : barrette, photodiode, fibre ; glisser le capteur : le déplacer ; molette sur la barrette : la tourner ; × de la fenêtre Capteur : retirer le capteur")],
+        [TRAD("graphe du capteur"), TRAD("molette : resserrer ou élargir la fenêtre ; « Capteur réel » : barrette de 2,9 cm, spectromètre de 1,5 nm (le parfait est plus long, et sépare le doublet du sodium)")], [TRAD("loupe de C₃"), TRAD("lire le manchon et le tambour, taper la lecture, « Vérifier ma lecture »")],
+        [TRAD("étapes"), TRAD("clic : les indices visent cette étape ; un second clic : choix automatique")], [TRAD("Un indice"), TRAD("ce qu'il faut regarder, et pourquoi ; un second clic : l'organe et le sens du geste ; jamais de valeur")]],
+      [TRAD("Clavier")]: [[TRAD("↑ ↓ (entrée)"), TRAD("déplacer l'élément choisi (↑ = vers l'appareil) ; ← → : son réglage (→ = comme la molette vers le haut)")],
+        [TRAD("← → (sortie)"), TRAD("déplacer l'élément choisi (→ = loin de l'appareil) ; ↑ ↓ : son réglage")],
+        [TRAD("flèches, rien de choisi"), TRAD("à l'œil : déplacer l'œil (Maj : fin), même pendant la molette sur A₁, A₂")],
+        [TRAD("Tab, Maj+Tab"), TRAD("l'élément suivant, précédent, dans l'ordre de la lumière")], [TRAD("Suppr"), TRAD("retirer l'élément choisi (ni la lampe, ni le détecteur)")],
+        ["F", TRAD("aide « Faisceau »")], ["?", TRAD("ce panneau")], [TRAD("Échap"), TRAD("fermer ce panneau ou un menu, puis plus rien de choisi")], [TRAD("Ctrl+Z, Ctrl+Maj+Z"), TRAD("annuler, rétablir (un glisser ou un tour de molette d'un coup ; le cahier n'est jamais annulé)")]]
     };
     // Touches F (faisceau) et ? (panneau), où qu'en soit le focus, sauf dans un champ.
     function toucheBandeau(ev) {
@@ -3380,7 +3404,7 @@
     function montrerAide() {
       K.aide.innerHTML = "";
       if (!aideIndice) return;
-      el("b", "", K.aide, "Indice : ");
+      el("b", "", K.aide, TRAD("Indice : "));
       K.aide.appendChild(document.createTextNode(aideIndice.t1));
       if (aideIndice.niveau === 2 && aideIndice.t2) { K.aide.appendChild(document.createTextNode(" ")); el("span", "pl-ind2", K.aide).textContent = aideIndice.t2; }
     }
@@ -3394,18 +3418,18 @@
     // aussi au choix automatique quand elle est soignée (atteinte, pour une étape sans niveau « soigné »).
     var RE = K.etapes(ETAPES, function (id) {
       st.vise = st.vise === id ? null : id;
-      aideIndice = null; montrerAide(); bInd.innerHTML = "Un indice";
+      aideIndice = null; montrerAide(); bInd.innerHTML = TRAD("Un indice");
       majEtapes(); K.modifie();
     }), dernier = null;
     // Manipulations (panneau de la coque, bouton au bout de la rangée) : la manipulation ouverte est celle que visent les
     // indices (st.vise) ; constats dans st.etapes ; situations à poser au mode prof.
     var MP = K.manipulations(MANIPS, { choisir: function (id) {
         st.vise = st.vise === id ? null : id;
-        aideIndice = null; montrerAide(); bInd.innerHTML = "Un indice";
+        aideIndice = null; montrerAide(); bInd.innerHTML = TRAD("Un indice");
         majEtapes(); K.modifie();
       },
-      intro: "Ce qu'un Michelson réglé permet de voir, dans l'ordre qu'on veut. Ouvrir une manipulation : « Un indice » aide alors sur elle. La case se coche quand on a vu le phénomène.",
-      a3: "<b>Manipulations</b> — ce que montre un Michelson, un phénomène à la fois : ce qu'on observe, comment faire ; la case se coche quand on l'a vu" });
+      intro: TRAD("Ce qu'un Michelson réglé permet de voir, dans l'ordre qu'on veut. Ouvrir une manipulation : « Un indice » aide alors sur elle. La case se coche quand on a vu le phénomène."),
+      a3: TRAD("<b>Manipulations</b> — ce que montre un Michelson, un phénomène à la fois : ce qu'on observe, comment faire ; la case se coche quand on l'a vu") });
     function majEtapes() {
       RE.maj(st.etapes, cible(st.etapes, st.vise), st.vise);
       var vus = {}; MANIPS.forEach(function (x) { vus[x.id] = atteinte(st.etapes[x.id]); });
@@ -3436,8 +3460,8 @@
       var fini = st.vise && ETAPES.some(function (d) { return d.id === st.vise && (d.soin ? st.etapes[d.id] === "soignee" : atteinte(st.etapes[d.id])); });
       if (fini) st.vise = null;
       if (neuf.length || soin.length || vus.length) {
-        annoncer([neuf.length ? "Réglage atteint : " + neuf.join(", ") + "." : "", soin.length ? "Réglage soigné : " + soin.join(", ") + "." : "",
-          vus.length ? "Manipulation : " + vus.join(", ") + "." : ""].filter(Boolean).join(" "));
+        annoncer([neuf.length ? TRAD("Réglage atteint : {0}.", [neuf.join(", ")]) : "", soin.length ? TRAD("Réglage soigné : {0}.", [soin.join(", ")]) : "",
+          vus.length ? TRAD("Manipulation : {0}.", [vus.join(", ")]) : ""].filter(Boolean).join(" "));
         K.modifie();
       }
       majEtapes();
@@ -3460,29 +3484,29 @@
       aideIndice = { cle: I.cle, t1: I.t1, t2: I.t2, niveau: n };
       if (tAnnonce) { clearTimeout(tAnnonce); tAnnonce = null; }
       montrerAide();
-      bInd.innerHTML = n === 1 && I.t2 ? "Préciser l'indice" : "Un indice";
+      bInd.innerHTML = n === 1 && I.t2 ? TRAD("Préciser l'indice") : TRAD("Un indice");
     }
-    var bInd = K.bouton(K.aide.parentNode, "Un indice", donnerIndice, "pl-btn-ind");
+    var bInd = K.bouton(K.aide.parentNode, TRAD("Un indice"), donnerIndice, "pl-btn-ind");
     K.aide.parentNode.insertBefore(bInd, K.aide);        // en tête de la ligne, devant son texte
-    bInd.setAttribute("data-a3", "<b>Un indice</b> — ce qu'il faut regarder, et pourquoi, d'après ce qu'on voit ; un second clic : l'organe et le sens du geste · jamais de valeur");
-    var bNouv = K.bouton(A, "Nouveau dérèglement", function () {
+    bInd.setAttribute("data-a3", TRAD("<b>Un indice</b> — ce qu'il faut regarder, et pourquoi, d'après ce qu'on voit ; un second clic : l'organe et le sens du geste · jamais de valeur"));
+    var bNouv = K.bouton(A, TRAD("Nouveau dérèglement"), function () {
       if (!bNouv.classList.contains("confirme")) {
-        bNouv.classList.add("confirme"); bNouv.innerHTML = "Confirmer : l'appareil et les étapes repartent de zéro";
-        setTimeout(function () { bNouv.classList.remove("confirme"); bNouv.innerHTML = "Nouveau dérèglement"; }, 3500);
+        bNouv.classList.add("confirme"); bNouv.innerHTML = TRAD("Confirmer : l'appareil et les étapes repartent de zéro");
+        setTimeout(function () { bNouv.classList.remove("confirme"); bNouv.innerHTML = TRAD("Nouveau dérèglement"); }, 3500);
         return;
       }
-      bNouv.classList.remove("confirme"); bNouv.innerHTML = "Nouveau dérèglement";
+      bNouv.classList.remove("confirme"); bNouv.innerHTML = TRAD("Nouveau dérèglement");
       nouveau(1 + Math.floor(Math.random() * 99998));
     });
-    bNouv.setAttribute("data-a3", "<b>Nouveau dérèglement</b> — un autre appareil à régler (deux clics : on confirme) ; le cahier de mesures est gardé");
+    bNouv.setAttribute("data-a3", TRAD("<b>Nouveau dérèglement</b> — un autre appareil à régler (deux clics : on confirme) ; le cahier de mesures est gardé"));
     var gr = el("span", "pl-graine", A);
     function dessinerGraine() {
       gr.innerHTML = "";
-      var b = el("button", "pl-graine-b", gr, "n° " + st.graine); b.type = "button";
-      b.setAttribute("data-a3", "<b>Numéro du dérèglement</b> — à donner au professeur · clic : en taper un autre (Entrée)");
+      var b = el("button", "pl-graine-b", gr, TRAD("n° {0}", [st.graine])); b.type = "button";
+      b.setAttribute("data-a3", TRAD("<b>Numéro du dérèglement</b> — à donner au professeur · clic : en taper un autre (Entrée)"));
       b.addEventListener("click", function () {
         gr.innerHTML = "";
-        var i = el("input", "pl-graine-in", gr); i.type = "text"; i.inputMode = "numeric"; i.value = st.graine; i.setAttribute("aria-label", "Numéro du dérèglement");
+        var i = el("input", "pl-graine-in", gr); i.type = "text"; i.inputMode = "numeric"; i.value = st.graine; i.setAttribute("aria-label", TRAD("Numéro du dérèglement"));
         i.addEventListener("keydown", function (ev) {
           ev.stopPropagation();
           if (ev.key === "Enter") { var n = parseInt(i.value, 10); if (n > 0) nouveau(n); else dessinerGraine(); }
@@ -3495,7 +3519,7 @@
     function nouveau(graine) {
       var cah = st.cahier, lum = st.lumiere, cap = st.capteur, lu = st.luminosite, pu = st.pupille;
       st = etatDepart(graine, false); st.cahier = cah; st.lumiere = lum; st.capteur = cap; st.luminosite = lu; st.pupille = pu; completer();
-      c3Vu = st.C3; c0Prec = null; aideIndice = null; montrerAide(); bInd.innerHTML = "Un indice";
+      c3Vu = st.C3; c0Prec = null; aideIndice = null; montrerAide(); bInd.innerHTML = TRAD("Un indice");
       lecteur.effacer();
       Object.keys(V).forEach(function (k) { V[k].dessiner(); });
       dessinerGraine(); majEtapes();
@@ -3506,23 +3530,23 @@
     dessinerGraine(); majEtapes();
 
     // ================= mode prof : valeurs cachées, configurations types =================
-    var PR = { panneau: K.panneau("pl-prof", "Mode prof : valeurs cachées", { coin: "bas-droite" }) };
+    var PR = { panneau: K.panneau("pl-prof", TRAD("Mode prof : valeurs cachées"), { coin: "bas-droite" }) };
     (function () {
       var C = PR.panneau.corps, vals = el("div", "pl-prof-v", C);
-      el("p", "pl-prof-t", C, "Configurations types (le dérèglement caché est gardé) :");
+      el("p", "pl-prof-t", C, TRAD("Configurations types (le dérèglement caché est gardé) :"));
       var cf = el("div", "pl-prof-cf", C);
       CONFIGS.forEach(function (c) {
         if (!c.manip) K.bouton(cf, c.nom, function () { c.f(st); rafraichir(); }, "pl-btn-p");
       });
-      el("p", "pl-prof-t", C, "Situations des manipulations (la manipulation s'ouvre) :");
+      el("p", "pl-prof-t", C, TRAD("Situations des manipulations (la manipulation s'ouvre) :"));
       var cm = el("div", "pl-prof-cf", C);
       CONFIGS.forEach(function (c) {
-        if (c.manip) K.bouton(cm, c.nom, function () { c.f(st); st.vise = c.id; aideIndice = null; montrerAide(); bInd.innerHTML = "Un indice"; rafraichir(); majEtapes(); }, "pl-btn-p");
+        if (c.manip) K.bouton(cm, c.nom, function () { c.f(st); st.vise = c.id; aideIndice = null; montrerAide(); bInd.innerHTML = TRAD("Un indice"); rafraichir(); majEtapes(); }, "pl-btn-p");
       });
       var ef = el("div", "pl-prof-cf", C);
-      K.bouton(ef, "Effacer les étapes", function () { st.etapes = {}; st.anti = []; st.vise = null; majEtapes(); K.modifie(); PR.maj(); }, "pl-btn-p");
+      K.bouton(ef, TRAD("Effacer les étapes"), function () { st.etapes = {}; st.anti = []; st.vise = null; majEtapes(); K.modifie(); PR.maj(); }, "pl-btn-p");
       // qualité pendant les gestes (réglage du poste) et cadence mesurée
-      el("p", "pl-prof-t", C, "Qualité de l'image pendant les gestes (ce poste) :");
+      el("p", "pl-prof-t", C, TRAD("Qualité de l'image pendant les gestes (ce poste) :"));
       var gq = el("div", "pl-prof-cf", C), bq = {};
       Object.keys(GESTE).forEach(function (q) {
         bq[q] = K.bouton(gq, GESTE[q].nom, function () {
@@ -3531,12 +3555,12 @@
           CAD.ips = 0; modifie("optique"); PR.maj();
         }, "pl-btn-p");
         bq[q].setAttribute("aria-pressed", q === gesteQ ? "true" : "false");
-        bq[q].title = GESTE[q].res + " × " + GESTE[q].res + " pixels, points sources × " + fmtNb(GESTE[q].k, 1);
+        bq[q].title = TRAD("{0} × {0} pixels, points sources × {1}", [GESTE[q].res, fmtNb(GESTE[q].k, 1)]);
       });
       // réglage complet (état sans le cahier) en JSON, pour le transmettre tel quel et le recharger ailleurs
       var rg = el("div", "pl-prof-cf", C), zone = null, msg = null;
       function montrerZone(txt) {
-        if (!zone) { zone = el("textarea", "pl-prof-etat", C); zone.spellcheck = false; zone.placeholder = "Coller ici un réglage copié, puis « Charger »."; }
+        if (!zone) { zone = el("textarea", "pl-prof-etat", C); zone.spellcheck = false; zone.placeholder = TRAD("Coller ici un réglage copié, puis « Charger »."); }
         zone.hidden = false; if (txt != null) { zone.value = txt; zone.focus(); zone.select(); } else { zone.value = ""; zone.focus(); }
       }
       var tMsg = null;
@@ -3554,49 +3578,50 @@
         try { o = JSON.parse(t); } catch (e) {}
         if (!o || o.v !== 1 || !o.cache || !o.ent || !o.sor) return false;
         delete o.c3Vu; o.cahier = st.cahier; st = o; completer();
-        c3Vu = st.C3; c0Prec = null; aideIndice = null; montrerAide(); bInd.innerHTML = "Un indice"; lecteur.effacer();
+        c3Vu = st.C3; c0Prec = null; aideIndice = null; montrerAide(); bInd.innerHTML = TRAD("Un indice"); lecteur.effacer();
         Object.keys(V).forEach(function (k) { V[k].dessiner(); });
         dessinerGraine(); majEtapes(); rafraichir(); K.sauverMaintenant(); analyser(); PR.maj();
         if (K.oublierAnnulations) K.oublierAnnulations();
         return true;
       }
       PR.texteEtat = texteEtat; PR.charger = chargerTexte;
-      K.bouton(rg, "Copier le réglage actuel", function () {
+      K.bouton(rg, TRAD("Copier le réglage actuel"), function () {
         var txt = texteEtat();
-        var ok = function () { dire("copié dans le presse-papier"); }, ko = function () { montrerZone(txt); dire("Ctrl+C pour copier"); };
+        var ok = function () { dire(TRAD("copié dans le presse-papier")); }, ko = function () { montrerZone(txt); dire(TRAD("Ctrl+C pour copier")); };
         try { if (root.navigator && root.navigator.clipboard && root.isSecureContext) root.navigator.clipboard.writeText(txt).then(ok, ko); else ko(); } catch (e) { ko(); }
       }, "pl-btn-p");
-      K.bouton(rg, "Coller un réglage…", function () { montrerZone(null); dire(""); }, "pl-btn-p");
-      K.bouton(rg, "Charger", function () {
-        if (!chargerTexte(zone ? zone.value : "")) { dire("réglage illisible"); return; }
-        zone.hidden = true; dire("réglage chargé");
+      K.bouton(rg, TRAD("Coller un réglage…"), function () { montrerZone(null); dire(""); }, "pl-btn-p");
+      K.bouton(rg, TRAD("Charger"), function () {
+        if (!chargerTexte(zone ? zone.value : "")) { dire(TRAD("réglage illisible")); return; }
+        zone.hidden = true; dire(TRAD("réglage chargé"));
       }, "pl-btn-p");
       function f(v, n) { return fmtNb(v, n); }
-      function g3(v) { return v.toPrecision(3).replace(".", ","); }
+      function g3(v) { return nb(v.toPrecision(3)); }
       PR.lignes = function () {
         var e = epaisseur(st), a = inclinaison(st), B = compensatrice(st), v = CO.VERRES[VERRE_LAMELLE], l = 570e-9;
         var n = CO.indice(VERRE_LAMELLE, 570), ng = n + 2 * v.B / (l * l), ep = epLamelle(st), R = dernier, m = R && R.m, G = R && R.G;
         var L = [
-          ["e (lame d'air)", f(e * 1e6, 1) + " µm"],
-          ["α (coin d'air)", f(Math.hypot(a.ax, a.ay) * 1e6, 1) + " µrad  (αx " + f(a.ax * 1e6, 1) + ", αy " + f(a.ay * 1e6, 1) + ")"],
-          ["Compensatrice", "B₁ " + f(B.b1 * 1e3, 2) + " mrad, B₂ " + f(B.b2 * 1e3, 2) + " mrad"],
-          ["Lecture du contact", f(st.cache.Rc, 3) + " mm  (C₃ : " + f(st.C3, 4) + " mm)"],
-          ["Lamelle", "ε " + f(ep * 1e6, 0) + " µm ; (n−1)ε " + f((n - 1) * ep * 1e6, 1) + " µm, (n_g−1)ε " + f((ng - 1) * ep * 1e6, 1) + " µm (D 263 M, 570 nm)"],
-          ["Anticoïncidences vues", st.anti.length ? st.anti.map(function (x) { return f(x, 2); }).join(" ; ") + " mm" : "aucune"]
+          [TRAD("e (lame d'air)"), f(e * 1e6, 1) + " µm"],
+          [TRAD("α (coin d'air)"), f(Math.hypot(a.ax, a.ay) * 1e6, 1) + " µrad  (αx " + f(a.ax * 1e6, 1) + ", αy " + f(a.ay * 1e6, 1) + ")"],
+          [TRAD("Compensatrice"), "B₁ " + f(B.b1 * 1e3, 2) + " mrad, B₂ " + f(B.b2 * 1e3, 2) + " mrad"],
+          [TRAD("Lecture du contact"), TRAD("{0} mm  (C₃ : {1} mm)", [f(st.cache.Rc, 3), f(st.C3, 4)])],
+          [TRAD("Lamelle"), TRAD("ε {0} µm ; (n−1)ε {1} µm, (n_g−1)ε {2} µm (D 263 M, 570 nm)", [f(ep * 1e6, 0), f((n - 1) * ep * 1e6, 1), f((ng - 1) * ep * 1e6, 1)])],
+          [TRAD("Anticoïncidences vues"), st.anti.length ? st.anti.map(function (x) { return f(x, 2); }).join(" ; ") + " mm" : TRAD("aucune")]
         ];
-        if (G) L.push(["Observation", "plan " + G.plan + " (" + (Math.abs(G.zo) < 100 ? f(G.zo * 100, 1) + " cm" : "∞") + ")" + ", entrée " +
-          (G.collimate ? "collimatée" : "non collimatée") + ", θs " + f(G.thetaS * 1e3, 2) + " mrad, 2α " + f(G.sep * 1e3, 2) + ", fantôme " + f(G.fantome * 1e3, 2) + " mrad"]);
-        if (m) L.push(["Mesure du champ", "V " + f(m.V, 2) + " (max " + f(m.Vmax, 2) + "), éclairé " + Math.round(m.part * 100) + " %, " + f(m.nfr, 1) +
-          " franges, courbure " + f(m.quad, 2) + ", circularité " + f(m.ratio, 2) + (m.centreDedans ? ", centre dans le champ" : "")]);
+        if (G) L.push([TRAD("Observation"), TRAD("plan {0} ({1}), entrée {2}, θs {3} mrad, 2α {4}, fantôme {5} mrad", [G.plan, (Math.abs(G.zo) < 100 ? f(G.zo * 100, 1) + " cm" : "∞"),
+          (G.collimate ? TRAD("collimatée") : TRAD("non collimatée")), f(G.thetaS * 1e3, 2), f(G.sep * 1e3, 2), f(G.fantome * 1e3, 2)])]);
+        if (m) L.push([TRAD("Mesure du champ"), TRAD("V {0} (max {1}), éclairé {2} %, {3} franges, courbure {4}, circularité {5}{6}", [f(m.V, 2), f(m.Vmax, 2), Math.round(m.part * 100),
+          f(m.nfr, 1), f(m.quad, 2), f(m.ratio, 2), (m.centreDedans ? TRAD(", centre dans le champ") : "")])]);
         var VS = MOT ? MOT.stats.vision : CPU && CPU.vision, vv = vue(st) === "feuille" ? FEU : VS;
         // le niveau AFFICHÉ est celui de l'œil à cet instant ; la cible entre parenthèses pendant qu'il la rejoint (la
         // feuille et le « toujours visible » restent stationnaires : rien à annoncer)
         var laAff = reelle(st) && vue(st) !== "feuille" && (MOT ? MOT.stats.adaptLa : CPU && CPU.adaptLa);
         var relaxe = reelle(st) && vv && vv === VS && (MOT ? MOT.relax : !!(SUIVI_CPU && VS && SUIVI_CPU.enRelax(VS.La)));
-        L.push(["Œil", (reelle(st) ? "luminosité réelle" : "toujours visible") + (vv ? ", adapté à " + g3(laAff || vv.La) + (relaxe ? " (vers " + g3(vv.La) + ")" : "") + " cd/m², pupille " + f(vv.D, 1) + " mm, le plus clair "
-          + g3(vv.haut) + " cd/m² (seuil " + g3(vv.seuil) + ")" + (vv.visible ? "" : ", trop peu de lumière") : "") + (vue(st) === "oeil" ? ", pupille tracée " + f(pupilleDe(st), 2) + " mm" : "")]);
-        L.push(["Pendant les gestes", GESTE[gesteQ].nom + " (" + GESTE[gesteQ].res + " px)" + (CAD.ips ? ", " + Math.round(CAD.ips) + " images/s au dernier geste" : ", cadence : faire un geste")]);
-        if (R) L.push(["Atteint en ce moment", ETAPES.filter(function (d) { return R.ok[d.id] || R.top[d.id]; }).map(function (d) { return d.nom + (R.top[d.id] ? " ★" : ""); }).join(", ") || "rien"]);
+        L.push([TRAD("Œil"), (reelle(st) ? TRAD("luminosité réelle") : TRAD("toujours visible")) + (vv ? TRAD(", adapté à {0}{1} cd/m², pupille {2} mm, le plus clair {3} cd/m² (seuil {4}){5}",
+          [g3(laAff || vv.La), (relaxe ? TRAD(" (vers {0})", [g3(vv.La)]) : ""), f(vv.D, 1), g3(vv.haut), g3(vv.seuil), (vv.visible ? "" : TRAD(", trop peu de lumière"))]) : "")
+          + (vue(st) === "oeil" ? TRAD(", pupille tracée {0} mm", [f(pupilleDe(st), 2)]) : "")]);
+        L.push([TRAD("Pendant les gestes"), GESTE[gesteQ].nom + " (" + GESTE[gesteQ].res + " px)" + (CAD.ips ? TRAD(", {0} images/s au dernier geste", [Math.round(CAD.ips)]) : TRAD(", cadence : faire un geste"))]);
+        if (R) L.push([TRAD("Atteint en ce moment"), ETAPES.filter(function (d) { return R.ok[d.id] || R.top[d.id]; }).map(function (d) { return d.nom + (R.top[d.id] ? " ★" : ""); }).join(", ") || TRAD("rien")]);
         return L;
       };
       PR.maj = function () {
@@ -3679,7 +3704,7 @@
         if (!o || o.graine !== st.graine) return;
         var k, c3 = c3Vu; for (k in st) if (SANS_ANNULER.indexOf(k) < 0) delete st[k];
         for (k in o) if (SANS_ANNULER.indexOf(k) < 0) st[k] = JSON.parse(JSON.stringify(o[k]));
-        completer(); aideIndice = null; montrerAide(); bInd.innerHTML = "Un indice";
+        completer(); aideIndice = null; montrerAide(); bInd.innerHTML = TRAD("Un indice");
         CAP.nouveau(); rafraichir(); c3Vu = c3; PR.maj();
       },
       reservePied: 176,      // place gardée au pied (texte de l'œil décalé, curseur…) : la taille de l'image, donc la largeur de la colonne, n'en dépend plus

@@ -102,7 +102,7 @@ DOCS = [("modele", "modele.html", "Modèle physique", "modele"),
         ("prise-en-main", "prise-en-main.html", "Prise en main", "prise-en-main")]
 # Figures SVG de la page Modèle (référencées ../schemas/<nom>.svg depuis modele/, vérifiées par verifier_dependances).
 SCHEMAS_SERVIS = ("spectres", "vision-reponse", "ddm-ordre2", "blanc-bandes", "moyenne-pixel",
-                  "pupilles", "etendue-poids", "tirage-rebours")
+                  "pupilles", "etendue-poids", "tirage-rebours", "onde-propagation", "parallaxe")
 # Site indexé (Google) : tout est ouvert sauf l'API (compteur, retours), plan du site déclaré.
 ROBOTS = f"User-agent: *\nAllow: /\nDisallow: /api/\n\nSitemap: {BASE}/sitemap.xml\n"
 

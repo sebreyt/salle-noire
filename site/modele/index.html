@@ -80,7 +80,7 @@
 <figure>
   <img src="../img/modele/anim-passes.webp" alt="Image de la lettre F sur l'écran du banc, affinée passe après passe : aperçu bruité d'abord, puis de plus en plus net jusqu'à l'image finale" width="480" style="max-width:100%; height:auto" loading="lazy">
   <figcaption>Chaque image de cette animation est un rendu complet du moteur (banc en optique réelle, montage
-    « image » de la lettre F, 60 passes fixées, luminosité « toujours visible ») : l'aperçu bruité du geste, puis
+    « image » de la lettre F, 60 passes fixées, œil simulé désactivé) : l'aperçu bruité du geste, puis
     l'image affinée passe après passe à l'arrêt, tenue ensuite sur l'image finale.</figcaption>
 </figure>
 <p><strong>Carte graphique.</strong> Au Michelson et au banc, les calculs pixel par pixel ou rayon par rayon sont
@@ -97,23 +97,24 @@
   <tbody>
     <tr><td>Lanterne halogène</td><td>corps noir à 3200 K</td><td>2,5·10⁷ cd/m²</td></tr>
     <tr><td>Lampe au sodium</td><td>doublet D₁, D₂</td><td>10⁵ cd/m²</td></tr>
-    <tr><td>Lampe à vapeur de mercure</td><td>raies du NIST ; raie verte seule avec le filtre</td><td>2·10⁶ cd/m²</td></tr>
+    <tr><td>Mercure haute pression</td><td>raies du NIST, larges (1 nm à 546 nm) ; raie verte seule avec le filtre</td><td>2·10⁶ cd/m²</td></tr>
+    <tr><td>Mercure basse pression (Michelson)</td><td>mêmes raies, fines (0,002 nm à 546 nm)</td><td>10⁵ cd/m²</td></tr>
     <tr><td>Cadmium, lampe inconnue</td><td>raies du NIST</td><td>10⁵ cd/m²</td></tr>
-    <tr><td>Laser hélium-néon</td><td>632,8 nm</td><td>1 mW</td></tr>
+    <tr><td>Laser hélium-néon ; laser vert (banc)</td><td>632,8 nm ; 532 nm</td><td>1 mW</td></tr>
   </tbody>
 </table>
 <p>Les raies ont une largeur finie, qui règle le brouillage des franges. Une raie est intégrée exactement sur son
   profil ; au Michelson, un spectre continu est découpé en bandes étroites, chacune intégrée exactement ; ailleurs, il
   est échantillonné en longueurs d'onde tirées à chaque passe. Les sources habituelles sont tracées ci-dessous, chaque raie à sa teinte calculée par le moteur.</p>
 <figure>
-  <img src="../schemas/spectres.svg" alt="Les cinq sources du calcul : spectre de chacune (raies à leur teinte calculée, lanterne en corps noir) et luminance en cd/m² ; en bas, contraste des franges selon la différence de marche pour le sodium et le mercure filtré" width="780" style="max-width:100%; height:auto" loading="lazy">
-  <figcaption>Les cinq sources, telles qu’elles entrent dans le calcul : à gauche le spectre (chaque raie à la teinte
+  <img src="../schemas/spectres.svg" alt="Les sources du calcul : spectre de chacune (raies à leur teinte calculée, lanterne en corps noir) et luminance en cd/m² ; en bas, contraste des franges selon la différence de marche pour le sodium et le mercure filtré, en haute et en basse pression" width="780" style="max-width:100%; height:auto" loading="lazy">
+  <figcaption>Les sources habituelles, telles qu’elles entrent dans le calcul : à gauche le spectre (chaque raie à la teinte
     donnée par la conversion couleur du moteur, la lanterne remplie de sa couleur de corps noir 3200 K entre 400 et
     700 nm), à droite la luminance de la partie émettrice (échelle logarithmique ; le laser en puissance de faisceau,
     1 mW = 0,16 lm). En bas, le contraste des franges en fonction de la différence de marche, calculé par le moteur sur
     les mêmes éléments spectraux : le doublet du sodium bat tous les 0,58 mm (ℓ = λ²/Δλ) et ne s’éteint vraiment que
-    vers 29 mm, ses raies étant très fines ; la raie verte filtrée du mercure, plus large (1 nm), éteint les franges
-    dès 0,3 mm.</figcaption>
+    vers 29 mm, ses raies étant très fines ; la raie verte filtrée du mercure haute pression, plus large (1 nm), éteint les
+    franges dès 0,3 mm ; en basse pression (0,002 nm), le contraste reste entier sur toute la course du chariot.</figcaption>
 </figure>
 
 
@@ -173,9 +174,13 @@
   diaphragmes d'un coup, et les raies faibles déjà présentes s'éteindraient. La constante qui va vers le noir est très
   abrégée : l'œil, lui, met plusieurs dizaines de minutes à s'adapter à l'obscurité. Le fondu suit les gestes : la mise
   au point, le déplacement d'une pièce ou de l'œil, la rotation de la lunette ne changent pas la scène, l'œil s'y adapte
-  donc progressivement, y compris pendant le geste. Refaire le montage, en revanche — autre lampe, autre filtre, autre
-  objet posé, autre mode d'affichage — pose le niveau d'un coup, sans fondu. Le halo ne fond pas, lui : la diffusion
-  dans l'œil est là dès que la source y entre, ce n'est pas de l'adaptation.</p>
+  donc progressivement, y compris pendant le geste. Poser ou retirer un dépoli, glisser une densité, changer de lampe
+  fondent de la même façon, au banc comme au Michelson : la lumière arrive à l'œil comme celle d'un réglage, puisque
+  c'est en regardant l'écran qu'on la fait, et c'est souvent la variation qu'on veut voir. N'ancrent le niveau, sans
+  fondu, que ce qui vient d'ailleurs — charger un montage, passer d'une vue à l'autre, changer de mode de luminosité —
+  et, au goniomètre, la lampe, le filtre, le diaphragme et le plateau, qu'on change en refaisant le montage loin du
+  champ. Le halo ne fond pas, lui : la diffusion dans l'œil est là dès que la source y entre, ce n'est pas de
+  l'adaptation.</p>
 
 <h4>Vision de nuit</h4>
 <p>Aux faibles luminances, les bâtonnets remplacent les cônes et les couleurs disparaissent. La part des bâtonnets
@@ -196,20 +201,26 @@
 <p>Un détail au-dessus du seuil reste affiché, même faiblement ; les luminances éblouissantes sont écrêtées. Le modèle
   a été vérifié sur les franges de Young éclairées par une lampe au sodium, qui se devinent de près en salle noire :
   il les rend visibles, faibles et presque sans couleur.</p>
+<p>Deux réglages d'affichage complètent ce facteur. Si la partie la plus claire du champ (99<sup>e</sup> centile des
+  points éclairés) restait sous 1,5 % du blanc du moniteur, le gain est relevé pour l'y amener : un seul gain pour
+  toute l'image, qui garde le profil des franges. Devant une source ponctuelle — le laser au Michelson —, la tache
+  saturée fixe le niveau d'adaptation et les lueurs voisines, comme une image fantôme de 1 %, disparaîtraient : les
+  faibles luminances sont alors relevées par un pied (figure ci-dessous, en bas). Au Michelson, ce pied sert aussi
+  quand l'œil simulé est désactivé.</p>
 <figure>
-  <img src="../schemas/vision-reponse.svg" alt="Réponse de l'œil simulé pour trois niveaux d'adaptation : seuil de vision, compression vers le blanc ; en bas, les faibles lueurs autour d'un point éblouissant, avec et sans correction" width="700" style="max-width:100%; height:auto" loading="lazy">
-  <figcaption>La réponse de l’œil simulé, tracée par le moteur pour trois éclairements de la salle auxquels l’œil
-    s’est habitué (salle noire, pièce peu éclairée, pièce éclairée) : sous le seuil de vision, rien n’est affiché ;
+  <img src="../schemas/vision-reponse.svg" alt="Réponse de l'œil simulé pour trois niveaux d'adaptation : seuil de vision, compression vers le blanc ; en bas, les faibles lueurs autour d'un point éblouissant, avec et sans relèvement" width="700" style="max-width:100%; height:auto" loading="lazy">
+  <figcaption>La réponse de l’œil simulé, tracée par le moteur pour trois niveaux d’adaptation (0,005, 0,5 et
+    50 cd/m²), fixés par le champ regardé : sous le seuil de vision, rien n’est affiché ;
     au-dessus, la compression vers le blanc conserve le contraste au seuil mais écrase les détails (près du blanc,
-    un écart de 1 % dans la scène n’en fait plus que 0,42 % à l’écran). En bas, en salle noire : la correction des
-    faibles lueurs remonte les reflets autour d’une tache vive — une lueur à 0,3 % du pic passe de 0,57 % à 3,4 % du
+    un écart de 1 % dans la scène n’en fait plus que 0,42 % à l’écran). En bas, pour le champ le plus sombre : le pied
+    des faibles lumières remonte les reflets autour d’une tache vive — une lueur à 0,3 % du pic passe de 0,57 % à 3,4 % du
     blanc à l’écran, sans elle elle disparaîtrait.</figcaption>
 </figure>
 
 <figure>
   <div class="paire">
-    <img width="480" height="480" src="../img/modele/young-na-reelle.webp" alt="Franges de Young au sodium en luminosité réelle : faibles et presque grises" loading="lazy">
-    <img width="480" height="480" src="../img/modele/young-na-visible.webp" alt="Les mêmes franges en luminosité « toujours visible » : vives et jaunes" loading="lazy">
+    <img width="480" height="480" src="../img/modele/young-na-reelle.webp" alt="Franges de Young au sodium avec l'œil simulé : faibles et presque grises" loading="lazy">
+    <img width="480" height="480" src="../img/modele/young-na-visible.webp" alt="Les mêmes franges sans l'œil simulé : vives et jaunes" loading="lazy">
   </div>
   <figcaption>Young au sodium sur l'écran du banc, avec l'œil simulé (à gauche) et sans (à droite).</figcaption>
 </figure>
@@ -279,8 +290,9 @@
     sur 64 sous-échantillons, en bas) 28,2 %.</figcaption>
 </figure>
 <p>Une raie est intégrée exactement sur son profil gaussien : le contraste suit l'enveloppe de cohérence, sans bruit.
-  Le sodium est un doublet (588,995 et 589,592 nm, rapport d'intensité 1,2, largeur 0,012 nm) ; la raie verte du
-  mercure filtrée a une largeur de 1 nm. La lumière blanche est découpée en seize bandes de nombre d'onde, intégrées
+  Le sodium est un doublet (588,995 et 589,592 nm, rapport d'intensité 1,2, largeur 0,012 nm). La raie verte du
+  mercure filtrée a une largeur de 1 nm en haute pression ; en basse pression, elle ne fait que 0,002 nm et les
+  anneaux restent contrastés sur toute la course du chariot. La lumière blanche est découpée en seize bandes de nombre d'onde, intégrées
   chacune exactement sous une densité spectrale affine : le blanc d'ordre supérieur sort uniforme, sans irisations.</p>
 <figure>
   <img src="../schemas/blanc-bandes.svg" alt="Lumière blanche selon la différence de marche : calcul du moteur (16 bandes intégrées exactement), ancien tirage au hasard de 16 couleurs, référence 512 bandes ; écart à la référence en dessous" width="780" style="max-width:100%; height:auto" loading="lazy">
@@ -293,8 +305,8 @@
   balayage. Au-delà d'une frange par image, les franges se brouillent au lieu de paraître défiler à l'envers.</p>
 <figure>
   <img src="../img/modele/anim-chariot.webp" alt="Anneaux du sodium sur l'écran : ils défilent nets puis se brouillent quand le chariot accélère" width="440" style="max-width:100%; height:auto" loading="lazy">
-  <figcaption>Anneaux du sodium sur l’écran au foyer de la lentille de 1 m, lame d’air de 0,85 mm, luminosité «
-    toujours visible » : le chariot avance de plus en plus vite (de 0,02 à 3 µm par image). Tant qu’il balaie moins
+  <figcaption>Anneaux du sodium sur l’écran au foyer de la lentille de 1 m, lame d’air de 0,85 mm, œil simulé
+    désactivé : le chariot avance de plus en plus vite (de 0,02 à 3 µm par image). Tant qu’il balaie moins
     d’une frange par image, les anneaux défilent nets ; au-delà, ils se brouillent — le vrai flou de pose du moteur,
     \(\mathrm{sinc}(\pi\,\text{pose}/\lambda)\) appliqué au terme d’interférence.</figcaption>
 </figure>
@@ -313,13 +325,14 @@
     la lumière qui entre dans la pupille (zone Ø 9,7 mm). En bas, en fermant l’iris (Ø 20 → 3 → 1 mm) : sur l’écran,
     tous les points de la zone donnent le même δ en P, fermer ne fait qu’assombrir (contraste 100 %, lumière 100 % →
     0,25 %) ; pour l’œil, δ varie dans la zone, le contraste monte de 23 % à 100 % quand l’iris se ferme, au prix de la
-    lumière (100 % → 6,6 %). Toutes les valeurs sont calculées par le moteur, pas illustratives : l’aire de la zone
+    lumière (100 % → 6,6 %) : accommodé sur les miroirs, l’œil regarde loin du plan des anneaux, qui sont à l’infini ;
+    accommodé à l’infini, il les verrait iris ouvert, comme l’écran. Toutes les valeurs sont calculées par le moteur, pas illustratives : l’aire de la zone
     fixe le flux reçu en P, son diamètre le brouillage des franges.</figcaption>
 </figure>
 <figure>
   <img src="../img/modele/anim-iris.webp" alt="Œil derrière la lentille de 20 cm au foyer : en fermant l'iris, le disque s'assombrit et les anneaux apparaissent" width="440" style="max-width:100%; height:auto" loading="lazy">
   <figcaption>La même idée en mouvement : œil derrière la lentille de 20 cm, au foyer (« à l’infini »), lame d’air
-    de 5,8 mm, luminosité réelle. L’iris se ferme (Ø 12 → 1,5 mm) : le disque s’assombrit et les anneaux apparaissent
+    de 5,8 mm, avec l’œil simulé. L’iris se ferme (Ø 12 → 1,5 mm) : le disque s’assombrit et les anneaux apparaissent
     sous Ø ≈ 3 mm — la source, de plus en plus ponctuelle, rend les franges cohérentes. Chaque image est un rendu
     complet du moteur.</figcaption>
 </figure>
@@ -343,16 +356,16 @@
 </ul>
 <p>Une réflexion sur une face de la compensatrice renvoie vers \(M_1\) une petite part du faisceau, déviée du double
   de l'angle entre les deux lames : une image fantôme, sommée en intensité, qui se confond avec l'image principale
-  quand la compensatrice est parallèle. La séparatrice partage la lumière en deux parts égales : chaque bras reçoit le
-  quart du flux incident.</p>
+  quand la compensatrice est parallèle. La séparatrice partage la lumière en deux parts égales, à l'aller puis au
+  retour : chaque bras renvoie vers la sortie le quart du flux incident.</p>
 <figure>
   <div class="paire">
     <img width="464" height="464" src="../img/modele/mich-ellipses.webp" alt="Anneaux du sodium elliptiques et doublés par l'image fantôme, compensatrice tournée" loading="lazy">
     <img width="464" height="464" src="../img/modele/mich-anneaux.webp" alt="Anneaux du sodium circulaires, compensatrice parallèle à la séparatrice" loading="lazy">
   </div>
   <figcaption>Anneaux du sodium près du contact optique, au foyer de la lentille de 1 m : compensatrice tournée (à
-    gauche : anneaux elliptiques, image fantôme décalée), puis parallèle à la séparatrice (à droite). Luminosité
-    « toujours visible ».</figcaption>
+    gauche : anneaux elliptiques, image fantôme décalée), puis parallèle à la séparatrice (à droite). Œil simulé
+    désactivé.</figcaption>
 </figure>
 <p>Une lamelle couvre-objet (verre D 263 M, épaisseur tirée au hasard) posée sur une partie d'un miroir est traversée
   deux fois. Chaque point source donne alors deux systèmes de franges, sans et avec la lamelle, séparés par l'image de
@@ -363,7 +376,7 @@
 <figure>
   <img width="464" height="464" src="../img/modele/mich-blanc.webp" alt="Coin d'air en lumière blanche : frange blanche entourée de franges sombres, puis franges colorées" loading="lazy" style="max-width:360px">
   <figcaption>Coin d'air en lumière blanche, lanterne à condenseur, miroirs conjugués de l'écran : frange achromatique,
-    puis teintes de l'échelle de Newton. Luminosité réelle.</figcaption>
+    puis teintes de l'échelle de Newton. Avec l'œil simulé.</figcaption>
 </figure>
 
 <h3 id="mi-observation">Observation et capteurs</h3>
@@ -383,7 +396,7 @@
   sur une copie de l'état. Pour les images de la source (compensatrice, parallélisme grossier), l'optique
   géométrique dit si le plan observé est celui de la source et sous quel angle elle est vue. Pour les franges, la
   mesure porte sur leur contraste et sur la part éclairée du champ, les miroirs supposés parallèles : le montage n'est
-  pas jugé sur un défaut de l'appareil. En luminosité réelle, une figure que l'œil ne verrait pas ne compte pas.</p>
+  pas jugé sur un défaut de l'appareil. Avec l'œil simulé, une figure que l'œil ne verrait pas ne compte pas.</p>
 <p>Si la figure ne suffit pas, chaque geste de montage possible est appliqué à une autre copie et mesuré de même,
   puis les gestes deux à deux si aucun n'améliore seul. Le geste retenu est le plus simple de ceux qui rendent la
   figure jugeable, à défaut celui qui l'améliore le plus. Le geste sur l'appareil se lit de la même façon, sur des
@@ -408,7 +421,7 @@
     <img width="392" height="392" src="../img/modele/gonio-ordre2.webp" alt="Champ de la lunette agrandi : raie verte du mercure à l'ordre 2, élargie et floue" loading="lazy">
   </div>
   <figcaption>Collimateur déréglé, lunette au point sur l'ordre 0, réseau en incidence normale : ordre 0 (à gauche) et
-    raie verte du mercure à l'ordre 2 (à droite). Champ agrandi quatre fois, luminosité « toujours visible ».</figcaption>
+    raie verte du mercure à l'ordre 2 (à droite). Champ agrandi quatre fois, œil simulé désactivé.</figcaption>
 </figure>
 <p><strong>Prisme.</strong> Prisme équilatéral en flint (loi de Cauchy) : chaque longueur d'onde est déviée par
   réfraction exacte sur ses faces.</p>
@@ -418,6 +431,14 @@
   dans le même plan, quel que soit l'œil. Quatre yeux sont proposés (normal, myope, hypermétrope, presbyte), chacun
   avec sa plage d'accommodation : l'œil accommode sur l'objet désigné s'il est dans sa plage, et se repose sur son
   punctum remotum sinon.</p>
+<figure>
+  <img src="../schemas/parallaxe.svg" alt="Champ de la lunette pour trois positions de l'œil : collimateur déréglé, l'image de la fente se décale par rapport au réticule ; collimateur réglé, elle reste dessus. En dessous, l'écart selon la position de l'œil, proportionnel à la différence de vergence" width="780" style="max-width:100%; height:auto" loading="lazy">
+  <figcaption>Champ de la lunette rendu par le moteur (lunette réglée à l’infini, fente éclairée au sodium, œil
+    accommodé sur le réticule). Collimateur déréglé de 1 mm de tirage : l’image de la fente, plus loin que le
+    réticule (1,6 δ d’écart de vergence), suit l’œil et s’écarte de 5,3′ quand il se décale de 1,2 mm. Collimateur
+    réglé : fente et réticule restent superposés, où que soit l’œil. En bas, l’écart selon la position de l’œil : une
+    droite de pente égale à l’écart de vergence, adoucie quand la pupille déborde du cercle oculaire.</figcaption>
+</figure>
 <p><strong>Image du champ.</strong> Chaque objet a un profil analytique : son image géométrique (fente, fils et repère
   du réticule, diaphragme de champ) convoluée par le disque de défocalisation, la diffraction par la largeur utile du
   faisceau et l'acuité de l'œil. Aucun tirage n'intervient. Les raies des lampes spectrales viennent des tables du
@@ -450,17 +471,18 @@
     la source). En bas, les étendues mesurées par le vrai moteur sur le montage de la figure suivante : le faisceau
     utile vaut ×1, le tirage à rebours en tire ×7,5, le tirage direct ×72 000 — le poids compense ce que le tirage
     gaspille : 1 rayon utile sur 72 000 en direct (chacun 9 600 fois plus lourd) contre 13 % à rebours donnent le même
-    flux sur l’écran (0,95 ± 0,1, prolongé sur 4 millions de rayons).</figcaption>
+    flux sur l’écran (0,95 ± 0,14, prolongé sur 4 millions de rayons).</figcaption>
 </figure>
 <p>Derrière un trou ou une fente source, les rayons partent de l'objet éclairé et sont remontés jusqu'à la lampe : le
   flux est le même, les rayons utiles bien plus nombreux. Une passe préalable apprend quelles directions mènent au
   détecteur ; les tirages suivants s'y concentrent, et chaque rayon est repondéré en conséquence, ce qui ne biaise pas
-  l'image — c'est ce que montrent les deux figures ci-dessous, tirage pour tirage.</p>
+  l'image — c'est ce que montrent la figure précédente et la suivante, tirage pour tirage.</p>
 <figure>
-  <img src="../schemas/tirage-rebours.svg" alt="Le même banc deux fois : en haut, tirage direct depuis la lampe, presque tous les rayons s'arrêtent sur la plaque du trou ; en bas, tirage à rebours depuis le trou, la plupart des rayons atteignent l'écran" width="800" style="max-width:100%; height:auto" loading="lazy">
+  <img src="../schemas/tirage-rebours.svg" alt="Le même banc deux fois : en haut, tirage direct depuis la lampe, presque tous les rayons s'arrêtent sur la plaque du trou ; en bas, tirage à rebours depuis le trou, 13 % des rayons atteignent l'écran" width="800" style="max-width:100%; height:auto" loading="lazy">
   <figcaption>Le même montage tiré dans les deux sens — lanterne éclairant un trou de 0,1 mm au foyer d’une lentille
     de 200 mm, seconde lentille, écran — rayons et comptages du moteur (graine 1, 20 000 rayons par panneau, vue de
-    dessus). En haut, tiré depuis le filament : 1 rayon sur 20 000 passe le trou et atteint l’écran. En bas, tiré
+    dessus). En haut, tiré depuis le filament : 1 rayon sur 20 000 passe le trou et atteint l’écran ; sur 4 millions de
+    rayons, 47 passent, soit 1 sur 85 000, l’étendue de la figure précédente à la précision du comptage près (±15 %). En bas, tiré
     depuis le trou et remonté jusqu’au filament : 2 665 rayons utiles (13,3 % ; les autres ratent le filament). Le
     poids de chaque rayon corrige le mode de tirage : l’image obtenue est la même, seule la part de rayons utiles —
     donc le bruit — change (flux reçu direct ÷ à rebours : 0,95 ± 0,14).</figcaption>
@@ -474,6 +496,15 @@
   séparent, par l'intégrale de Collins, axe par axe. La courbure de l'onde est portée à part, jamais échantillonnée.
   Entre deux plans conjugués, la propagation est une copie à l'échelle ; en champ lointain, une transformée de
   Fourier ; en champ proche, le spectre angulaire.</p>
+<figure>
+  <img src="../schemas/onde-propagation.svg" alt="Trois montages du banc, laser et fente de 200 µm : écran à 2 cm de la fente, calculé par le spectre angulaire ; écran au foyer d'une lentille, une seule transformée de Fourier ; fente et écran conjugués, copie à l'échelle. Le profil du moteur se superpose chaque fois à l'intégrale de diffraction calculée point par point" width="780" style="max-width:100%; height:auto" loading="lazy">
+  <figcaption>Le même calcul, trois chemins : laser hélium-néon, fente de 200 µm, profils du moteur sur l’écran. À
+    2 cm de la fente, le champ proche est calculé par le spectre angulaire ; au foyer d’une lentille de 200 mm, une
+    seule transformée donne la figure de Fraunhofer ; quand l’écran est conjugué de la fente (2f–2f), aucune
+    transformée : la fente est recopiée, renversée, avec l’éclairage gaussien du laser. Le choix se lit sur la matrice
+    du trajet et sur la grille (N mailles de pas d). En pointillés, l’intégrale de diffraction calculée directement,
+    point par point, sur le même champ d’entrée : écart au plus 1,3 % du maximum.</figcaption>
+</figure>
 <p>La source étendue et la lumière blanche sont des sommes incohérentes sur des points source et des longueurs
   d'onde. Avec un seul plan diffractant, un point source ne fait que décaler la figure : une propagation par longueur
   d'onde suffit, relue pour chaque point source. Le laser est un faisceau gaussien ; un réseau donne une copie décalée
@@ -485,7 +516,7 @@
   </div>
   <figcaption>Montage 4f, lettre gravée dans le verre (objet de phase). À gauche, une pastille au plan focal arrête la
     lumière non diffractée : tous les bords apparaissent sur un fond noir. À droite, un couteau vertical : seuls les
-    bords verticaux ressortent. Luminosité « toujours visible ».</figcaption>
+    bords verticaux ressortent. Œil simulé désactivé.</figcaption>
 </figure>
 
 <h3 id="bc-detecteurs">Détecteurs</h3>
@@ -543,8 +574,8 @@
 <h4>Œil</h4>
 <ul>
   <li>Pupille stationnaire ; adaptation de la rétine par un simple fondu du niveau d'adaptation (le logarithme de \(L_a\)
-    filtré, 1 s vers la lumière et 2 s vers l'obscurité, ancré quand le montage change) — pas l'adaptation
-    progressive à l'obscurité.</li>
+    filtré, 1 s vers la lumière et 2 s vers l'obscurité, ancré sur un changement de montage, de vue ou de mode) — pas
+    l'adaptation progressive à l'obscurité.</li>
   <li>Ni distance d'observation de l'écran, ni acuité hors du goniomètre ; le moniteur est supposé de luminance
     maximale 150 cd/m².</li>
 </ul>

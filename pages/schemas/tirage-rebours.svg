@@ -12,7 +12,8 @@ l'éclairement estimé est le même, seule la part des rayons utiles change.</de
 <line x1="464" y1="16.5" x2="490" y2="16.5" stroke="#8a939f" stroke-width="1.4"/>
 <text x="497" y="21" fill="#c9cfd8" font-size="14">rayon perdu</text>
 <text x="36" y="48" fill="#c9cfd8" font-weight="600" font-size="16">Tirage direct, depuis la lampe</text>
-<text x="36" y="68" fill="#8a939f" font-size="14">on part du filament : presque tous les rayons s’arrêtent sur la plaque du trou</text>
+<text x="36" y="68" fill="#8a939f" font-size="14">on part du filament : presque tous les rayons s’arrêtent sur la plaque du trou ;</text>
+<text x="36" y="86" fill="#8a939f" font-size="14">ici un seul passe ; sur 4 000 000 rayons tirés, 47 passent : 1 sur 85 000</text>
 <text x="764" y="48" fill="#e0b84c" font-size="14" text-anchor="end">1 utile sur 20 000</text>
 <line x1="36" y1="230.0" x2="764" y2="230.0" stroke="#8a939f" stroke-opacity=".4" stroke-dasharray="3 6" stroke-width="1"/>
 <line x1="127.5" y1="324.4" x2="127.5" y2="135.6" stroke="#39414d" stroke-width="7" stroke-linecap="round"/>

@@ -1,7 +1,7 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 1240" width="760" height="1240" role="img" aria-labelledby="t dd" font-family="system-ui, sans-serif" font-size="14">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 1280" width="760" height="1280" role="img" aria-labelledby="t dd" font-family="system-ui, sans-serif" font-size="14">
 <title id="t">Pour un point P, la zone de la source</title>
 <desc id="dd">Bras de M2 déplié : le faisceau qui arrive en un point P du détecteur part d’une zone de la source. Écran au foyer de la lentille : rayons parallèles, zone fixée par l’iris, anneaux contrastés quelle que soit l’ouverture. Œil accommodé sur les miroirs : zone découpée par la pupille de l’œil, anneaux brouillés tant que l’iris n’est pas fermé.</desc>
-<rect width="760" height="1240" fill="#0f1216"/>
+<rect width="760" height="1280" fill="#0f1216"/>
 <text x="24" y="32" fill="#c9cfd8" font-size="16" font-weight="600">Quelle partie de la source éclaire un point P ?</text>
 <text x="24" y="54" fill="#8a939f">un bras du Michelson, déplié, iris ouvert (Ø 20 mm) ; en jaune, la lumière qui atteint P</text>
 <line x1="40.0" y1="208" x2="714" y2="208" stroke="#8a939f" stroke-opacity=".4" stroke-dasharray="3 6"/>
@@ -83,7 +83,9 @@
 <text x="640" y="1084" fill="#8a939f" text-anchor="middle">par l’iris</text>
 <text x="640" y="1105" fill="#e0b84c" text-anchor="middle">contraste 100 %</text>
 <text x="640" y="1124" fill="#8a939f" text-anchor="middle">lumière 6,6 %</text>
-<text x="24" y="1210" fill="#8a939f">lumière : comparée à l’iris ouvert</text>
+<text x="24" y="1250" fill="#8a939f">lumière : comparée à l’iris ouvert</text>
 <text x="24" y="1166" fill="#c9cfd8">Sur l’écran, tous les points de la zone donnent le même δ en P : fermer l’iris ne fait</text>
-<text x="24" y="1186" fill="#c9cfd8">qu’assombrir. Pour l’œil, δ varie dans la zone : il faut fermer l’iris pour voir les anneaux.</text>
+<text x="24" y="1186" fill="#c9cfd8">qu’assombrir. L’œil, lui, est accommodé sur les miroirs, loin du plan des anneaux (à l’infini) :</text>
+<text x="24" y="1206" fill="#c9cfd8">δ varie dans la zone, il faut fermer l’iris pour les voir. Accommodé à l’infini, il les verrait</text>
+<text x="24" y="1226" fill="#c9cfd8">iris ouvert, comme l’écran au foyer.</text>
 </svg>

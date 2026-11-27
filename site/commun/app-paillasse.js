@@ -25,6 +25,12 @@
  */
 (function (root) {
   "use strict";
+  // Traduction : sans le moteur i18n (node, jsdom des tests, et les pages qui ne le chargent
+  // pas), TRAD rend le texte français tel quel — mais il substitue quand même {0}, {1}… :
+  // un appel paramétré doit afficher « clic ou touche ? » en français, jamais son gabarit.
+  var TRAD = root.VITRINE_I18N ? root.VITRINE_I18N.T : function (s, p) {
+    return !p ? s : String(s).replace(/\{(\d+)\}/g, function (m, i) { return p[i] == null ? m : String(p[i]); });
+  };
   var NS = "http://www.w3.org/2000/svg";
   var P = root.VITRINE_PAILLASSE = root.VITRINE_PAILLASSE || { instruments: {} };
 
@@ -394,17 +400,16 @@
     // code commun des autres apps : le site public des instruments ne le charge pas.
     if (root.matchMedia && root.matchMedia("(max-width:900px)").matches) {
       R.classList.add("pl-etroit");
-      el("p", "pl-msg", R, "Cette paillasse virtuelle s'ouvre sur un <b>ordinateur</b> : on y tourne les vis à la souris, " +
-        "devant un grand écran.");
+      el("p", "pl-msg", R, TRAD("Cette paillasse virtuelle s'ouvre sur un <b>ordinateur</b> : on y tourne les vis à la souris, devant un grand écran."));
       return { stop: function () { R.remove(); if (pane) pane.classList.remove("paillasse-on"); } };
     }
-    if (!fab) { el("p", "pl-msg", R, "Instrument inconnu."); return { stop: function () { R.remove(); } }; }
+    if (!fab) { el("p", "pl-msg", R, TRAD("Instrument inconnu.")); return { stop: function () { R.remove(); } }; }
 
     // ----- squelette -----
     var gauche = el("div", "pl-gauche", R), droite = el("div", "pl-droite", R), bas = el("div", "pl-bas", R);
     var dessus = svg("svg", { class: "pl-dessus", preserveAspectRatio: "xMidYMid meet" }, gauche);
     var boite = el("div", "pl-boite", gauche);
-    el("a", "pl-licence", gauche, "© S. Reyt · GPLv3 + CC BY-NC-SA 4.0").setAttribute("href", "https://www.gnu.org/licenses/gpl-3.0.html");
+    el("a", "pl-licence", gauche, TRAD("© S. Reyt · GPLv3 + CC BY-NC-SA 4.0")).setAttribute("href", "https://www.gnu.org/licenses/gpl-3.0.html");
     var obsTete = el("div", "pl-obs-tete", droite), obs = el("div", "pl-obs", droite), obsPied = el("div", "pl-obs-pied", droite);
     var loupe = svg("svg", { class: "pl-loupe" }, droite), lecture = el("div", "pl-lecture", droite);
     var rangEt = el("div", "pl-etapes", bas), ligneBas = el("div", "pl-bas-l", bas);
@@ -616,9 +621,9 @@
       inp.setAttribute("aria-label", o.label.replace(/<[^>]+>/g, ""));
       el("span", "pl-lect-u", host, o.unite || "");
       var verdict;
-      var b = bouton(host, "Vérifier ma lecture", function () {
+      var b = bouton(host, TRAD("Vérifier ma lecture"), function () {
         var v = parseFloat(String(inp.value).replace(",", ".").replace(/\s/g, ""));
-        verdict.textContent = isNaN(v) ? (o.aideSaisie || "Taper une valeur.") : o.verifier(v);
+        verdict.textContent = isNaN(v) ? (o.aideSaisie || TRAD("Taper une valeur.")) : o.verifier(v);
       });
       inp.addEventListener("keydown", function (ev) { if (ev.key === "Enter") { ev.preventDefault(); b.click(); } ev.stopPropagation(); });
       inp.addEventListener("input", function () { verdict.textContent = ""; });
@@ -737,14 +742,14 @@
       if (RAC) { fermerGestes(); return; }
       if (typeof G === "function") G = G();
       RAC = el("div", "bc-voile", R);
-      var d = el("div", "bc-rac", RAC), h2 = el("div", "bc-rac-t", d, "<b>Gestes et raccourcis</b>");
-      bouton(h2, "Fermer (Échap)", fermerGestes, "pl-btn-p");
+      var d = el("div", "bc-rac", RAC), h2 = el("div", "bc-rac-t", d, TRAD("<b>Gestes et raccourcis</b>"));
+      bouton(h2, TRAD("Fermer (Échap)"), fermerGestes, "pl-btn-p");
       // Site public : formulaire de retour (optique-public/retour.js pose OPTIQUE_RETOUR). En tête
       // du panneau et bien visible : un bug signalé ici emporte l'état de l'instrument, pas celui de l'accueil.
       if (root.OPTIQUE_RETOUR) {
         var pr = el("div", "bc-rac-retour", d);
-        el("span", "", pr, "Un problème, une idée ? Signale-le d'ici : l'état de l'instrument est joint au rapport.");
-        bouton(pr, "Signaler un bug ou proposer une idée", function () { fermerGestes(); root.OPTIQUE_RETOUR.ouvrir(); }, "pl-btn-retour");
+        el("span", "", pr, TRAD("Un problème, une idée ? Signale-le d'ici : l'état de l'instrument est joint au rapport."));
+        bouton(pr, TRAD("Signaler un bug ou proposer une idée"), function () { fermerGestes(); root.OPTIQUE_RETOUR.ouvrir(); }, "pl-btn-retour");
       }
       var c3 = el("div", "bc-rac-c", d), nz = Object.keys(G || {}).length;
       if (nz > 3) c3.style.gridTemplateColumns = "repeat(" + Math.min(nz, 4) + ", minmax(0,1fr))";     // Michelson : quatre zones
@@ -779,7 +784,7 @@
       if (BANDEAU) return BANDEAU;
       var h = el("div", "pl-haut bc-barre"); R.insertBefore(h, R.firstChild); R.classList.add("pl-a-haut");
       BANDEAU = { el: h, l1: el("div", "bc-l1", h), l2: el("div", "bc-l2", h), l3: el("div", "bc-l3", h) };
-      BANDEAU.l2.setAttribute("aria-label", "Aides");
+      BANDEAU.l2.setAttribute("aria-label", TRAD("Aides"));
       return BANDEAU;
     }
     function k_(t) { return "<span class=\"k\">" + t + "</span>"; }
@@ -788,7 +793,7 @@
       var b = el("button", "bc-aide" + (a.cls ? " " + a.cls : ""), host,
         '<svg viewBox="0 0 18 14" aria-hidden="true">' + (a.ico || ICONES[a.cle] || "") + "</svg>" + a.nom + (a.lettre ? "<kbd>" + a.lettre + "</kbd>" : ""));
       b.type = "button"; b.setAttribute("aria-pressed", a.on ? "true" : "false");
-      b.setAttribute("data-a3", "<b>" + a.nom + "</b> — " + a.titre + (a.lettre ? " · clic ou touche " + k_(a.lettre) : ""));
+      b.setAttribute("data-a3", "<b>" + a.nom + "</b> — " + a.titre + (a.lettre ? TRAD(" · clic ou touche {0}", [k_(a.lettre)]) : ""));
       b.addEventListener("click", function () { basculer(a.cle); });
       return b;
     }
@@ -798,7 +803,7 @@
       return { maj: function (liste) {
         var c = JSON.stringify(liste); if (c === cle) return;
         cle = c; host.innerHTML = "";
-        el("span", "bc-l2-lab", host, lab || "Aides");
+        el("span", "bc-l2-lab", host, lab || TRAD("Aides"));
         liste.forEach(function (a) { boutonAide(host, a, basculer); });
       } };
     }
@@ -808,8 +813,8 @@
       var r = {};
       if (o.cahier) {
         var CA = o.cahier;
-        r.cahier = bouton(host, "Cahier", function () { CA.panneau.basculer(); }, "bc-discret");
-        r.cahier.setAttribute("data-a3", "<b>Cahier</b> — les mesures notées, à exporter en CSV");
+        r.cahier = bouton(host, TRAD("Cahier"), function () { CA.panneau.basculer(); }, "bc-discret");
+        r.cahier.setAttribute("data-a3", TRAD("<b>Cahier</b> — les mesures notées, à exporter en CSV"));
         CA.panneau.surBascule = (function (f) { return function (v) { if (f) f(v); r.cahier.setAttribute("aria-pressed", v ? "true" : "false"); }; })(CA.panneau.surBascule);
       }
       if (o.prof) {
@@ -817,13 +822,13 @@
         r.prof.hidden = !o.prof.visible; if (o.prof.a3) r.prof.setAttribute("data-a3", o.prof.a3);
       }
       r.aide = bouton(host, ICO_AIDE, function () { panneauGestes(o.gestes); }, "bc-discret bc-ico");
-      r.aide.setAttribute("data-a3", "<b>Gestes et raccourcis</b> — tout ce que font la souris et le clavier, par zone · touche " + k_("?"));
+      r.aide.setAttribute("data-a3", TRAD("<b>Gestes et raccourcis</b> — tout ce que font la souris et le clavier, par zone · touche {0}", [k_("?")]));
       if (root.OPTIQUE_RETOUR) {
-        r.retour = bouton(host, "Signaler", function () { root.OPTIQUE_RETOUR.ouvrir(); }, "pl-btn-retour");
-        r.retour.setAttribute("data-a3", "<b>Signaler un bug ou proposer une idée</b> — l'état de l'instrument est joint au rapport");
+        r.retour = bouton(host, TRAD("Signaler"), function () { root.OPTIQUE_RETOUR.ouvrir(); }, "pl-btn-retour");
+        r.retour.setAttribute("data-a3", TRAD("<b>Signaler un bug ou proposer une idée</b> — l'état de l'instrument est joint au rapport"));
       }
       r.plein = bouton(host, ICO_PLEIN, pleinEcran, "bc-discret bc-ico");
-      r.plein.setAttribute("data-a3", "<b>Plein écran</b>");
+      r.plein.setAttribute("data-a3", TRAD("<b>Plein écran</b>"));
       return r;
     }
 
@@ -880,10 +885,10 @@
       function garder() { if (mem) mem.ecrire({ onglet: ouvert, replie: replie }); }
       if (o.flottante && !o.fixe) {
         var bPlier = el("button", "bc-et-plier", RG, "▾"); bPlier.type = "button";
-        bPlier.setAttribute("data-a3", "<b>Replier l'étagère</b> — elle laisse la place à l'appareil");
+        bPlier.setAttribute("data-a3", TRAD("<b>Replier l'étagère</b> — elle laisse la place à l'appareil"));
         bPlier.addEventListener("click", function () { replier(true); });
-        bOuvrir = el("button", "pl-btn bc-et-ouvrir", ET, (o.titre || "Éléments") + " ▴"); bOuvrir.type = "button";
-        bOuvrir.setAttribute("data-a3", "<b>" + (o.titre || "Éléments") + "</b> — ouvrir l'étagère");
+        bOuvrir = el("button", "pl-btn bc-et-ouvrir", ET, (o.titre || TRAD("Éléments")) + " ▴"); bOuvrir.type = "button";
+        bOuvrir.setAttribute("data-a3", TRAD("<b>{0}</b> — ouvrir l'étagère", [o.titre || TRAD("Éléments")]));
         bOuvrir.addEventListener("click", function () { replier(false); });
       }
       function replier(v) { replie = !!v; ET.classList.toggle("replie", replie); garder(); }
@@ -1006,7 +1011,7 @@
         if (d.app && (i === 0 || !defs[i - 1].app)) el("span", "pl-et-sep", rangEt, "Applications");
         var b = el(choisir ? "button" : "span", "pl-et" + (d.app ? " pl-et-app" : ""), rangEt);
         if (choisir) { b.type = "button"; b.addEventListener("click", function () { choisir(d.id); }); }
-        b.title = (d.regarde ? "On regarde " + d.regarde + "\n" : "") + (d.titre || "") + (d.soin ? "\nSoignée (★) : " + d.soin : "") + (choisir ? "\nCliquer : les indices visent cette étape." : "");
+        b.title = (d.regarde ? TRAD("On regarde {0}\n", [d.regarde]) : "") + (d.titre || "") + (d.soin ? TRAD("\nSoignée (★) : {0}", [d.soin]) : "") + (choisir ? TRAD("\nCliquer : les indices visent cette étape.") : "");
         b.setAttribute("data-etape", d.id);
         el("span", "pl-et-m", b); el("span", "pl-et-n", b, (d.app ? "" : (i + 1) + ". ") + d.nom);
         puces[d.id] = b;
@@ -1014,8 +1019,8 @@
       // Légende des deux niveaux, à côté des puces (les deux instruments en ont) : sans elle, le vert se lit « c'est
       // réglé » alors qu'il ne dit que « le critère est atteint » ; le soigné, lui, est en or.
       var lg = el("span", "pl-et-leg", rangEt);
-      [["fait", "✓", "correct", "Vert : l'étape est atteinte, le critère du réglage est rempli."],
-        ["soignee", "★", "soigné", "Or : l'étape est atteinte et soignée, le réglage fin au-delà du critère."]].forEach(function (l) {
+      [["fait", "✓", "correct", TRAD("Vert : l'étape est atteinte, le critère du réglage est rempli.")],
+        ["soignee", "★", TRAD("soigné"), TRAD("Or : l'étape est atteinte et soignée, le réglage fin au-delà du critère.")]].forEach(function (l) {
         var it = el("span", "pl-et-leg-i " + l[0], lg); it.title = l[3];
         el("span", "pl-et-m", it, l[1]); el("span", "", it).textContent = l[2];
       });
@@ -1036,7 +1041,7 @@
     // réglages : appeler APRÈS etapes(), qui vide la rangée. defs = [{id, nom, observe, etapes: [..], titre}] ;
     // o = {intro, a3, choisir(id)} ; maj(vus {id: vrai}, vise). -----
     function manipulations(defs, o) {
-      var P = panneau("pl-manips", "Manipulations", { mesureBas: true }), items = {};
+      var P = panneau("pl-manips", TRAD("Manipulations"), { mesureBas: true }), items = {};
       if (o.intro) el("p", "pl-mp-intro", P.corps, o.intro);
       defs.forEach(function (m) {
         var it = el("div", "pl-mp", P.corps); it.setAttribute("data-manip", m.id);
@@ -1044,10 +1049,10 @@
         el("span", "pl-et-m", h); el("span", "pl-mp-nom", h, m.nom); el("span", "pl-mp-chev", h, "▸");
         h.addEventListener("click", function () { o.choisir(m.id); });
         var c = el("div", "pl-mp-c", it);
-        el("div", "pl-mp-h", c, "Ce qu'on observe"); el("p", "pl-mp-t", c, m.observe);
-        el("div", "pl-mp-h", c, "Comment faire");
+        el("div", "pl-mp-h", c, TRAD("Ce qu'on observe")); el("p", "pl-mp-t", c, m.observe);
+        el("div", "pl-mp-h", c, TRAD("Comment faire"));
         var ol = el("ol", "pl-mp-e", c); m.etapes.forEach(function (e) { el("li", "", ol, e); });
-        el("p", "pl-mp-q", c, "Coché quand : " + m.titre);
+        el("p", "pl-mp-q", c, TRAD("Coché quand : {0}", [m.titre]));
         items[m.id] = it;
       });
       el("span", "pl-bm-sep", rangEt);
@@ -1064,7 +1069,7 @@
           it.querySelector(".pl-et-m").textContent = vu ? "✓" : "";
           it.querySelector(".pl-mp-chev").textContent = ouv ? "▾" : "▸";
         });
-        b.innerHTML = "Manipulations <span class=\"pl-bm-n\">" + n + "/" + defs.length + "</span>";
+        b.innerHTML = TRAD("Manipulations") + " <span class=\"pl-bm-n\">" + n + "/" + defs.length + "</span>";
       } };
     }
 
@@ -1076,7 +1081,7 @@
       opt = opt || {};
       var p = el("div", "pl-pan " + cls + (opt.coin ? " pl-pan-" + opt.coin : ""), opt.coin ? R : gauche); p.hidden = true;
       var t = el("div", "pl-pan-t", p); el("span", "", t, titre);
-      var x = el("button", "pl-pan-x", t, "×"); x.type = "button"; x.title = "Fermer";
+      var x = el("button", "pl-pan-x", t, "×"); x.type = "button"; x.title = TRAD("Fermer");
       var corps = el("div", "pl-pan-c", p);
       var o = { el: p, corps: corps, libre: !!opt.libre, ouvert: function () { return !p.hidden; }, surBascule: null,
         basculer: function (v) {
@@ -1134,7 +1139,7 @@
     // ----- cahier de mesures : lignes libres (libellé, valeur, unité, incertitude-type) ; ne calcule rien -----
     // o = { lire() → [lignes], ecrire(lignes), fichier: "cahier.csv" }
     function cahier(o) {
-      var P = panneau("pl-cahier", "Cahier de mesures");
+      var P = panneau("pl-cahier", TRAD("Cahier de mesures"));
       function num(v) { return String(v == null ? "" : v).trim().replace(/\s/g, "").replace(",", "."); }
       function csv() {
         var q = function (t) { t = String(t == null ? "" : t); return /[",\n]/.test(t) ? '"' + t.replace(/"/g, '""') + '"' : t; };
@@ -1145,29 +1150,29 @@
       function dessiner() {
         var C = P.corps; C.innerHTML = "";
         var L = o.lire(), tab = el("table", "pl-cah-tab", C), th = el("tr", "", tab);
-        ["Mesure", "Valeur", "Unité", "Incertitude-type", ""].forEach(function (h) { el("th", "", th, h); });
+        ["Mesure", "Valeur", TRAD("Unité"), TRAD("Incertitude-type"), ""].forEach(function (h) { el("th", "", th, h); });
         L.forEach(function (l, i) {
           var tr = el("tr", "", tab);
-          [["lib", "ex. C₃ au contact", "pl-cah-lib"], ["val", "", "pl-cah-v"], ["u", "mm", "pl-cah-u"], ["inc", "", "pl-cah-v"]].forEach(function (c) {
+          [["lib", TRAD("ex. C₃ au contact"), "pl-cah-lib"], ["val", "", "pl-cah-v"], ["u", "mm", "pl-cah-u"], ["inc", "", "pl-cah-v"]].forEach(function (c) {
             var td = el("td", "", tr), inp = el("input", "pl-cah-in " + c[2], td);
             inp.type = "text"; inp.value = l[c[0]] == null ? "" : l[c[0]]; inp.placeholder = c[1];
             if (c[2] === "pl-cah-v") inp.inputMode = "decimal";
-            inp.setAttribute("aria-label", { lib: "Mesure", val: "Valeur", u: "Unité", inc: "Incertitude-type" }[c[0]]);
+            inp.setAttribute("aria-label", { lib: "Mesure", val: "Valeur", u: TRAD("Unité"), inc: TRAD("Incertitude-type") }[c[0]]);
             inp.addEventListener("input", function () { var M = o.lire(); M[i][c[0]] = inp.value; o.ecrire(M); });
           });
-          var td = el("td", "", tr), x = el("button", "pl-cah-x", td, "×"); x.type = "button"; x.title = "Supprimer la ligne";
+          var td = el("td", "", tr), x = el("button", "pl-cah-x", td, "×"); x.type = "button"; x.title = TRAD("Supprimer la ligne");
           x.addEventListener("click", function () { var M = o.lire(); M.splice(i, 1); o.ecrire(M); dessiner(); });
         });
         var pied = el("div", "pl-cah-pied", C);
-        bouton(pied, "Ajouter une ligne", function () {
+        bouton(pied, TRAD("Ajouter une ligne"), function () {
           var M = o.lire(); M.push({ lib: "", val: "", u: M.length ? M[M.length - 1].u : "mm", inc: "" }); o.ecrire(M); dessiner();
           var ins = P.corps.querySelectorAll(".pl-cah-lib"); if (ins.length) ins[ins.length - 1].focus();
         });
-        var bx = bouton(pied, "Exporter (CSV)", function () {
-          if (!telecharger(o.fichier || "cahier.csv", csv())) bx.title = "Export impossible dans ce navigateur.";
+        var bx = bouton(pied, TRAD("Exporter (CSV)"), function () {
+          if (!telecharger(o.fichier || "cahier.csv", csv())) bx.title = TRAD("Export impossible dans ce navigateur.");
         });
-        bx.title = "Fichier .csv à lire avec Python (point décimal, séparateur virgule).";
-        el("p", "pl-cah-n", C, "Le cahier ne calcule rien : les exploitations restent à faire, à la main ou en Python.");
+        bx.title = TRAD("Fichier .csv à lire avec Python (point décimal, séparateur virgule).");
+        el("p", "pl-cah-n", C, TRAD("Le cahier ne calcule rien : les exploitations restent à faire, à la main ou en Python."));
       }
       P.surBascule = function (ouv) { if (ouv) dessiner(); };
       return { panneau: P, csv: csv, redessiner: dessiner };

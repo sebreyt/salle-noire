@@ -29,10 +29,27 @@
  */
 (function (root) {
   "use strict";
+  // Traduction : sans le moteur i18n (node, jsdom des tests, et les pages qui ne le chargent
+  // pas), TRAD rend le texte français tel quel — mais il substitue quand même {0}, {1}… :
+  // un appel paramétré doit afficher « clic ou touche ? » en français, jamais son gabarit.
+  var TRAD = root.VITRINE_I18N ? root.VITRINE_I18N.T : function (s, p) {
+    return !p ? s : String(s).replace(/\{(\d+)\}/g, function (m, i) { return p[i] == null ? m : String(p[i]); });
+  };
+  // Nombres affichés : UN point de passage (piège n° 1 de la SPEC). Il délègue au moteur i18n
+  // quand il est là (point décimal en anglais, virgule en français) et garde le français intact
+  // hors moteur (node, jsdom) : « 0,85 » y reste « 0,85 ».
+  var I18N = root.VITRINE_I18N;
+  function nb(v, n) {
+    var s = n == null ? String(v) : (+v).toFixed(n);
+    return I18N && I18N.dec() === "." ? s : s.replace(".", ",");
+  }
+  // Entier avec séparateur de milliers de la langue (1 000 / 1,000).
+  function nbEntier(v) { return Math.round(v).toLocaleString(I18N && I18N.dec() === "." ? "en-US" : "fr-FR"); }
   var C = root && root.VITRINE_BANC;
   if (!C && typeof require === "function") C = require("./_app-banc-coeur.js").Coeur;
   var K_ = C.K, F_ = C.F;
   var LONGUEUR = 2000, DEC_MAX = 10;                 // banc de 2 m ; vis de hauteur et de décalage latéral : ±10 mm
+  var SEUIL_INFINI = 20000;                          // mm : un conjugué au-delà (dix bancs) est tenu pour à l'infini
   var F_COND = 60;                                   // focale du condenseur de la lanterne (cœur : lentille(60, 50, "asph"))
   var TIRAGE = [45, 120];
   // Capteur : 1280 × 960 pixels de 5 µm ; N = pixels affichés en largeur (au plus 640 texels : au-delà, 2 × 2 pixels
@@ -70,9 +87,9 @@
   //    (10 V), sans PRNU : plus longue, plus fine, plus de dynamique.
   // Temps d'intégration réglable (INTEG, ms).
   var BARRETTE = { L: 28.672, n: 2048, pixel: 0.014, S: 200, Usat: 0.8, prnu: 0.05,
-    nom: "barrette réelle (Sony ILX511) : 2048 pixels de 14 µm, 28,7 mm, saturation 0,8 V, PRNU 5 %" };
+    nom: TRAD("barrette réelle (Sony ILX511) : 2048 pixels de 14 µm, 28,7 mm, saturation 0,8 V, PRNU 5 %") };
   var BARRETTE_PARFAITE = { pixel: 0.007, n: 8192, S: 200, Usat: 10, prnu: 0, Lmin: 20, Lmax: 200,
-    nom: "barrette parfaite : aussi longue qu'on veut, pixels de 7 µm, saturation 10 V, sans PRNU" };
+    nom: TRAD("barrette parfaite : aussi longue qu'on veut, pixels de 7 µm, saturation 10 V, sans PRNU") };
   var INTEG = [1, 2, 5, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000, 10000];
   function nomInteg(i) { var t = INTEG[i]; return t < 1000 ? t + " ms" : t / 1000 + " s"; }
   // Transmission des filtres du trajet (colorés, interférentiel, densités) à la longueur d'onde l (nm).
@@ -105,7 +122,7 @@
   // les deux moteurs) : calibre × réponse du silicium pour le spectre reçu (`gainPhotodiode`).
   var MI_ = (root && root.VITRINE_MICHELSON) || (typeof require === "function" ? require("./_app-michelson-coeur.js").Coeur : null);
   var R_PD = 0.5, U_SAT = 10;
-  var YEUX = [["normal", "normal"], ["myope", "myope"], ["hyper", "hypermétrope"], ["presbyte", "presbyte"]];
+  var YEUX = [["normal", "normal"], ["myope", TRAD("myope")], ["hyper", TRAD("hypermétrope")], ["presbyte", TRAD("presbyte")]];
   function amplitude(type) { var G = root && root.VITRINE_GONIOMETRE; return G && G.YEUX && G.YEUX[type] ? G.YEUX[type] : { normal: [0, 8], myope: [2, 8], hyper: [-1, 8], presbyte: [0, 1] }[type] || [0, 8]; }
   // Proximité (dioptries) sur laquelle l'œil est réglé : mode « objet » = mise au point automatique sur la proximité
   // visée p.cible, dans la plage de l'œil (comme `foyer` du cœur goniomètre) ; mode « curseur » = accommodation p.acc.
@@ -148,122 +165,125 @@
   // ================= boîte à éléments =================
   // Une pièce = un type du cœur + ses paramètres ; max = nombre d'exemplaires dans le tiroir.
   var PIECES = {
-    lanterne: { nom: "Lanterne", court: "lanterne", type: "lanterne", params: { tirage: 70 }, max: 1,
-      titre: "Lampe halogène et son condenseur ; le tirage du condenseur se règle." },
-    lettreF: { nom: "Lettre F", court: "lettre F", type: "lettreF", max: 1, titre: "Lettre F transparente, haute de 20 mm, sur une plaque opaque." },
-    quadrillage: { nom: "Quadrillage", court: "quadrillage", type: "quadrillage", max: 1, titre: "Quadrillage millimétré sur verre (carré de 40 mm)." },
-    depoli: { nom: "Dépoli", court: "dépoli", type: "depoli", max: 1, titre: "Verre dépoli : il diffuse la lumière dans toutes les directions." },
-    trouSource: { nom: "Trou source", court: "trou source", type: "trouSource", params: { d: 0.5 }, max: 1, titre: "Trou de 0,1 à 1 mm de diamètre : un objet presque ponctuel." },
-    iris: { nom: "Iris", court: "iris", type: "iris", params: { D: 20 }, max: 2, titre: "Diaphragme à iris, de 1 à 40 mm de diamètre." },
-    ecran: { nom: "Écran", court: "écran", type: "ecran", params: { quadrille: false }, max: 1, titre: "Écran blanc de 20 cm de côté, regardé du côté de la lumière." },
-    capteur: { nom: "Capteur", court: "capteur", type: "capteur", max: 1, titre: "Capteur d'appareil photo : 6,4 × 4,8 mm, pixels de 5 µm, temps de pose réglable." },
-    oeil: { nom: "Œil", court: "œil", type: "oeil", params: { type: "normal", mode: "objet", acc: 0, pupille: 4 }, max: 1,
-      titre: "Un œil (sa pupille s'ouvre ou se ferme selon la lumière, de 2 à 8 mm) : il regarde vers la source et met au point de lui-même sur l'objet, dans la limite de son accommodation." },
-    viseur: { nom: "Viseur", court: "viseur", type: "viseur", max: 1,
-      titre: "Viseur à frontale fixe : il montre net ce qui se trouve 100 mm devant son objectif, sur un réticule en croix." },
-    lunette: { nom: "Lunette", court: "lunette", type: "lunette", params: { bonnette: false }, max: 1,
-      titre: "Lunette réglée à l'infini, à réticule gradué au dixième de millimètre (objectif de 200 mm) ; une bonnette la fait viser à 100 mm." }
+    lanterne: { nom: TRAD("Lanterne"), court: TRAD("lanterne"), type: "lanterne", params: { tirage: 70 }, max: 1,
+      titre: TRAD("Lampe halogène et son condenseur ; le tirage du condenseur se règle.") },
+    lettreF: { nom: TRAD("Lettre F"), court: TRAD("lettre F"), type: "lettreF", max: 1, titre: TRAD("Lettre F transparente, haute de 20 mm, sur une plaque opaque.") },
+    quadrillage: { nom: TRAD("Quadrillage"), court: TRAD("quadrillage"), type: "quadrillage", max: 1, titre: TRAD("Quadrillage millimétré sur verre (carré de 40 mm).") },
+    depoli: { nom: TRAD("Dépoli"), court: TRAD("dépoli"), type: "depoli", max: 1, titre: TRAD("Verre dépoli : il diffuse la lumière dans toutes les directions.") },
+    trouSource: { nom: TRAD("Trou source"), court: TRAD("trou source"), type: "trouSource", params: { d: 0.5 }, max: 1, titre: TRAD("Trou de 0,1 à 1 mm de diamètre : un objet presque ponctuel.") },
+    iris: { nom: TRAD("Iris"), court: "iris", type: "iris", params: { D: 20 }, max: 2, titre: TRAD("Diaphragme à iris, de 1 à 40 mm de diamètre.") },
+    ecran: { nom: TRAD("Écran"), court: TRAD("écran"), type: "ecran", params: { quadrille: false }, max: 1, titre: TRAD("Écran blanc de 20 cm de côté, regardé du côté de la lumière.") },
+    capteur: { nom: TRAD("Capteur"), court: TRAD("capteur"), type: "capteur", max: 1, titre: TRAD("Capteur d'appareil photo : 6,4 × 4,8 mm, pixels de 5 µm, temps de pose réglable.") },
+    oeil: { nom: TRAD("Œil"), court: TRAD("œil"), type: "oeil", params: { type: "normal", mode: "objet", acc: 0, pupille: 4 }, max: 1,
+      titre: TRAD("Un œil (sa pupille s'ouvre ou se ferme selon la lumière, de 2 à 8 mm) : il regarde vers la source et met au point de lui-même sur l'objet, dans la limite de son accommodation.") },
+    viseur: { nom: TRAD("Viseur"), court: TRAD("viseur"), type: "viseur", max: 1,
+      titre: TRAD("Viseur à frontale fixe : il montre net ce qui se trouve 100 mm devant son objectif, sur un réticule en croix.") },
+    lunette: { nom: TRAD("Lunette"), court: TRAD("lunette"), type: "lunette", params: { bonnette: false }, max: 1,
+      titre: TRAD("Lunette réglée à l'infini, à réticule gradué au dixième de millimètre (objectif de 200 mm) ; une bonnette la fait viser à 100 mm.") }
   };
   // Young et diffraction (tiroir « Young et diffraction ») ; les variantes d'une pièce (largeur de
   // fente, écartement, nombre de fentes, traits du réseau) se choisissent au bandeau (VARIANTES).
-  PIECES.sodium = { nom: "Lampe à sodium", court: "sodium", type: "spectrale", params: { gaz: "na", filtre: false }, max: 1,
-    titre: "Lampe spectrale à vapeur de sodium (doublet jaune 589,0 et 589,6 nm), ampoule de 15 mm." };
+  PIECES.sodium = { nom: TRAD("Lampe à sodium"), court: "sodium", type: "spectrale", params: { gaz: "na", filtre: false }, max: 1,
+    titre: TRAD("Lampe spectrale à vapeur de sodium (doublet jaune 589,0 et 589,6 nm), ampoule de 15 mm.") };
   PIECES.laser = { nom: "Laser", court: "laser", type: "laser", max: 1,
-    titre: "Laser hélium-néon (632,8 nm), faisceau fin de 0,8 mm, très peu divergent." };
-  PIECES.laserVert = { nom: "Laser vert", court: "laser vert", type: "laser", params: { vert: true }, max: 1,
-    titre: "Laser vert (532 nm), 1 mW comme le rouge, faisceau de 1 mm, très peu divergent." };
-  PIECES.fenteSource = { nom: "Fente source", court: "fente source", type: "fenteSource", params: { b: 0.1 }, max: 1, orientable: true,
-    titre: "Fente réglable de 0 à 2 mm, haute de 10 mm, orientable : on l'éclaire avec la lampe, elle sert de source." };
-  PIECES.bifentes = { nom: "Bifentes", court: "bifentes", type: "bifentes", params: { caches: [true, false, true] }, max: 1,
-    titre: "Support de trois bifentes (fentes de 60 µm, écartements 0,20, 0,25 et 0,30 mm) : on masque les deux qu'on n'utilise pas." };
-  PIECES.fente = { nom: "Fente fine", court: "fente", type: "fente", params: { e: 0.1 }, max: 1, titre: "Fente fine calibrée : 40, 70, 100 ou 200 µm." };
-  PIECES.trousYoung = { nom: "Trous d'Young", court: "trous d'Young", type: "trousYoung", params: { a: 0.5, d: 0.1 }, max: 1,
-    titre: "Deux trous de 0,1 mm, distants de 0,5 ou 1 mm." };
-  PIECES.fentesMultiples = { nom: "Fentes multiples", court: "N fentes", type: "fentesMultiples", params: { n: 4 }, max: 1,
-    titre: "2, 3, 4, 5 ou 10 fentes de 40 µm au pas de 0,2 mm." };
-  PIECES.reseau = { nom: "Réseau", court: "réseau", type: "reseau", params: { n: 100 }, max: 1, titre: "Réseau de 100, 300 ou 600 traits par millimètre." };
+    titre: TRAD("Laser hélium-néon (632,8 nm), faisceau fin de 0,8 mm, très peu divergent.") };
+  PIECES.laserVert = { nom: TRAD("Laser vert"), court: TRAD("laser vert"), type: "laser", params: { vert: true }, max: 1,
+    titre: TRAD("Laser vert (532 nm), 1 mW comme le rouge, faisceau de 1 mm, très peu divergent.") };
+  PIECES.fenteSource = { nom: TRAD("Fente source"), court: TRAD("fente source"), type: "fenteSource", params: { b: 0.1 }, max: 1, orientable: true,
+    titre: TRAD("Fente réglable de 0 à 2 mm, haute de 10 mm, orientable : on l'éclaire avec la lampe, elle sert de source.") };
+  PIECES.bifentes = { nom: TRAD("Bifentes"), court: TRAD("bifentes"), type: "bifentes", params: { caches: [true, false, true] }, max: 1,
+    titre: TRAD("Support de trois bifentes (fentes de 60 µm, écartements 0,20, 0,25 et 0,30 mm) : on masque les deux qu'on n'utilise pas.") };
+  PIECES.fente = { nom: TRAD("Fente fine"), court: TRAD("fente"), type: "fente", params: { e: 0.1 }, max: 1, titre: TRAD("Fente fine calibrée : 40, 70, 100 ou 200 µm.") };
+  PIECES.trousYoung = { nom: TRAD("Trous d'Young"), court: TRAD("trous d'Young"), type: "trousYoung", params: { a: 0.5, d: 0.1 }, max: 1,
+    titre: TRAD("Deux trous de 0,1 mm, distants de 0,5 ou 1 mm.") };
+  PIECES.fentesMultiples = { nom: TRAD("Fentes multiples"), court: TRAD("N fentes"), type: "fentesMultiples", params: { n: 4 }, max: 1,
+    titre: TRAD("2, 3, 4, 5 ou 10 fentes de 40 µm au pas de 0,2 mm.") };
+  PIECES.reseau = { nom: TRAD("Réseau"), court: TRAD("réseau"), type: "reseau", params: { n: 100 }, max: 1, titre: TRAD("Réseau de 100, 300 ou 600 traits par millimètre.") };
   PIECES.fente.orientable = true;
   // Optique de Fourier (tiroir « Fourier »), le cheveu, la lampe à mercure (raie verte filtrée).
-  PIECES.mercure = { nom: "Lampe à mercure", court: "mercure", type: "spectrale", params: { gaz: "hg", filtre: true }, max: 1,
-    titre: "Lampe spectrale à vapeur de mercure, ampoule de 15 mm ; un filtre ne laisse passer que la raie verte (546,1 nm)." };
-  PIECES.fil = { nom: "Cheveu", court: "cheveu", type: "fil", params: { w: 0.07 }, max: 1, orientable: true,
-    titre: "Un cheveu (environ 70 µm d'épaisseur) tendu sur un cadre, orientable." };
-  PIECES.grilleCroisee = { nom: "Grille croisée", court: "grille", type: "grilleCroisee", params: { pas: 0.25 }, max: 1,
-    titre: "Grille de fils croisés de 50 µm, au pas de 0,2, 0,25 ou 0,5 mm, sur un champ de 20 mm." };
-  PIECES.objetPhase = { nom: "Objet de phase", court: "objet de phase", type: "objetPhase", params: { forme: "goutte" }, max: 1,
-    titre: "Verre gravé, parfaitement transparent : une goutte ou une lettre qui retarde la lumière d'environ un radian, sans l'absorber." };
-  PIECES.pastille = { nom: "Pastille", court: "pastille", type: "pastille", params: { d: 0.5 }, max: 1,
-    titre: "Pastille opaque de 0,2, 0,5 ou 1 mm de diamètre sur un verre : placée au foyer, elle arrête la lumière qui n'a pas été diffractée." };
-  PIECES.couteau = { nom: "Couteau", court: "couteau", type: "couteau", params: { xc: 0 }, max: 1, orientable: true,
-    titre: "Lame à bord droit qui arrête la lumière d'un côté de son bord ; une vis la translate, elle s'oriente autour de l'axe." };
+  PIECES.mercure = { nom: TRAD("Lampe à mercure"), court: TRAD("mercure"), type: "spectrale", params: { gaz: "hg", filtre: true }, max: 1,
+    titre: TRAD("Lampe spectrale à vapeur de mercure, ampoule de 15 mm ; un filtre ne laisse passer que la raie verte (546,1 nm).") };
+  PIECES.fil = { nom: TRAD("Cheveu"), court: TRAD("cheveu"), type: "fil", params: { w: 0.07 }, max: 1, orientable: true,
+    titre: TRAD("Un cheveu (environ 70 µm d'épaisseur) tendu sur un cadre, orientable.") };
+  PIECES.grilleCroisee = { nom: TRAD("Grille croisée"), court: TRAD("grille"), type: "grilleCroisee", params: { pas: 0.25 }, max: 1,
+    titre: TRAD("Grille de fils croisés de 50 µm, au pas de 0,2, 0,25 ou 0,5 mm, sur un champ de 20 mm.") };
+  PIECES.objetPhase = { nom: TRAD("Objet de phase"), court: TRAD("objet de phase"), type: "objetPhase", params: { forme: "goutte" }, max: 1,
+    titre: TRAD("Verre gravé, parfaitement transparent : une goutte ou une lettre qui retarde la lumière d'environ un radian, sans l'absorber.") };
+  PIECES.pastille = { nom: TRAD("Pastille"), court: TRAD("pastille opaque"), type: "pastille", params: { d: 0.5 }, max: 1,
+    titre: TRAD("Pastille opaque de 0,2, 0,5 ou 1 mm de diamètre sur un verre : placée au foyer, elle arrête la lumière qui n'a pas été diffractée.") };
+  PIECES.couteau = { nom: TRAD("Couteau"), court: TRAD("couteau"), type: "couteau", params: { xc: 0 }, max: 1, orientable: true,
+    titre: TRAD("Lame à bord droit qui arrête la lumière d'un côté de son bord ; une vis la translate, elle s'oriente autour de l'axe.") };
   // Filtres, règle transparente (la barrette CCD n'est plus une pièce : elle se pose sur l'écran, st.barr).
-  PIECES.filtre = { nom: "Filtre", court: "filtre", type: "filtre", params: { couleur: "vert" }, max: 2,
-    titre: "Filtre coloré rouge, vert ou bleu (bandes larges), ou filtre interférentiel vert (546 nm, 10 nm de large)." };
+  PIECES.filtre = { nom: TRAD("Filtre"), court: TRAD("filtre"), type: "filtre", params: { couleur: "vert" }, max: 2,
+    titre: TRAD("Filtre coloré rouge, vert ou bleu (bandes larges), ou filtre interférentiel vert (546 nm, 10 nm de large).") };
   // Densité neutre (transmission 10^−d, la même pour toutes les couleurs), pour un capteur, une
   // barrette ou un œil que la lumière éblouit.
-  PIECES.densite = { nom: "Densité neutre", court: "densité", type: "densite", params: { d: 2 }, max: 2,
-    titre: "Filtre gris de densité optique 1 à 4 : il divise la lumière par 10, 100, 1000 ou 10 000, sans changer sa couleur (devant un capteur saturé, par exemple)." };
+  PIECES.densite = { nom: TRAD("Densité neutre"), court: TRAD("densité"), type: "densite", params: { d: 2 }, max: 2,
+    titre: TRAD("Filtre gris de densité optique 1 à 4 : il divise la lumière par 10, 100, 1000 ou 10 000, sans changer sa couleur (devant un capteur saturé, par exemple).") };
   // Diapos (images en niveaux de gris, 20 mm, du cœur : C.DIAPO_NOMS), et la même éclairée par un dépoli.
-  PIECES.diapo = { nom: "Diapo", court: "diapo", type: "diapo", params: { image: "siemens" }, max: 1,
-    titre: "Diapositive de 20 mm de côté : mire de Siemens, mire USAF 1951, portrait de Fourier tramé ou photo de la Lune à lignes de balayage." };
-  PIECES.imageEclairee = { nom: "Image éclairée", court: "image éclairée", type: "diapo", params: { image: "lune", eclairee: true }, max: 1,
-    titre: "La même diapositive avec un verre dépoli juste derrière : chaque point de l'image renvoie de la lumière dans toutes les directions." };
-  PIECES.regle = { nom: "Règle transparente", court: "règle", type: "regle", max: 1, titre: "Règle transparente graduée au dixième de millimètre, sur 5 cm." };
+  PIECES.diapo = { nom: TRAD("Diapo"), court: TRAD("diapo"), type: "diapo", params: { image: "siemens" }, max: 1,
+    titre: TRAD("Diapositive de 20 mm de côté : mire de Siemens, mire USAF 1951, portrait de Fourier tramé ou photo de la Lune à lignes de balayage.") };
+  PIECES.imageEclairee = { nom: TRAD("Image éclairée"), court: TRAD("image éclairée"), type: "diapo", params: { image: "lune", eclairee: true }, max: 1,
+    titre: TRAD("La même diapositive avec un verre dépoli juste derrière : chaque point de l'image renvoie de la lumière dans toutes les directions.") };
+  PIECES.regle = { nom: TRAD("Règle transparente"), court: TRAD("règle"), type: "regle", max: 1, titre: TRAD("Règle transparente graduée au dixième de millimètre, sur 5 cm.") };
   // Polarisation (types `polariseur` et `lame` du cœur, Jones). Orientation affichée = e.rot : 0° = axe du
   // polariseur (ou ligne neutre de la lame) VERTICAL sur les miniatures, alors que le cœur compte rot depuis son axe x.
   // Le repère du cœur est donc tourné de 90° par rapport au dessin, sans effet : rien d'autre sur le banc ne dépend de
   // la polarisation (lumière naturelle, laser compris), seuls les angles RELATIFS des pièces comptent.
-  PIECES.polariseur = { nom: "Polariseur", court: "polariseur", type: "polariseur", max: 2, orientable: true,
-    titre: "Polariseur (ou analyseur) gradué en degrés : il ne laisse passer que la vibration parallèle à son axe." };
-  PIECES.lameD = { nom: "Lame demi-onde", court: "λ/2", type: "lame", params: { ordre: "demi" }, max: 1, orientable: true,
-    titre: "Lame demi-onde d'ordre zéro pour 546 nm, orientable : elle retarde d'une demi-période la vibration parallèle à l'une de ses lignes neutres." };
-  PIECES.lameQ = { nom: "Lame quart d'onde", court: "λ/4", type: "lame", params: { ordre: "quart" }, max: 1, orientable: true,
-    titre: "Lame quart d'onde d'ordre zéro pour 546 nm, orientable : elle retarde d'un quart de période la vibration parallèle à l'une de ses lignes neutres." };
+  PIECES.polariseur = { nom: TRAD("Polariseur"), court: TRAD("polariseur"), type: "polariseur", max: 2, orientable: true,
+    titre: TRAD("Polariseur (ou analyseur) gradué en degrés : il ne laisse passer que la vibration parallèle à son axe.") };
+  PIECES.lameD = { nom: TRAD("Lame demi-onde"), court: "λ/2", type: "lame", params: { ordre: "demi" }, max: 1, orientable: true,
+    titre: TRAD("Lame demi-onde d'ordre zéro pour 546 nm, orientable : elle retarde d'une demi-période la vibration parallèle à l'une de ses lignes neutres.") };
+  PIECES.lameQ = { nom: TRAD("Lame quart d'onde"), court: "λ/4", type: "lame", params: { ordre: "quart" }, max: 1, orientable: true,
+    titre: TRAD("Lame quart d'onde d'ordre zéro pour 546 nm, orientable : elle retarde d'un quart de période la vibration parallèle à l'une de ses lignes neutres.") };
   var TEINTES = { rouge: "#e5362b", vert: "#2fbf4a", bleu: "#2f6bff", interferentiel: "#7fe36a" };
   // [paramètre, valeurs, texte] : pastilles du bandeau et molette sur la miniature
   var VARIANTES = {
-    filtre: ["couleur", ["rouge", "vert", "bleu", "interferentiel"], function (v) { return v === "interferentiel" ? "interférentiel 546 nm" : v; }],
-    densite: ["d", [1, 2, 3, 4], function (v) { return "densité " + v + " (÷ " + ["10", "100", "1000", "10 000"][v - 1] + ")"; }],
+    filtre: ["couleur", ["rouge", "vert", "bleu", "interferentiel"], function (v) { return v === "interferentiel" ? TRAD("interférentiel 546 nm") : v === "rouge" ? TRAD("rouge") : v === "vert" ? TRAD("vert") : TRAD("bleu"); }],
+    densite: ["d", [1, 2, 3, 4], function (v) { return TRAD("densité {0} (÷ {1})", [v, ["10", "100", "1000", "10 000"][v - 1]]); }],
     fente: ["e", [0.04, 0.07, 0.1, 0.2], function (v) { return fmtV(1000 * v) + " µm"; }],
     trousYoung: ["a", [0.5, 1], function (v) { return "a = " + fmtV(v) + " mm"; }],
-    fentesMultiples: ["n", [2, 3, 4, 5, 10], function (v) { return v + " fentes"; }],
-    reseau: ["n", [100, 300, 600], function (v) { return v + " traits/mm"; }],
-    grilleCroisee: ["pas", [0.2, 0.25, 0.5], function (v) { return "pas " + fmtV(v) + " mm"; }],
-    objetPhase: ["forme", ["goutte", "lettre"], function (v) { return v; }],
+    fentesMultiples: ["n", [2, 3, 4, 5, 10], function (v) { return TRAD("{0} fentes", [v]); }],
+    reseau: ["n", [100, 300, 600], function (v) { return TRAD("{0} traits/mm", [v]); }],
+    grilleCroisee: ["pas", [0.2, 0.25, 0.5], function (v) { return TRAD("pas {0} mm", [fmtV(v)]); }],
+    objetPhase: ["forme", ["goutte", "lettre"], function (v) { return v === "goutte" ? TRAD("goutte") : TRAD("lettre"); }],
     pastille: ["d", [0.2, 0.5, 1], function (v) { return "Ø " + fmtV(v) + " mm"; }],
-    diapo: ["image", C.DIAPO_NOMS, function (v) { return { siemens: "mire de Siemens", usaf: "mire USAF 1951", fourier: "portrait de Fourier", lune: "Lune (Apollo 11)" }[v] || v; }]
+    diapo: ["image", C.DIAPO_NOMS, function (v) { return { siemens: TRAD("mire de Siemens"), usaf: TRAD("mire USAF 1951"), fourier: TRAD("portrait de Fourier"), lune: TRAD("Lune (Apollo 11)") }[v] || v; }]
   };
+  // Nom d'un filtre : « filtre rouge » se dit « red filter », l'ordre des mots impose la table.
+  var NOM_FILTRE = { rouge: TRAD("filtre rouge"), vert: TRAD("filtre vert"), bleu: TRAD("filtre bleu"), interferentiel: TRAD("filtre interférentiel 546 nm") };
   var ECARTS = [0.2, 0.25, 0.3];                      // bifentes du cœur (a), la découverte choisie au bandeau
-  function fmtV(v) { return String(Math.round(v * 1000) / 1000).replace(".", ","); }
+  function fmtV(v) { return nb(Math.round(v * 1000) / 1000); }
   function signe(f) { return (f < 0 ? "−" : "") + Math.abs(f); }
   C.LENTILLES.forEach(function (L) {
     PIECES["l" + L[0]] = { nom: signe(L[0]) + " mm", court: signe(L[0]) + " mm", type: "lentille", max: 2,
       params: { f: L[0], D: L[1], forme: L[0] > 0 ? "bicv" : "bicc", retournee: false },
-      titre: "Lentille " + (L[0] > 0 ? "convergente" : "divergente") + " de focale " + signe(L[0]) + " mm, de diamètre " + L[1] + " mm." };
+      titre: L[0] > 0 ? TRAD("Lentille convergente de focale {0} mm, de diamètre {1} mm.", [signe(L[0]), L[1]])
+        : TRAD("Lentille divergente de focale {0} mm, de diamètre {1} mm.", [signe(L[0]), L[1]]) };
   });
   PIECES.l200.max = 3;                               // montage 4f : collimateur et deux lentilles de 200 mm
   // Grande lentille de démonstration : ses aberrations se voient sans zoomer.
   PIECES.l150d = { nom: "150 mm, Ø 100", court: "150 mm Ø 100", type: "lentille", max: 1,
     params: { f: 150, D: 100, forme: "bicv", retournee: false },
-    titre: "Grande lentille de démonstration : focale 150 mm, diamètre 100 mm ; ses aberrations se voient bien en optique réelle." };
+    titre: TRAD("Grande lentille de démonstration : focale 150 mm, diamètre 100 mm ; ses aberrations se voient bien en optique réelle.") };
   // Objectif de microscope ×20 (forme « objectif » du cœur : idéal dans les deux optiques, comme un objectif corrigé de
   // TP) ; la lentille simple de 10 mm reste dans la boîte, pour ses aberrations.
-  PIECES.objectif = { nom: "Objectif ×20", court: "objectif ×20", type: "lentille", max: 1,
+  PIECES.objectif = { nom: TRAD("Objectif ×20"), court: TRAD("objectif ×20"), type: "lentille", max: 1,
     params: { f: 10, D: 8, forme: "objectif", retournee: false },
-    titre: "Objectif de microscope ×20, de focale 10 mm : plusieurs lentilles collées corrigent ses aberrations, il forme des images nettes même en optique réelle. Pour un microscope, ou pour élargir le faisceau d'un laser." };
-  PIECES.miroir = { nom: "Miroir plan", court: "miroir", type: "miroir", max: 1,
-    titre: "Miroir plan, inclinable : il renvoie la lumière vers la source ; la face de la lettre F ou du trou source tournée vers lui est blanche et sert d'écran." };
-  var NOMS = { spectrale: "lampe à sodium", laser: "laser", fenteSource: "fente source", bifentes: "bifentes", fente: "fente fine", trousYoung: "trous d'Young",
-    fentesMultiples: "fentes multiples", reseau: "réseau", miroir: "miroir plan", lanterne: "lanterne", lettreF: "lettre F", quadrillage: "quadrillage", depoli: "dépoli", trouSource: "trou source",
-    iris: "iris", ecran: "écran", capteur: "capteur", oeil: "œil", viseur: "viseur", lunette: "lunette", regle: "règle transparente",
-    fil: "cheveu", grilleCroisee: "grille croisée", objetPhase: "objet de phase", pastille: "pastille", couteau: "couteau", polariseur: "polariseur" };
+    titre: TRAD("Objectif de microscope ×20, de focale 10 mm : plusieurs lentilles collées corrigent ses aberrations, il forme des images nettes même en optique réelle. Pour un microscope, ou pour élargir le faisceau d'un laser.") };
+  PIECES.miroir = { nom: TRAD("Miroir plan"), court: TRAD("miroir"), type: "miroir", max: 1,
+    titre: TRAD("Miroir plan, inclinable : il renvoie la lumière vers la source ; la face de la lettre F ou du trou source tournée vers lui est blanche et sert d'écran.") };
+  var NOMS = { spectrale: TRAD("lampe à sodium"), laser: "laser", fenteSource: TRAD("fente source"), bifentes: TRAD("bifentes"), fente: TRAD("fente fine"), trousYoung: TRAD("trous d'Young"),
+    fentesMultiples: TRAD("fentes multiples"), reseau: TRAD("réseau"), miroir: TRAD("miroir plan"), lanterne: TRAD("lanterne"), lettreF: TRAD("lettre F"), quadrillage: TRAD("quadrillage"), depoli: TRAD("dépoli"), trouSource: TRAD("trou source"),
+    iris: "iris", ecran: TRAD("écran"), capteur: TRAD("capteur"), oeil: TRAD("œil"), viseur: TRAD("viseur"), lunette: TRAD("lunette"), regle: TRAD("règle transparente"),
+    fil: TRAD("cheveu"), grilleCroisee: TRAD("grille croisée"), objetPhase: TRAD("objet de phase"), pastille: TRAD("pastille opaque"), couteau: TRAD("couteau"), polariseur: TRAD("polariseur") };
   function nomDe(e) {
-    if (e.type === "lame") return C.params(e).ordre === "demi" ? "lame demi-onde" : "lame quart d'onde";
-    if (e.type === "filtre") return "filtre " + VARIANTES.filtre[2](C.params(e).couleur);
+    if (e.type === "lame") return C.params(e).ordre === "demi" ? TRAD("lame demi-onde") : TRAD("lame quart d'onde");
+    if (e.type === "filtre") return NOM_FILTRE[C.params(e).couleur] || TRAD("filtre {0}", [VARIANTES.filtre[2](C.params(e).couleur)]);
     if (e.type === "densite") return VARIANTES.densite[2](C.params(e).d);
-    if (e.type === "lentille") { var f = C.params(e).f; return "lentille " + signe(f) + " mm"; }
-    if (e.type === "spectrale" && C.params(e).gaz !== "na") return "lampe à mercure";
-    if (e.type === "diapo") return (C.params(e).eclairee ? "image éclairée : " : "diapo : ") + VARIANTES.diapo[2](C.params(e).image);
+    if (e.type === "lentille") { var f = C.params(e).f; return TRAD("lentille {0} mm", [signe(f)]); }
+    if (e.type === "spectrale" && C.params(e).gaz !== "na") return TRAD("lampe à mercure");
+    if (e.type === "diapo") return (C.params(e).eclairee ? TRAD("image éclairée : ") : TRAD("diapo : ")) + VARIANTES.diapo[2](C.params(e).image);
     return NOMS[e.type] || e.type;
   }
   // Demi-hauteur dessinée d'un élément (mm) et, pour un objet, demi-étendue [dessus, profil] de sa partie utile.
@@ -358,20 +378,20 @@
   // m.f(st) pose les éléments ; optique, vue et aides reviennent à celles du bac sauf mention ; le cahier est gardé.
   function eclaire(st, zL, zLent) { return poser(st, "lanterne", zL, { tirage: tirageVers(zLent - zL) }); }
   var MONTAGES = {
-    depart: { nom: "Montage de départ", titre: "La lanterne, la lettre F, une lentille de 200 mm et l'écran : chercher l'image.",
+    depart: { nom: TRAD("Montage de départ"), titre: TRAD("La lanterne, la lettre F, une lentille de 200 mm et l'écran : chercher l'image."),
       aides: { faisceau: true }, f: function (st) { eclaire(st, 150, 700); poser(st, "lettreF", 300); poser(st, "l200", 700); poser(st, "ecran", 1400); } },
-    image: { nom: "Image sur un écran", titre: "Une lentille de 200 mm forme l'image de la lettre F sur l'écran : conjugaison et grandissement.",
+    image: { nom: TRAD("Image sur un écran"), titre: TRAD("Une lentille de 200 mm forme l'image de la lettre F sur l'écran : conjugaison et grandissement."),
       aides: { construction: true }, zoom: 2,
       f: function (st) { eclaire(st, 150, 600); poser(st, "lettreF", 300); poser(st, "l200", 600); poser(st, "ecran", 1200); } },
-    quatref: { nom: "Écran trop proche", titre: "L'écran est à 70 cm de l'objet, la lentille a une focale de 20 cm : chercher une image nette en déplaçant la lentille, puis reculer l'écran.",
+    quatref: { nom: TRAD("Écran trop proche"), titre: TRAD("L'écran est à 70 cm de l'objet, la lentille a une focale de 20 cm : chercher une image nette en déplaçant la lentille, puis reculer l'écran."),
       aides: { construction: true }, zoom: 2,
       f: function (st) { eclaire(st, 150, 650); poser(st, "lettreF", 300); poser(st, "l200", 650); poser(st, "ecran", 1000); } },
-    infini: { nom: "Objet au foyer", titre: "L'objet est dans le plan focal objet de la lentille : son image est à l'infini.",
+    infini: { nom: TRAD("Objet au foyer"), titre: TRAD("L'objet est dans le plan focal objet de la lentille : son image est à l'infini."),
       aides: { pinceau: true }, f: function (st) { eclaire(st, 150, 500); poser(st, "lettreF", 300); poser(st, "l200", 500); poser(st, "ecran", 1500); } },
-    bessel: { nom: "Méthode de Bessel", titre: "Objet et écran fixes, distants de 1 m : deux positions de la lentille donnent une image nette.",
+    bessel: { nom: TRAD("Méthode de Bessel"), titre: TRAD("Objet et écran fixes, distants de 1 m : deux positions de la lentille donnent une image nette."),
       aides: { faisceau: true }, zoom: 2,
       f: function (st) { eclaire(st, 150, 576.4); poser(st, "lettreF", 300); poser(st, "l200", 576.4); poser(st, "ecran", 1300); } },
-    silbermann: { nom: "Méthode de Silbermann", titre: "Objet et image symétriques par rapport à la lentille : même taille, image renversée.",
+    silbermann: { nom: TRAD("Méthode de Silbermann"), titre: TRAD("Objet et image symétriques par rapport à la lentille : même taille, image renversée."),
       aides: { construction: true }, zoom: 4,
       f: function (st) { eclaire(st, 150, 700); poser(st, "lettreF", 300); poser(st, "l200", 700); poser(st, "ecran", 1100); } },
     // Trou source des trois montages d'aberrations (stigmatisme, aberration, chromatisme) éclairé par la lanterne en
@@ -379,7 +399,7 @@
     // aberrations, chaque zone de la lentille voit par le trou une spire ou un intervalle différent, et la tache prend la
     // forme d'un os ou d'un nœud papillon colorés (selon le tirage) au lieu d'un disque. Pas de dépoli : il ferait perdre
     // le tirage depuis le trou (seq.mode = 1 du cœur), 50 à 100 fois moins de rayons utiles, et 75 à 250 fois moins de lumière.
-    stigmatisme: { nom: "Stigmatisme approché", titre: "Un trou source, une lentille plan-convexe, un iris et un capteur, en optique réelle : fermer l'iris resserre la tache.",
+    stigmatisme: { nom: TRAD("Stigmatisme approché"), titre: TRAD("Un trou source, une lentille plan-convexe, un iris et un capteur, en optique réelle : fermer l'iris resserre la tache."),
       seule: "reelle", aides: { pinceau: true }, poseAuto: true,
       f: function (st) {
         poser(st, "lanterne", 150, { tirage: tirageVers(150), emet: "carre" }); poser(st, "trouSource", 300, { d: 0.1 });
@@ -387,27 +407,27 @@
         var c = poser(st, "capteur", 833), im = C.images(C.sequence(banc(st)), 587.6, C.sequence(banc(st)).objet);
         if (im && !im.finale.infini) c.z = Math.round(10 * im.finale.z) / 10;
       } },
-    photo: { nom: "Appareil photo", titre: "Un objectif de 50 mm, un diaphragme et un capteur : mise au point, profondeur de champ, temps de pose. La lettre éclairée par la lanterne est si lumineuse qu'une densité de 3 devant l'objectif est nécessaire.",
+    photo: { nom: TRAD("Appareil photo"), titre: TRAD("Un objectif de 50 mm, un diaphragme et un capteur : mise au point, profondeur de champ, temps de pose. La lettre éclairée par la lanterne est si lumineuse qu'une densité de 3 devant l'objectif est nécessaire."),
       aides: { faisceau: true }, poseAuto: true,
       f: function (st) { eclaire(st, 150, 1500); poser(st, "lettreF", 300); poser(st, "densite", 1480, { d: 3 }); poser(st, "l50", 1500); poser(st, "iris", 1506, { D: 8 }); poser(st, "capteur", 1552.2); } }
   };
   // Montages : l'œil, le viseur, la lunette. Un dépoli devant l'objet quand c'est l'œil qui regarde : sans
   // lui, chaque point de l'objet n'envoie sa lumière que dans le cône étroit qui vient du filament, et la pupille de
   // 4 mm n'en reçoit que d'une petite partie de l'objet.
-  MONTAGES.loupe = { nom: "Loupe", titre: "La lettre F est dans le plan focal objet d'une lentille de 100 mm : l'œil, placé derrière, la voit nette sans accommoder. Rapprocher la lentille de l'objet : l'œil accommode.",
+  MONTAGES.loupe = { nom: TRAD("Loupe"), titre: TRAD("La lettre F est dans le plan focal objet d'une lentille de 100 mm : l'œil, placé derrière, la voit nette sans accommoder. Rapprocher la lentille de l'objet : l'œil accommode."),
     aides: { pinceau: true },
     f: function (st) { poser(st, "lanterne", 150, { tirage: 70 }); poser(st, "depoli", 290); poser(st, "lettreF", 300); poser(st, "l100", 400); poser(st, "oeil", 430); } };
-  MONTAGES.astro = { nom: "Lunette astronomique", titre: "Un objet à l'infini (la lettre F au foyer d'une lentille de 300 mm), un objectif de 200 mm, un oculaire de 50 mm dont le foyer objet est au foyer image de l'objectif : l'œil voit l'image à l'infini, renversée et agrandie.",
+  MONTAGES.astro = { nom: TRAD("Lunette astronomique"), titre: TRAD("Un objet à l'infini (la lettre F au foyer d'une lentille de 300 mm), un objectif de 200 mm, un oculaire de 50 mm dont le foyer objet est au foyer image de l'objectif : l'œil voit l'image à l'infini, renversée et agrandie."),
     aides: { pinceau: true },
     f: function (st) { poser(st, "lanterne", 60, { tirage: 70 }); poser(st, "depoli", 190); poser(st, "lettreF", 200); poser(st, "l300", 500); poser(st, "l200", 700); poser(st, "l50", 950); poser(st, "oeil", 1012.5); } };
-  MONTAGES.viseur = { nom: "Viseur", titre: "Le viseur montre net ce qui se trouve 100 mm devant son objectif : sa position sur le banc donne celle de l'image, sans écran.",
+  MONTAGES.viseur = { nom: TRAD("Viseur"), titre: TRAD("Le viseur montre net ce qui se trouve 100 mm devant son objectif : sa position sur le banc donne celle de l'image, sans écran."),
     aides: { faisceau: true },
     f: function (st) { eclaire(st, 150, 900); poser(st, "lettreF", 300); poser(st, "l200", 900); poser(st, "viseur", 1300); } };
-  MONTAGES.lunette = { nom: "Lunette et objet à l'infini", titre: "La lunette est réglée à l'infini : elle montre nette, sur son réticule, l'image d'un objet placé dans le plan focal objet de la lentille. Déplacer la lentille.",
+  MONTAGES.lunette = { nom: TRAD("Lunette et objet à l'infini"), titre: TRAD("La lunette est réglée à l'infini : elle montre nette, sur son réticule, l'image d'un objet placé dans le plan focal objet de la lentille. Déplacer la lentille."),
     aides: { pinceau: true },
     f: function (st) { poser(st, "lanterne", 60, { tirage: 70 }); poser(st, "depoli", 190); poser(st, "lettreF", 200); poser(st, "l500", 700); poser(st, "lunette", 900); } };
   // Le miroir replie le banc ; la lumière revient jusqu'à la plaque de la lettre F, dont la face blanche sert d'écran.
-  MONTAGES.autocollimation = { nom: "Autocollimation", titre: "Un miroir plan derrière la lentille renvoie la lumière : quand la lettre F est dans le plan focal objet de la lentille, son image revient nette dans son propre plan, renversée, où que soit le miroir. Déplacer la lentille, puis le miroir.",
+  MONTAGES.autocollimation = { nom: "Autocollimation", titre: TRAD("Un miroir plan derrière la lentille renvoie la lumière : quand la lettre F est dans le plan focal objet de la lentille, son image revient nette dans son propre plan, renversée, où que soit le miroir. Déplacer la lentille, puis le miroir."),
     aides: { pinceau: true }, zoom: 2,
     f: function (st) { eclaire(st, 150, 500); poser(st, "lettreF", 300); poser(st, "l200", 500); incliner(poser(st, "miroir", 600), 1); } };
   // Inclinaison du miroir (degrés, dans le plan vertical ; > 0 : le retour monte de 2 f′ θ dans le plan focal de la
@@ -419,18 +439,18 @@
     if (lampe === "lanterne") poser(st, "lanterne", 80, { tirage: tirageVers(150) }); else poser(st, lampe || "sodium", 200);
     poser(st, "fenteSource", 230, { b: b }); poser(st, "l200", 430); poser(st, "bifentes", 480); poser(st, "l200", 530); poser(st, "ecran", 730);
   }
-  MONTAGES.young = { nom: "Young au sodium", titre: "Lampe à sodium, fente source au foyer d'une lentille de 200 mm, bifentes dans le faisceau parallèle, écran au foyer d'une seconde lentille : les franges sont celles de l'infini. Élargir la fente source : elles se brouillent.",
+  MONTAGES.young = { nom: TRAD("Young au sodium"), titre: TRAD("Lampe à sodium, fente source au foyer d'une lentille de 200 mm, bifentes dans le faisceau parallèle, écran au foyer d'une seconde lentille : les franges sont celles de l'infini. Élargir la fente source : elles se brouillent."),
     vue: "dessus", aides: { faisceau: true }, zoom: 32, f: function (st) { young(st, "sodium", 0.1); } };
-  MONTAGES.youngBlanc = { nom: "Young en lumière blanche", titre: "Le même montage éclairé par la lanterne : une frange centrale blanche, quelques franges irisées, puis le blanc d'ordre supérieur.",
+  MONTAGES.youngBlanc = { nom: TRAD("Young en lumière blanche"), titre: TRAD("Le même montage éclairé par la lanterne : une frange centrale blanche, quelques franges irisées, puis le blanc d'ordre supérieur."),
     vue: "dessus", aides: { faisceau: true }, zoom: 32, f: function (st) { young(st, "lanterne", 0.05); } };
-  MONTAGES.youngLaser = { nom: "Laser sur les bifentes", titre: "Le laser éclaire directement les bifentes ; l'écran est à 1,65 m : des franges larges, dans la tache de diffraction de chaque fente.",
+  MONTAGES.youngLaser = { nom: TRAD("Laser sur les bifentes"), titre: TRAD("Le laser éclaire directement les bifentes ; l'écran est à 1,65 m : des franges larges, dans la tache de diffraction de chaque fente."),
     vue: "dessus", aides: { faisceau: true }, zoom: 3, f: function (st) { poser(st, "laser", 250); poser(st, "bifentes", 350); poser(st, "ecran", 2000); } };
   // La barrette sur l'écran à 1,65 m des bifentes (a = 0,25 mm) : interfrange 4,2 mm, six ou sept franges sur 28,7 mm.
-  MONTAGES.barretteLaser = { nom: "Franges sur la barrette", titre: "Le laser sur les bifentes, une barrette CCD posée sur l'écran à 1,65 m : la courbe de l'éclairement le long de la barrette, ses franges et l'enveloppe de diffraction. La glisser et la tourner sur l'écran. Une densité de 3 devant le laser : sans elle, la barrette sature même à 1 ms.",
+  MONTAGES.barretteLaser = { nom: TRAD("Franges sur la barrette"), titre: TRAD("Le laser sur les bifentes, une barrette CCD posée sur l'écran à 1,65 m : la courbe de l'éclairement le long de la barrette, ses franges et l'enveloppe de diffraction. La glisser et la tourner sur l'écran. Une densité de 3 devant le laser : sans elle, la barrette sature même à 1 ms."),
     vue: "dessus", aides: {}, zoom: 4, barrette: true, f: function (st) { poser(st, "laser", 250); poser(st, "densite", 300, { d: 3 }); poser(st, "bifentes", 350); poser(st, "ecran", 2000); st.integ = 1; } };
-  MONTAGES.multiples = { nom: "Fentes multiples", titre: "Le laser sur quatre fentes au pas de 0,2 mm : des pics fins aux mêmes endroits que les franges de deux fentes, et des maximums secondaires entre eux. Changer le nombre de fentes.",
+  MONTAGES.multiples = { nom: TRAD("Fentes multiples"), titre: TRAD("Le laser sur quatre fentes au pas de 0,2 mm : des pics fins aux mêmes endroits que les franges de deux fentes, et des maximums secondaires entre eux. Changer le nombre de fentes."),
     vue: "dessus", aides: {}, zoom: 3, f: function (st) { poser(st, "laser", 250); poser(st, "fentesMultiples", 350, { n: 4 }); poser(st, "ecran", 2000); } };
-  MONTAGES.reseauLaser = { nom: "Réseau au laser", titre: "Un réseau de 100 traits par millimètre éclairé par le laser, l'écran à 50 cm : les ordres de diffraction, de plus en plus écartés.",
+  MONTAGES.reseauLaser = { nom: TRAD("Réseau au laser"), titre: TRAD("Un réseau de 100 traits par millimètre éclairé par le laser, l'écran à 50 cm : les ordres de diffraction, de plus en plus écartés."),
     vue: "dessus", aides: {}, f: function (st) { poser(st, "laser", 250); poser(st, "reseau", 350, { n: 100 }); poser(st, "ecran", 850); } };
   // Filtrage en montage 4f (bancs de contrôle du cœur, objet et filtre décalés de 10 cm, collimateur écarté
   // pour que les pièces ne se chevauchent pas). Trou source au foyer d'un collimateur de 200 mm, iris de champ dans le
@@ -440,36 +460,36 @@
     poser(st, "mercure", 40); poser(st, "trouSource", 70, { d: 0.1 }); poser(st, "l200", 270); poser(st, "iris", 310, { D: D });
     poser(st, objet[0], 350, objet[1]); poser(st, "l200", 550); poser(st, filtre[0], 750, filtre[1]); poser(st, "l200", 950); poser(st, "ecran", 1150);
   }
-  MONTAGES.abbe = { nom: "Abbe-Porter", titre: "Une grille croisée éclairée en lumière parallèle, son image sur l'écran par deux lentilles de 200 mm. Une fente fine est placée dans leur plan focal commun, où se forme la figure de diffraction de la grille : elle ne laisse passer que les taches alignées avec elle, et l'image ne garde que les traits perpendiculaires à la fente. Tourner la fente.",
+  MONTAGES.abbe = { nom: "Abbe-Porter", titre: TRAD("Une grille croisée éclairée en lumière parallèle, son image sur l'écran par deux lentilles de 200 mm. Une fente fine est placée dans leur plan focal commun, où se forme la figure de diffraction de la grille : elle ne laisse passer que les taches alignées avec elle, et l'image ne garde que les traits perpendiculaires à la fente. Tourner la fente."),
     vue: "dessus", aides: { faisceau: true }, zoom: 50, f: function (st) { quatreF(st, 3, ["grilleCroisee"], ["fente", { e: 0.2 }]); } };
   // Couteau à 45 µm de l'axe (l'image du trou a 50 µm de rayon), sur la lettre gravée et non sur la goutte : la goutte
   // (1 rad sur 1,2 mm, phase douce) ne donnait qu'une tache claire et floue, sans bord ni relief lisible.
   // Les bords nets de la lettre diffractent au-delà du couteau : seuls les bords perpendiculaires à son arête
   // (verticaux) ressortent en clair, le fond reste sombre ; couteau sur l'axe (xc = 0) : relief, un côté de chaque
   // bord vertical clair, l'autre sombre (vérifié sur le processeur).
-  MONTAGES.strioscopie = { nom: "Strioscopie", titre: "Une lettre gravée dans le verre (objet de phase) en montage 4f : sans filtrage, l'écran est uniformément éclairé et la lettre ne se voit pas. Un couteau dans le plan focal arrête presque toute l'image du trou source : seuls les bords de la lettre perpendiculaires à l'arête du couteau apparaissent, en clair sur un fond sombre. Reculer le couteau jusqu'à couper cette image en deux : la lettre paraît en relief, chaque bord clair d'un côté, sombre de l'autre ; tourner le couteau d'un quart de tour fait ressortir les autres bords.",
+  MONTAGES.strioscopie = { nom: TRAD("Strioscopie"), titre: TRAD("Une lettre gravée dans le verre (objet de phase) en montage 4f : sans filtrage, l'écran est uniformément éclairé et la lettre ne se voit pas. Un couteau dans le plan focal arrête presque toute l'image du trou source : seuls les bords de la lettre perpendiculaires à l'arête du couteau apparaissent, en clair sur un fond sombre. Reculer le couteau jusqu'à couper cette image en deux : la lettre paraît en relief, chaque bord clair d'un côté, sombre de l'autre ; tourner le couteau d'un quart de tour fait ressortir les autres bords."),
     vue: "dessus", aides: { faisceau: true }, zoom: 25, f: function (st) { quatreF(st, 26, ["objetPhase", { forme: "lettre" }], ["couteau", { xc: 0.045 }]); } };
   // Fond noir sur la lettre gravée, pas sur la goutte : le spectre de la goutte (1,2 mm) tient presque entier sous la
   // pastille (0,1 mm de rayon), qui l'arrête avec le fond (contraste ~2) ; les bords nets de la lettre diffractent
   // au-delà (bords à ~1400 fois le fond, vérifié sur le processeur à 1024²).
-  MONTAGES.fondNoir = { nom: "Fond noir", titre: "Une pastille opaque dans le plan focal arrête la lumière que l'objet de phase, une lettre gravée dans le verre, n'a pas diffractée : le fond de l'écran devient noir et les bords de la lettre y apparaissent en clair.",
+  MONTAGES.fondNoir = { nom: TRAD("Fond noir"), titre: TRAD("Une pastille opaque dans le plan focal arrête la lumière que l'objet de phase, une lettre gravée dans le verre, n'a pas diffractée : le fond de l'écran devient noir et les bords de la lettre y apparaissent en clair."),
     vue: "dessus", aides: { faisceau: true }, zoom: 25, f: function (st) { quatreF(st, 26, ["objetPhase", { forme: "lettre" }], ["pastille", { d: 0.2 }]); } };
   // Élargisseur : foyer image de l'objectif ×20 (10 mm) confondu avec le foyer objet de la lentille de 100 mm : afocal,
   // grandissement 10 (0,8 → 8 mm), divergence divisée par 10. Pas la lentille de 200 mm : faisceau de 16 mm dans une
   // monture de 40, que le moteur ondulatoire compte comme une ouverture (rayon < 2,5 w : `ondePlan`).
-  MONTAGES.elargir = { nom: "Élargir le faisceau du laser", titre: "Un objectif de microscope ×20 fait converger le faisceau du laser en un point, d'où il diverge ; une lentille de 100 mm, dont le foyer est sur ce point, le rend parallèle, dix fois plus large : 8 mm au lieu de 0,8 mm. Reculer l'écran : la tache garde sa taille. Déplacer la lentille : le faisceau converge ou diverge.",
+  MONTAGES.elargir = { nom: TRAD("Élargir le faisceau du laser"), titre: TRAD("Un objectif de microscope ×20 fait converger le faisceau du laser en un point, d'où il diverge ; une lentille de 100 mm, dont le foyer est sur ce point, le rend parallèle, dix fois plus large : 8 mm au lieu de 0,8 mm. Reculer l'écran : la tache garde sa taille. Déplacer la lentille : le faisceau converge ou diverge."),
     vue: "dessus", aides: { faisceau: true }, zoom: 3, f: function (st) { poser(st, "laser", 250); poser(st, "objectif", 350); poser(st, "l100", 460); poser(st, "ecran", 1500); } };
-  MONTAGES.cheveu = { nom: "Cheveu au laser", titre: "Le laser éclaire un cheveu, l'écran est à 1,65 m : autour de la tache du faisceau, la même figure de diffraction que celle d'une fente fine de même largeur.",
+  MONTAGES.cheveu = { nom: TRAD("Cheveu au laser"), titre: TRAD("Le laser éclaire un cheveu, l'écran est à 1,65 m : autour de la tache du faisceau, la même figure de diffraction que celle d'une fente fine de même largeur."),
     vue: "dessus", aides: {}, zoom: 2.5, f: function (st) { poser(st, "laser", 250); poser(st, "fil", 350); poser(st, "ecran", 2000); } };
   // Diapos. Projection : la lanterne et son condenseur (filament imagé sur la lentille), diapo à 30 cm, lentille
   // de 200 mm à 60 cm (image à 60 cm de la lentille, γ = −2 : 40 mm sur l'écran).
-  MONTAGES.projection = { nom: "Projeter une diapo", titre: "La lanterne éclaire une diapo, une lentille de 200 mm en forme l'image agrandie sur l'écran. Changer de diapo, déplacer la lentille.",
+  MONTAGES.projection = { nom: TRAD("Projeter une diapo"), titre: TRAD("La lanterne éclaire une diapo, une lentille de 200 mm en forme l'image agrandie sur l'écran. Changer de diapo, déplacer la lentille."),
     aides: { faisceau: true }, zoom: 3, f: function (st) { eclaire(st, 150, 600); poser(st, "diapo", 300, { image: "fourier" }); poser(st, "l200", 600); poser(st, "ecran", 1200); } };
   // Lentille inclinée de 15° (niveau 3, optique réelle) : foyers tangentiel et sagittal séparés, lignes focales FIXES
   // (horizontale, puis verticale ~9 cm plus loin : vers 1,07 m et 1,16 m) ; sur la mire de
   // Siemens, nets tour à tour les rayons horizontaux puis verticaux, jamais « les rayons puis le cercle » (ça, c'est
   // l'astigmatisme de champ d'une lentille droite, centré sur l'axe).
-  MONTAGES.astigmatisme = { nom: "Astigmatisme", titre: "La mire de Siemens projetée par une lentille inclinée de 15° : il n'y a plus d'image nette. En avançant l'écran vers la lentille, les rayons verticaux de la mire deviennent nets (et les côtés du cercle qui la borde), puis, 9 cm plus près, les rayons horizontaux (et le haut et le bas du cercle) : deux lignes focales perpendiculaires, jamais une image nette.",
+  MONTAGES.astigmatisme = { nom: TRAD("Astigmatisme"), titre: TRAD("La mire de Siemens projetée par une lentille inclinée de 15° : il n'y a plus d'image nette. En avançant l'écran vers la lentille, les rayons verticaux de la mire deviennent nets (et les côtés du cercle qui la borde), puis, 9 cm plus près, les rayons horizontaux (et le haut et le bas du cercle) : deux lignes focales perpendiculaires, jamais une image nette."),
     seule: "reelle", niveau: 3, aides: { pinceau: true, face: true }, pres: "lentille", zoom: 3,
     f: function (st) { eclaire(st, 150, 600); poser(st, "diapo", 300, { image: "siemens" }); incliner(poser(st, "l200", 600), 15); poser(st, "ecran", 1200); } };
   // Filtrage d'une diapo en montage 4f (comme quatreF, sans iris de champ : la diapo fait 20 mm). Trame du portrait et
@@ -481,11 +501,11 @@
     poser(st, "l200", 550); var e = poser(st, filtre[0], 750, filtre[1]); if (filtre[2] != null) e.rot = filtre[2];
     poser(st, "l200", 950); poser(st, "ecran", 1150);
   }
-  MONTAGES.trame = { nom: "Effacer une trame", titre: "Le portrait de Fourier, imprimé sous une trame fine, en montage 4f. Un iris de 1 mm dans le plan focal commun ne laisse passer que la tache centrale : la trame disparaît de l'image, le portrait reste. Ouvrir l'iris.",
+  MONTAGES.trame = { nom: TRAD("Effacer une trame"), titre: TRAD("Le portrait de Fourier, imprimé sous une trame fine, en montage 4f. Un iris de 1 mm dans le plan focal commun ne laisse passer que la tache centrale : la trame disparaît de l'image, le portrait reste. Ouvrir l'iris."),
     vue: "dessus", aides: { faisceau: true }, zoom: 8, f: function (st) { diapo4F(st, "fourier", ["iris", { D: 1 }]); } };
-  MONTAGES.lignes = { nom: "Effacer des lignes", titre: "Une photo de la Lune prise par Apollo 11, rayée de lignes horizontales. Une fente horizontale dans le plan focal arrête les taches que les lignes y diffractent, au-dessus et au-dessous de l'axe : les lignes disparaissent. Tourner la fente.",
+  MONTAGES.lignes = { nom: TRAD("Effacer des lignes"), titre: TRAD("Une photo de la Lune prise par Apollo 11, rayée de lignes horizontales. Une fente horizontale dans le plan focal arrête les taches que les lignes y diffractent, au-dessus et au-dessous de l'axe : les lignes disparaissent. Tourner la fente."),
     vue: "dessus", aides: { faisceau: true }, zoom: 8, f: function (st) { diapo4F(st, "lune", ["fenteSource", { b: 0.6 }, Math.PI / 2]); } };
-  MONTAGES.passeBas = { nom: "Filtre passe-bas", titre: "La mire USAF 1951 en montage 4f, un iris de 1,2 mm dans le plan focal : les traits les plus fins ne passent plus. Fermer l'iris, l'ouvrir.",
+  MONTAGES.passeBas = { nom: TRAD("Filtre passe-bas"), titre: TRAD("La mire USAF 1951 en montage 4f, un iris de 1,2 mm dans le plan focal : les traits les plus fins ne passent plus. Fermer l'iris, l'ouvrir."),
     vue: "dessus", aides: { faisceau: true }, zoom: 8, f: function (st) { diapo4F(st, "usaf", ["iris", { D: 1.2 }]); } };
   // Voir le spectre (l'écran au plan focal de la deuxième lentille, à la place du
   // filtre du montage 4f). Mesuré sur le cœur (ondulatoire, 546 nm) : grille de pas 0,25 mm, taches tous les 0,437 mm
@@ -496,9 +516,9 @@
     if (D) poser(st, "iris", 310, { D: D });
     poser(st, objet[0], 350, objet[1]); poser(st, "l200", 550); poser(st, "ecran", 750);
   }
-  MONTAGES.spectreGrille = { nom: "Spectre d'une grille", titre: "Une grille croisée de pas 0,25 mm éclairée en lumière parallèle, l'écran au plan focal de la lentille qui suit : sa figure de diffraction, un quadrillage de taches espacées de λf/a = 0,44 mm, bien plus vives sur les deux axes qu'en diagonale. Changer le pas de la grille : plus elle est fine, plus les taches s'écartent.",
+  MONTAGES.spectreGrille = { nom: TRAD("Spectre d'une grille"), titre: TRAD("Une grille croisée de pas 0,25 mm éclairée en lumière parallèle, l'écran au plan focal de la lentille qui suit : sa figure de diffraction, un quadrillage de taches espacées de λf/a = 0,44 mm, bien plus vives sur les deux axes qu'en diagonale. Changer le pas de la grille : plus elle est fine, plus les taches s'écartent."),
     vue: "dessus", aides: { faisceau: true }, zoom: 50, f: function (st) { spectre(st, ["grilleCroisee"], 3); } };
-  MONTAGES.spectreTrame = { nom: "Spectre d'une trame", titre: "Le portrait de Fourier imprimé sous une trame fine, l'écran au plan focal de la lentille qui suit : autour de la tache centrale, où se trouve le portrait, les taches que la trame diffracte, aux nœuds d'un quadrillage de pas 0,70 mm : quatre nettes sur les axes, quatre bien plus faibles en diagonale. Ce sont elles qu'arrête l'iris du montage « Effacer une trame ».",
+  MONTAGES.spectreTrame = { nom: TRAD("Spectre d'une trame"), titre: TRAD("Le portrait de Fourier imprimé sous une trame fine, l'écran au plan focal de la lentille qui suit : autour de la tache centrale, où se trouve le portrait, les taches que la trame diffracte, aux nœuds d'un quadrillage de pas 0,70 mm : quatre nettes sur les axes, quatre bien plus faibles en diagonale. Ce sont elles qu'arrête l'iris du montage « Effacer une trame »."),
     // Optique réelle seule : en parfaite, la passe d'adaptation aux rayons (l'onde rate la tache, `adapterChamp`) met
     // quelques texels très clairs dans ~1 700 texels faibles, le 99e centile tombe dans ce fond et l'œil se dit dans le
     // noir alors que les taches se voient.
@@ -506,11 +526,11 @@
   // Orientation (fente de 0,1 mm, mesuré sur le cœur) : contraste des rayons perpendiculaires à la fente 0,92, des
   // rayons parallèles 0,04 ; fente tournée de 90° : l'inverse. 40 µm : figure plus étroite mais bords de la diapo
   // brouillés ; 0,2 mm : les rayons parallèles restent nets loin du centre.
-  MONTAGES.orientation = { nom: "Filtrer une orientation", titre: "La mire de Siemens en montage 4f, une fente verticale de 0,1 mm dans le plan focal commun : seuls passent les points du spectre alignés avec elle. Sur l'écran, les rayons de la mire perpendiculaires à la fente restent nets, les autres se brouillent en gris. Tourner la fente : les rayons nets tournent avec elle.",
+  MONTAGES.orientation = { nom: TRAD("Filtrer une orientation"), titre: TRAD("La mire de Siemens en montage 4f, une fente verticale de 0,1 mm dans le plan focal commun : seuls passent les points du spectre alignés avec elle. Sur l'écran, les rayons de la mire perpendiculaires à la fente restent nets, les autres se brouillent en gris. Tourner la fente : les rayons nets tournent avec elle."),
     vue: "dessus", aides: { faisceau: true }, zoom: 8, f: function (st) { diapo4F(st, "siemens", ["fente", { e: 0.1 }]); } };
   // Contours (passe-haut) : la pastille de 0,2 mm couvre l'image du trou source (0,1 mm) et les plus basses fréquences ;
   // 0,5 et 1 mm : contours plus fins et plus faibles.
-  MONTAGES.contours = { nom: "Détecter les contours", titre: "La mire USAF 1951 en montage 4f, une pastille opaque de 0,2 mm au centre du plan focal commun : elle arrête la lumière non diffractée et les plus basses fréquences. Les plages uniformes s'éteignent, seuls les bords des traits restent éclairés. Prendre une pastille plus grande : les contours s'affinent et pâlissent.",
+  MONTAGES.contours = { nom: TRAD("Détecter les contours"), titre: TRAD("La mire USAF 1951 en montage 4f, une pastille opaque de 0,2 mm au centre du plan focal commun : elle arrête la lumière non diffractée et les plus basses fréquences. Les plages uniformes s'éteignent, seuls les bords des traits restent éclairés. Prendre une pastille plus grande : les contours s'affinent et pâlissent."),
     vue: "dessus", aides: { faisceau: true }, zoom: 8, f: function (st) { diapo4F(st, "usaf", ["pastille", { d: 0.2 }]); } };
   // Montages d'instruments (optique parfaite des Révisions, sauf le chromatisme). Un dépoli devant l'objet
   // quand c'est l'œil qui regarde (comme la loupe). Positions calculées au paraxial, vérifiées par `images` du cœur.
@@ -520,13 +540,13 @@
   // le dépoli (6 × 3 mm) : étalée sur tout le dépoli, la lumière n'éclairerait presque pas ce champ (un rayon sur 4 000).
   // Règle remontée de 4,2 mm sur son cavalier : ses traits partent de son bord bas (cœur, F.REGLE), 5 mm sous son milieu ;
   // ainsi le bord est hors du champ et les petits traits finissent 0,2 mm au-dessus de l'axe. Pinceau parti de l'axe du banc.
-  MONTAGES.microscope = { nom: "Microscope", titre: "Un objectif de microscope ×20, de focale 10 mm, forme, 21 cm plus loin, une image agrandie vingt fois de la règle graduée au dixième de millimètre ; un oculaire de 20 mm, dont le foyer objet est sur cette image, la renvoie à l'infini. L'œil est au cercle oculaire, là où le faisceau se resserre derrière l'oculaire.",
+  MONTAGES.microscope = { nom: "Microscope", titre: TRAD("Un objectif de microscope ×20, de focale 10 mm, forme, 21 cm plus loin, une image agrandie vingt fois de la règle graduée au dixième de millimètre ; un oculaire de 20 mm, dont le foyer objet est sur cette image, la renvoie à l'infini. L'œil est au cercle oculaire, là où le faisceau se resserre derrière l'oculaire."),
     aides: { faisceau: true },
     f: function (st) { poser(st, "lanterne", 150, { tirage: tirageVers(145) }); poser(st, "depoli", 295); poser(st, "regle", 300, null, { y: 4.2 }); poser(st, "objectif", 310.5); poser(st, "l20", 540.5); poser(st, "oeil", 562.5); st.pinceau.h = -4.2; st.pinceau.hx = 0.06; } };   // hx hors du trait central de la règle (x = 0 opaque)
   // Objet à l'infini des lunettes : la lettre F (ou le quadrillage) au foyer d'une lentille de 300 mm, comme `astro`.
   function infiniPour(st, objet) { poser(st, "lanterne", 60, { tirage: 70 }); poser(st, "depoli", 190); poser(st, objet, 200); poser(st, "l300", 500); }
   // Galilée : objectif 200 mm, oculaire −100 mm à 100 mm derrière (foyers confondus) : G = +2, image droite.
-  MONTAGES.galilee = { nom: "Lunette de Galilée", titre: "Un objectif de 200 mm et un oculaire divergent de −100 mm, placé avant le foyer image de l'objectif, à 100 mm de lui : les foyers sont confondus, l'œil voit l'objet à l'infini agrandi deux fois, et à l'endroit. Comparer avec la lunette astronomique.",
+  MONTAGES.galilee = { nom: TRAD("Lunette de Galilée"), titre: TRAD("Un objectif de 200 mm et un oculaire divergent de −100 mm, placé avant le foyer image de l'objectif, à 100 mm de lui : les foyers sont confondus, l'œil voit l'objet à l'infini agrandi deux fois, et à l'endroit. Comparer avec la lunette astronomique."),
     aides: { pinceau: true },
     f: function (st) { infiniPour(st, "lettreF"); poser(st, "l200", 700); poser(st, "l-100", 800); poser(st, "oeil", 812); } };
   // Lunette terrestre : objectif 200 mm (image en 900), véhicule de 100 mm à 2f (900 → 1300, γ = −1), oculaire 50 mm
@@ -537,9 +557,9 @@
     infiniPour(st, "quadrillage"); poser(st, "l200", 700); if (champ) poser(st, "l100", 900);
     poser(st, "l100", 1100); poser(st, "l50", 1350); poser(st, "oeil", 1412.5);
   }
-  MONTAGES.terrestre = { nom: "Lunette terrestre", titre: "Une lentille de 100 mm, à deux focales de l'image que donne l'objectif, en forme une seconde image de même taille, renversée : l'oculaire montre le quadrillage à l'endroit. Les bords du champ sont sombres : leur lumière passe à côté de cette lentille.",
+  MONTAGES.terrestre = { nom: TRAD("Lunette terrestre"), titre: TRAD("Une lentille de 100 mm, à deux focales de l'image que donne l'objectif, en forme une seconde image de même taille, renversée : l'oculaire montre le quadrillage à l'endroit. Les bords du champ sont sombres : leur lumière passe à côté de cette lentille."),
     aides: { faisceau: true }, f: function (st) { terrestre(st, false); } };
-  MONTAGES.champ = { nom: "Lentille de champ", titre: "La même lunette terrestre, avec une lentille de 100 mm de plus dans le plan de la première image : elle ne change pas l'image, mais rabat vers l'axe la lumière des bords du champ, qui passe maintenant par la lentille suivante. Le champ s'agrandit. La ranger, la remettre.",
+  MONTAGES.champ = { nom: TRAD("Lentille de champ"), titre: TRAD("La même lunette terrestre, avec une lentille de 100 mm de plus dans le plan de la première image : elle ne change pas l'image, mais rabat vers l'axe la lumière des bords du champ, qui passe maintenant par la lentille suivante. Le champ s'agrandit. La ranger, la remettre."),
     aides: { faisceau: true }, f: function (st) { terrestre(st, true); } };
   // Projecteur : diapo juste après le condenseur (160), objectif de 200 mm en 410 (image en 1410, γ = −4) ; tirage
   // réglé pour que le filament se forme sur l'objectif. Dépoli à la place : la lumière part dans tous les sens, une
@@ -551,25 +571,25 @@
   // sans lui (objectif de 40 mm, diapo de 20 mm), le faisceau de chaque point de la diapo entre dans l'objectif quel que
   // soit le tirage et les bords ne s'assombrissent jamais (coins/centre ≥ 1,1 de 45 à 120 mm).
   function projecteur(st, cle) { poser(st, "lanterne", 148, { tirage: tirageVers(262) }); poser(st, cle, 160, { image: "usaf" }); poser(st, "l200", 410); poser(st, "iris", 422, { D: 15 }); poser(st, "ecran", 1410); }
-  MONTAGES.condenseur = { nom: "Projecteur à condenseur", titre: "La diapo est juste après le condenseur, qui forme l'image du filament sur l'objectif, diaphragmé à 15 mm : toute la lumière qui traverse la diapo passe l'iris, l'écran est éclairé fort et uniformément. Dérégler le tirage du condenseur : l'image du filament s'éloigne de l'objectif, les bords de l'image s'assombrissent puis s'éteignent. Ouvrir l'iris en grand : plus rien ne s'assombrit, l'objectif reçoit tout de toute façon. Remplacer la diapo par l'image éclairée (une diapo sur un dépoli) : chaque point renvoie sa lumière dans toutes les directions, l'objectif n'en reçoit qu'une petite part, l'image est une centaine de fois plus sombre.",
+  MONTAGES.condenseur = { nom: TRAD("Projecteur à condenseur"), titre: TRAD("La diapo est juste après le condenseur, qui forme l'image du filament sur l'objectif, diaphragmé à 15 mm : toute la lumière qui traverse la diapo passe l'iris, l'écran est éclairé fort et uniformément. Dérégler le tirage du condenseur : l'image du filament s'éloigne de l'objectif, les bords de l'image s'assombrissent puis s'éteignent. Ouvrir l'iris en grand : plus rien ne s'assombrit, l'objectif reçoit tout de toute façon. Remplacer la diapo par l'image éclairée (une diapo sur un dépoli) : chaque point renvoie sa lumière dans toutes les directions, l'objectif n'en reçoit qu'une petite part, l'image est une centaine de fois plus sombre."),
     aides: { faisceau: true }, zoom: 1.5, f: function (st) { projecteur(st, "diapo"); } };
   // Diaphragmes : image de la lettre F à γ = −2 (lentille de 200 mm à 300 mm de l'objet, écran à 600 mm derrière) ;
   // iris contre la lentille (ouverture) ou 30 mm avant l'écran (champ : le cône de chaque point y a ~1 mm de rayon).
   function diaphragme(st, zI, D) { eclaire(st, 150, 600); poser(st, "lettreF", 300); poser(st, "l200", 600); poser(st, "iris", zI, { D: D }); poser(st, "ecran", 1200); }
-  MONTAGES.ouverture = { nom: "Diaphragme d'ouverture", titre: "Un iris contre la lentille : le fermer assombrit toute l'image, sans la couper. Il limite l'ouverture des faisceaux, pas le champ.",
+  MONTAGES.ouverture = { nom: TRAD("Diaphragme d'ouverture"), titre: TRAD("Un iris contre la lentille : le fermer assombrit toute l'image, sans la couper. Il limite l'ouverture des faisceaux, pas le champ."),
     aides: { faisceau: true }, zoom: 2, f: function (st) { diaphragme(st, 610, 10); } };
-  MONTAGES.champIris = { nom: "Diaphragme de champ", titre: "Le même iris près de l'image, à 3 cm de l'écran : le fermer coupe l'image de la lettre, dont le reste garde son éclat. Il limite le champ.",
+  MONTAGES.champIris = { nom: TRAD("Diaphragme de champ"), titre: TRAD("Le même iris près de l'image, à 3 cm de l'écran : le fermer coupe l'image de la lettre, dont le reste garde son éclat. Il limite le champ."),
     aides: { faisceau: true }, zoom: 2, f: function (st) { diaphragme(st, 1170, 12); } };
   // Œil myope de 2 δ (cœur goniomètre : il ne voit net qu'entre 6 cm et 50 cm) devant un objet à l'infini ; la lentille
   // de −500 mm, 10 mm devant l'œil, en donne une image virtuelle à 51 cm.
-  MONTAGES.myope = { nom: "Corriger un œil myope", titre: "Un œil myope ne voit net que jusqu'à 50 cm. Une lentille divergente de −500 mm juste devant lui donne, de l'objet à l'infini, une image à 50 cm : il la voit nette. Ranger la lentille : l'image se brouille.",
+  MONTAGES.myope = { nom: TRAD("Corriger un œil myope"), titre: TRAD("Un œil myope ne voit net que jusqu'à 50 cm. Une lentille divergente de −500 mm juste devant lui donne, de l'objet à l'infini, une image à 50 cm : il la voit nette. Ranger la lentille : l'image se brouille."),
     aides: { pinceau: true },
     f: function (st) { infiniPour(st, "lettreF"); poser(st, "l-500", 990); poser(st, "oeil", 1000, { type: "myope" }); } };
   // Chromatisme : trou source à 2f d'une lentille de 100 mm (BK7, V ≈ 64 : foyers bleu et rouge distants de 4f/V ≈ 6 mm
   // à ce grandissement), capteur au foyer paraxial vert. Iris de 10 mm : à 20 mm, l'aberration sphérique déplace la
   // meilleure mise au point de 3 mm vers la lentille et le bord reste bleu partout sauf 6 mm avant (rayons rms par
   // composante, processeur) ; à 10 mm, bord rouge 3 à 6 mm avant le capteur, bleu après.
-  MONTAGES.chromatisme = { nom: "Chromatisme", titre: "Un trou en lumière blanche, son image par une lentille de 100 mm, en optique réelle : le verre dévie plus le bleu que le rouge, le bleu converge plus près de la lentille. Avancer le capteur : la tache se borde de rouge ; le reculer : de bleu.",
+  MONTAGES.chromatisme = { nom: TRAD("Chromatisme"), titre: TRAD("Un trou en lumière blanche, son image par une lentille de 100 mm, en optique réelle : le verre dévie plus le bleu que le rouge, le bleu converge plus près de la lentille. Avancer le capteur : la tache se borde de rouge ; le reculer : de bleu."),
     seule: "reelle", aides: { pinceau: true }, poseAuto: true,
     f: function (st) {
       poser(st, "lanterne", 150, { tirage: tirageVers(150), emet: "carre" }); poser(st, "trouSource", 300, { d: 0.1 });
@@ -588,31 +608,31 @@
     pieces.forEach(function (q) { var e = poser(st, q[0], q[1], q[3]); if (q[2] != null) e.rot = deg(q[2]); });
     poser(st, "ecran", 1300);
   }
-  MONTAGES.malus = { nom: "Loi de Malus", titre: "La lumière naturelle de la lanterne traverse un polariseur, puis un second, l'analyseur, tourné de 30° : la photodiode posée sur l'écran mesure ce qui passe. Tourner l'analyseur : le flux suit cos²θ ; polariseurs croisés, plus rien.",
+  MONTAGES.malus = { nom: TRAD("Loi de Malus"), titre: TRAD("La lumière naturelle de la lanterne traverse un polariseur, puis un second, l'analyseur, tourné de 30° : la photodiode posée sur l'écran mesure ce qui passe. Tourner l'analyseur : le flux suit cos²θ ; polariseurs croisés, plus rien."),
     photodiode: true, aides: { pola: true }, f: function (st) { polar(st, [["polariseur", 450, 0], ["polariseur", 750, 30]]); } };
-  MONTAGES.croises = { nom: "Polariseurs croisés", titre: "Deux polariseurs croisés : l'écran est noir. Un troisième entre eux, à 45°, et la lumière revient (le quart de ce qui sortait du premier). Le tourner : elle s'éteint quand il est parallèle à l'un des deux.",
+  MONTAGES.croises = { nom: TRAD("Polariseurs croisés"), titre: TRAD("Deux polariseurs croisés : l'écran est noir. Un troisième entre eux, à 45°, et la lumière revient (le quart de ce qui sortait du premier). Le tourner : elle s'éteint quand il est parallèle à l'un des deux."),
     photodiode: true, aides: { pola: true }, f: function (st) { polar(st, [["polariseur", 450, 0], ["polariseur", 600, 45], ["polariseur", 750, 90]]); } };
-  MONTAGES.demiOnde = { nom: "Lame demi-onde", titre: "Un filtre interférentiel vert, un polariseur, une lame demi-onde dont une ligne neutre fait 20° avec lui : la vibration ressort rectiligne, tournée de 40°. L'analyseur croisé avec le polariseur ne l'éteint plus ; le tourner de 40° : elle s'éteint.",
+  MONTAGES.demiOnde = { nom: TRAD("Lame demi-onde"), titre: TRAD("Un filtre interférentiel vert, un polariseur, une lame demi-onde dont une ligne neutre fait 20° avec lui : la vibration ressort rectiligne, tournée de 40°. L'analyseur croisé avec le polariseur ne l'éteint plus ; le tourner de 40° : elle s'éteint."),
     photodiode: true, aides: { pola: true }, f: function (st) { polar(st, [["filtre", 300, null, { couleur: "interferentiel" }], ["polariseur", 450, 0], ["lameD", 600, 20], ["polariseur", 750, 90]]); } };
-  MONTAGES.quartOnde = { nom: "Lame quart d'onde", titre: "Un filtre interférentiel vert, un polariseur, une lame quart d'onde à 45° : la vibration ressort circulaire. Tourner l'analyseur : la photodiode ne bouge plus. Tourner la lame : la vibration devient elliptique, l'analyseur retrouve un maximum et un minimum.",
+  MONTAGES.quartOnde = { nom: TRAD("Lame quart d'onde"), titre: TRAD("Un filtre interférentiel vert, un polariseur, une lame quart d'onde à 45° : la vibration ressort circulaire. Tourner l'analyseur : la photodiode ne bouge plus. Tourner la lame : la vibration devient elliptique, l'analyseur retrouve un maximum et un minimum."),
     photodiode: true, aides: { pola: true }, f: function (st) { polar(st, [["filtre", 300, null, { couleur: "interferentiel" }], ["polariseur", 450, 0], ["lameQ", 600, 45], ["polariseur", 750, 30]]); } };
-  MONTAGES.lameBlanc = { nom: "Lame en lumière blanche", titre: "La même lame quart d'onde à 45° entre polariseurs croisés, sans le filtre : elle n'est quart d'onde qu'à 546 nm. Le bleu passe mieux que le rouge : l'écran se teinte. Remettre le filtre, tourner la lame.",
+  MONTAGES.lameBlanc = { nom: TRAD("Lame en lumière blanche"), titre: TRAD("La même lame quart d'onde à 45° entre polariseurs croisés, sans le filtre : elle n'est quart d'onde qu'à 546 nm. Le bleu passe mieux que le rouge : l'écran se teinte. Remettre le filtre, tourner la lame."),
     aides: { pola: true }, f: function (st) { polar(st, [["polariseur", 450, 0], ["lameQ", 600, 45], ["polariseur", 750, 90]]); } };
   // ---- Optique géométrique ----
   // Badal : objet à l'infini (lettre F au foyer d'une lentille de 300 mm), lentille de Badal de 200 mm en 800 (image en
   // 1000) ; la divergente de −200 mm à son foyer objet (600) fait partir le faisceau de son foyer image virtuel (400),
   // que la lentille de 200 mm image 400 mm derrière elle : 1200, recul f₁²/|f′| = 200 mm.
-  MONTAGES.badal = { nom: "Focale d'une divergente (Badal)", titre: "La lettre F est à l'infini (au foyer d'une lentille de 300 mm) ; seule, la lentille de 200 mm en formerait l'image dans son plan focal, à 1 m. La lentille divergente, posée au foyer objet de la lentille de 200 mm, recule cette image de f′₁²/|f′| sans changer sa taille : l'écran est à 1,2 m, d'où f′ = −(200 mm)²/(200 mm) = −200 mm. Ranger la divergente : l'image revient à 1 m.",
+  MONTAGES.badal = { nom: TRAD("Focale d'une divergente (Badal)"), titre: TRAD("La lettre F est à l'infini (au foyer d'une lentille de 300 mm) ; seule, la lentille de 200 mm en formerait l'image dans son plan focal, à 1 m. La lentille divergente, posée au foyer objet de la lentille de 200 mm, recule cette image de f′₁²/|f′| sans changer sa taille : l'écran est à 1,2 m, d'où f′ = −(200 mm)²/(200 mm) = −200 mm. Ranger la divergente : l'image revient à 1 m."),
     aides: { faisceau: true }, zoom: 6, f: function (st) { eclaire(st, 60, 500); poser(st, "lettreF", 200); poser(st, "l300", 500); poser(st, "l-200", 600); poser(st, "l200", 800); poser(st, "ecran", 1200); } };
   // Image virtuelle : quadrillage (lettre F : le champ du viseur, ±6 mm, n'en montrerait qu'une jambe) à 40 mm d'une lentille de 100 mm (entre le foyer et la lentille) : image droite, virtuelle,
   // à 66,7 mm devant la lentille (1/p′ = 1/100 − 1/40), γ = +5/3 ; le viseur (frontale 100 mm) la voit nette 33,3 mm
   // derrière la lentille.
-  MONTAGES.virtuelle = { nom: "Image virtuelle au viseur", titre: "Un quadrillage millimétré est à 4 cm d'une lentille de 100 mm, entre son foyer et elle : aucun écran n'en recueille l'image. Le viseur, qui voit net à 10 cm devant lui, la montre nette à 3,3 cm derrière la lentille : l'image est virtuelle, droite, agrandie 1,7 fois, à 6,7 cm devant la lentille, plus loin que l'objet. Viser la lentille puis l'image : l'écart des deux positions du viseur donne p′.",
+  MONTAGES.virtuelle = { nom: TRAD("Image virtuelle au viseur"), titre: TRAD("Un quadrillage millimétré est à 4 cm d'une lentille de 100 mm, entre son foyer et elle : aucun écran n'en recueille l'image. Le viseur, qui voit net à 10 cm devant lui, la montre nette à 3,3 cm derrière la lentille : l'image est virtuelle, droite, agrandie 1,7 fois, à 6,7 cm devant la lentille, plus loin que l'objet. Viser la lentille puis l'image : l'écart des deux positions du viseur donne p′."),
     aides: { construction: true }, f: function (st) { eclaire(st, 150, 400); poser(st, "quadrillage", 360); poser(st, "l100", 400); poser(st, "viseur", 433.3); } };
   // Aberration sphérique en lumière parallèle : trou source au foyer d'une lentille de 500 mm, plan-convexe de 200 mm
   // présentée face plane à la lumière (retournée), capteur au foyer paraxial (optique réelle). Filtre interférentiel :
   // en lumière blanche, le chromatisme de la lentille (f′/V ≈ 3 mm) noie la différence entre les deux sens.
-  MONTAGES.aberration = { nom: "Aberration sphérique", titre: "Lumière parallèle (un trou au foyer d'une lentille de 500 mm, filtre vert) sur une lentille plan-convexe de 200 mm, face plane vers la lumière : les rayons du bord convergent 8 mm avant ceux du centre, et font un halo autour du point au foyer paraxial, où est le capteur. Retourner la lentille, face bombée vers la lumière : l'écart tombe à 2 mm, quatre fois moins (le foyer s'est rapproché de 2,6 mm : remettre le capteur au point). Fermer l'iris : le halo disparaît.",
+  MONTAGES.aberration = { nom: TRAD("Aberration sphérique"), titre: TRAD("Lumière parallèle (un trou au foyer d'une lentille de 500 mm, filtre vert) sur une lentille plan-convexe de 200 mm, face plane vers la lumière : les rayons du bord convergent 8 mm avant ceux du centre, et font un halo autour du point au foyer paraxial, où est le capteur. Retourner la lentille, face bombée vers la lumière : l'écart tombe à 2 mm, quatre fois moins (le foyer s'est rapproché de 2,6 mm : remettre le capteur au point). Fermer l'iris : le halo disparaît."),
     seule: "reelle", aides: { pinceau: true }, poseAuto: true,
     f: function (st) {
       poser(st, "lanterne", 150, { tirage: tirageVers(150), emet: "carre" }); poser(st, "trouSource", 300, { d: 0.1 }); poser(st, "filtre", 320, { couleur: "interferentiel" });
@@ -623,11 +643,11 @@
   // ---- Interférences et diffraction ----
   // Laser seul sur une pièce, écran à 1,65 m (comme les bifentes et le cheveu).
   function auLaser(st, cle, params) { poser(st, "laser", 250); poser(st, cle, 350, params); poser(st, "ecran", 2000); }
-  MONTAGES.fenteLaser = { nom: "Fente fine au laser", titre: "Le laser éclaire une fente fine de 100 µm ; l'écran est à 1,65 m : une tache centrale de largeur 2λD/e ≈ 21 mm, et de part et d'autre des taches deux fois moins larges et bien plus faibles (la première à 5 % du centre). Changer de fente : la figure s'élargit comme 1/e.",
+  MONTAGES.fenteLaser = { nom: TRAD("Fente fine au laser"), titre: TRAD("Le laser éclaire une fente fine de 100 µm ; l'écran est à 1,65 m : une tache centrale de largeur 2λD/e ≈ 21 mm, et de part et d'autre des taches deux fois moins larges et bien plus faibles (la première à 5 % du centre). Changer de fente : la figure s'élargit comme 1/e."),
     vue: "dessus", aides: {}, zoom: 3, f: function (st) { auLaser(st, "fente", { e: 0.1 }); } };
-  MONTAGES.trousLaser = { nom: "Trous d'Young au laser", titre: "Le laser éclaire deux trous de 0,1 mm distants de 0,5 mm ; l'écran est à 1,65 m : des franges rectilignes, perpendiculaires à la droite des trous, d'interfrange λD/a ≈ 2,1 mm, dans la tache d'Airy de chaque trou (13 mm de rayon). Passer à a = 1 mm : les franges se resserrent, la tache reste.",
+  MONTAGES.trousLaser = { nom: TRAD("Trous d'Young au laser"), titre: TRAD("Le laser éclaire deux trous de 0,1 mm distants de 0,5 mm ; l'écran est à 1,65 m : des franges rectilignes, perpendiculaires à la droite des trous, d'interfrange λD/a ≈ 2,1 mm, dans la tache d'Airy de chaque trou (13 mm de rayon). Passer à a = 1 mm : les franges se resserrent, la tache reste."),
     vue: "dessus", aides: {}, zoom: 4, f: function (st) { auLaser(st, "trousYoung", { a: 0.5 }); } };
-  MONTAGES.airy = { nom: "Tache d'Airy", titre: "Le laser éclaire un trou de 0,1 mm de diamètre ; l'écran est à 1,65 m : une tache d'Airy, dont le premier anneau sombre a pour rayon 1,22 λD/d ≈ 13 mm, entourée d'anneaux bien plus faibles (1,7 % du centre pour le premier). Agrandir le trou : la tache rétrécit, tant que le trou reste plus petit que le faisceau (0,8 mm).",
+  MONTAGES.airy = { nom: TRAD("Tache d'Airy"), titre: TRAD("Le laser éclaire un trou de 0,1 mm de diamètre ; l'écran est à 1,65 m : une tache d'Airy, dont le premier anneau sombre a pour rayon 1,22 λD/d ≈ 13 mm, entourée d'anneaux bien plus faibles (1,7 % du centre pour le premier). Agrandir le trou : la tache rétrécit, tant que le trou reste plus petit que le faisceau (0,8 mm)."),
     vue: "dessus", aides: {}, zoom: 3, f: function (st) { auLaser(st, "trouSource", { d: 0.1 }); } };
   // Fraunhofer à deux lentilles : fente source au foyer d'une lentille de 200 mm, fente fine dans le faisceau parallèle,
   // écran au foyer d'une lentille de 300 mm (tache centrale de demi-largeur λf′/e). Au sodium, les fentes sont ouvertes
@@ -638,14 +658,14 @@
     if (lampe === "lanterne") poser(st, "lanterne", 80, { tirage: tirageVers(150) }); else poser(st, lampe, 200);
     poser(st, "fenteSource", 230, { b: b }); poser(st, "l200", 430); poser(st, "fente", 480, { e: e }); poser(st, "l300", 530); poser(st, "ecran", 830);
   }
-  MONTAGES.fraunhofer = { nom: "Fraunhofer à deux lentilles", titre: "La lampe à sodium éclaire une fente source ouverte à 0,5 mm au foyer d'une lentille de 200 mm ; une fente fine de 200 µm dans le faisceau parallèle, l'écran au foyer d'une lentille de 300 mm : la figure de diffraction à l'infini, tache centrale de demi-largeur λf′/e ≈ 0,9 mm. Élargir la fente source au-delà de 1 mm : son image recouvre la tache, les taches latérales se fondent.",
+  MONTAGES.fraunhofer = { nom: TRAD("Fraunhofer à deux lentilles"), titre: TRAD("La lampe à sodium éclaire une fente source ouverte à 0,5 mm au foyer d'une lentille de 200 mm ; une fente fine de 200 µm dans le faisceau parallèle, l'écran au foyer d'une lentille de 300 mm : la figure de diffraction à l'infini, tache centrale de demi-largeur λf′/e ≈ 0,9 mm. Élargir la fente source au-delà de 1 mm : son image recouvre la tache, les taches latérales se fondent."),
     vue: "dessus", aides: { faisceau: true }, zoom: 15, f: function (st) { fraunhofer(st, "sodium", 0.5, 0.2); } };
-  MONTAGES.fenteBlanc = { nom: "Fente en lumière blanche", titre: "Le même montage éclairé par la lanterne, fentes plus fermées (0,1 mm) : chaque couleur diffracte à sa propre échelle λf′/e. La tache centrale est blanche, bordée de rouge ; les taches latérales sont irisées, bleues vers le centre, rouges vers l'extérieur.",
+  MONTAGES.fenteBlanc = { nom: TRAD("Fente en lumière blanche"), titre: TRAD("Le même montage éclairé par la lanterne, fentes plus fermées (0,1 mm) : chaque couleur diffracte à sa propre échelle λf′/e. La tache centrale est blanche, bordée de rouge ; les taches latérales sont irisées, bleues vers le centre, rouges vers l'extérieur."),
     vue: "dessus", aides: { faisceau: true }, zoom: 15, f: function (st) { fraunhofer(st, "lanterne", 0.1, 0.1); } };
   // De Fresnel à Fraunhofer : faisceau élargi à 8 mm (comme `elargir`, presque plan sur 1 mm), trou de 1 mm, écran à
   // D : nombre de Fresnel N = a²/λD (a = 0,5 mm : 395 mm / D). En optique réelle, la lentille de 100 mm est mise au
   // point AVANT de poser le trou (sans lui : `mettreAuPoint` vise l'image de la source, le trou en serait l'objet).
-  MONTAGES.fresnel = { nom: "De Fresnel à Fraunhofer", titre: "Le faisceau du laser, élargi à 8 mm, éclaire un trou de 1 mm ; l'écran est à 1,65 m : une tache d'Airy de 1,3 mm de rayon, plus large que le trou (diffraction de Fraunhofer). Rapprocher l'écran : la tache se resserre jusqu'à la taille du trou vers 40 cm, puis son centre s'assombrit et devient noir à 20 cm, entouré d'un anneau brillant (diffraction de Fresnel).",
+  MONTAGES.fresnel = { nom: TRAD("De Fresnel à Fraunhofer"), titre: TRAD("Le faisceau du laser, élargi à 8 mm, éclaire un trou de 1 mm ; l'écran est à 1,65 m : une tache d'Airy de 1,3 mm de rayon, plus large que le trou (diffraction de Fraunhofer). Rapprocher l'écran : la tache se resserre jusqu'à la taille du trou vers 40 cm, puis son centre s'assombrit et devient noir à 20 cm, entouré d'un anneau brillant (diffraction de Fresnel)."),
     vue: "dessus", aides: {}, zoom: 30,
     f: function (st) {
       poser(st, "laser", 100); poser(st, "objectif", 200); var L = poser(st, "l100", 310); poser(st, "ecran", 2000);
@@ -657,11 +677,11 @@
     if (lampe === "lanterne") poser(st, "lanterne", 80, { tirage: tirageVers(150) }); else poser(st, "mercure", 200, { filtre: false });
     poser(st, "fenteSource", 230, { b: 0.1 }); poser(st, "l200", 430); poser(st, "reseau", 480, { n: 100 }); poser(st, "l200", 530); poser(st, "ecran", 730);
   }
-  MONTAGES.reseauMercure = { nom: "Réseau à la lampe à mercure", titre: "La lampe à mercure, sans son filtre, éclaire une fente source au foyer d'une lentille de 200 mm ; un réseau de 100 traits par millimètre dans le faisceau parallèle, l'écran au foyer d'une seconde lentille de 200 mm : de part et d'autre de l'ordre 0, où toutes les raies se superposent, chaque raie donne une image de la fente, d'autant plus déviée que sa longueur d'onde est grande (sin θ = pnλ). La fibre du spectromètre est posée sur la raie verte d'ordre 1, à 10,9 mm : la glisser sur les autres.",
+  MONTAGES.reseauMercure = { nom: TRAD("Réseau à la lampe à mercure"), titre: TRAD("La lampe à mercure, sans son filtre, éclaire une fente source au foyer d'une lentille de 200 mm ; un réseau de 100 traits par millimètre dans le faisceau parallèle, l'écran au foyer d'une seconde lentille de 200 mm : de part et d'autre de l'ordre 0, où toutes les raies se superposent, chaque raie donne une image de la fente, d'autant plus déviée que sa longueur d'onde est grande (sin θ = pnλ). La fibre du spectromètre est posée sur la raie verte d'ordre 1, à 10,9 mm : la glisser sur les autres."),
     vue: "dessus", aides: { faisceau: true }, zoom: 3, fibre: [10.94, 0], f: function (st) { reseau(st, "mercure"); } };
-  MONTAGES.reseauBlanc = { nom: "Réseau en lumière blanche", titre: "La lanterne à la place de la lampe : chaque ordre étale tout le spectre, du violet, le moins dévié, au rouge. Le spectre d'ordre 2 est deux fois plus large que celui d'ordre 1, et son rouge se mêle au violet de l'ordre 3.",
+  MONTAGES.reseauBlanc = { nom: TRAD("Réseau en lumière blanche"), titre: TRAD("La lanterne à la place de la lampe : chaque ordre étale tout le spectre, du violet, le moins dévié, au rouge. Le spectre d'ordre 2 est deux fois plus large que celui d'ordre 1, et son rouge se mêle au violet de l'ordre 3."),
     vue: "dessus", aides: { faisceau: true }, zoom: 3, f: function (st) { reseau(st, "lanterne"); } };
-  MONTAGES.youngMercure = { nom: "Young au mercure", titre: "La lampe à mercure et son filtre vert (546,1 nm) dans le montage de Young : des franges vertes d'interfrange λf′/a ≈ 0,44 mm, un peu plus serrées qu'au sodium. Élargir la fente source : elles disparaissent quand sa largeur atteint λf′/a, 0,44 mm, puis reviennent, inversées.",
+  MONTAGES.youngMercure = { nom: TRAD("Young au mercure"), titre: TRAD("La lampe à mercure et son filtre vert (546,1 nm) dans le montage de Young : des franges vertes d'interfrange λf′/a ≈ 0,44 mm, un peu plus serrées qu'au sodium. Élargir la fente source : elles disparaissent quand sa largeur atteint λf′/a, 0,44 mm, puis reviennent, inversées."),
     vue: "dessus", aides: { faisceau: true }, zoom: 32, f: function (st) { young(st, "mercure", 0.1); } };
   var INCL_MAX = 3, INCL_LENTILLE = 30;
   // Pièces qu'on décale latéralement (x) à tous les niveaux : vis de translation sur le cavalier (vue de dessus), réglette
@@ -685,7 +705,7 @@
     // Les clés (revisions, young) sont celles du méta `bac:` et de la mémoire du navigateur : ne pas les renommer ; les
     // noms montrés sont libres. `optique` : celle de la première ouverture du matériel seulement (ensuite, l'optique en
     // cours passe d'un montage et d'un matériel à l'autre) ; `ouvert` : le tiroir ouvert au départ.
-    revisions: { nom: "Optique géométrique", quoi: "lanterne, objets, lentilles, miroir, écran, œil, viseur, lunette.", optique: "parfaite", vue: "profil", clair: true, depart: "depart",
+    revisions: { nom: TRAD("Optique géométrique"), quoi: TRAD("lanterne, objets, lentilles, miroir, écran, œil, viseur, lunette."), optique: "parfaite", vue: "profil", clair: true, depart: "depart",
       special: [], ouvert: "Lentilles et miroirs", autres: false,
       etagere1: [{ nom: "Sources", pieces: ["lanterne"] }, { nom: "Objets et diaphragmes", pieces: ["lettreF", "quadrillage", "regle", "depoli", "trouSource", "iris", "diapo", "imageEclairee"] },
         { nom: "Lentilles et miroirs", pieces: LENTILLES_ETAGERE }, { nom: "Observer", pieces: ["ecran", "capteur", "oeil", "viseur", "lunette", "densite"] }],
@@ -695,7 +715,7 @@
     // Interférences et diffraction (fusionnés ; la clé `diffraction` a
     // disparu : une clé de bac inconnue ouvre le matériel par défaut). Valeurs encore en clair (lecture à la règle et
     // valeurs vraies tirées).
-    young: { nom: "Interférences et diffraction", quoi: "lampes, laser, fente source, bifentes, trous d'Young, fentes multiples, fente fine, réseau, cheveu, dépoli.", optique: "reelle", vue: "dessus", clair: true, depart: "young",
+    young: { nom: TRAD("Interférences et diffraction"), quoi: TRAD("lampes, laser, fente source, bifentes, trous d'Young, fentes multiples, fente fine, réseau, cheveu, dépoli."), optique: "reelle", vue: "dessus", clair: true, depart: "young",
       special: [T_FENTES], ouvert: "Fentes et réseaux",
       etagere1: [{ nom: "Sources", pieces: ["sodium", "mercure", "lanterne", "laser"] }, { nom: "Objets et diaphragmes", pieces: ["fenteSource", "trouSource", "iris", "depoli"] },
         { nom: "Lentilles et miroirs", pieces: ["objectif", "l100", "l200", "l300", "l500", "miroir"] }, T_FENTES,
@@ -703,14 +723,14 @@
       montages: ["youngBlanc", "youngMercure", "youngLaser", "trousLaser", "barretteLaser", "multiples", "fenteLaser", "fraunhofer", "fenteBlanc", "airy", "fresnel",
         "reseauLaser", "reseauMercure", "reseauBlanc", "cheveu", "elargir"] },
     // Optique de Fourier : montage 4f, filtrage au plan focal.
-    fourier: { nom: "Optique de Fourier", quoi: "montage 4f : objets (grille, objet de phase), filtres (fente, pastille, couteau, iris).", optique: "reelle", vue: "dessus", clair: true, depart: "abbe",
+    fourier: { nom: TRAD("Optique de Fourier"), quoi: TRAD("montage 4f : objets (grille, objet de phase), filtres (fente, pastille, couteau, iris)."), optique: "reelle", vue: "dessus", clair: true, depart: "abbe",
       special: [T_FOURIER], ouvert: "Fourier",
       etagere1: [{ nom: "Sources", pieces: ["mercure", "laser", "lanterne"] }, { nom: "Objets et diaphragmes", pieces: ["trouSource", "fenteSource", "iris", "lettreF", "diapo"] },
         { nom: "Lentilles et miroirs", pieces: ["objectif", "l100", "l200", "l300", "l500", "miroir"] }, T_FOURIER,
         { nom: "Observer", pieces: ["ecran", "capteur", "densite"] }],
       montages: ["spectreGrille", "spectreTrame", "strioscopie", "fondNoir", "trame", "lignes", "passeBas", "orientation", "contours"] },
     // Polarisation (lumière naturelle de la lanterne ou du laser, polariseurs, lames ; photodiode sur l'écran).
-    polarisation: { nom: "Polarisation", quoi: "lanterne, laser, polariseurs, lames demi-onde et quart d'onde, filtres, photodiode.", optique: "parfaite", vue: "profil", clair: true, depart: "malus",
+    polarisation: { nom: TRAD("Polarisation"), quoi: TRAD("lanterne, laser, polariseurs, lames demi-onde et quart d'onde, filtres, photodiode."), optique: "parfaite", vue: "profil", clair: true, depart: "malus",
       special: [T_POLA], ouvert: "Polarisation",
       etagere1: [{ nom: "Sources", pieces: ["lanterne", "laser", "sodium", "mercure"] }, { nom: "Objets et diaphragmes", pieces: ["trouSource", "iris", "lettreF"] },
         { nom: "Lentilles et miroirs", pieces: ["l100", "l200", "l300", "l500"] }, { nom: "Polarisation", pieces: ["polariseur", "lameD", "lameQ", "filtre"] },
@@ -729,18 +749,18 @@
       var la = {}, autres = [];
       T.forEach(function (t) { t.pieces.forEach(function (c) { la[c] = 1; }); });
       Object.keys(BACS).forEach(function (b) { BACS[b].special.forEach(function (t) { t.pieces.forEach(function (c) { if (!la[c]) { la[c] = 1; autres.push(c); } }); }); });
-      if (autres.length && B.autres !== false) T = T.concat({ nom: "Autres", pieces: autres });
+      if (autres.length && B.autres !== false) T = T.concat({ nom: "Autres", pieces: autres });   // « Autres » : clé de tiroir, traduite au libellé (ongletsEtagere)
     }
     return T.map(function (t) { return { nom: t.nom, pieces: t.pieces.filter(function (c) { return piecePermise(c, prof); }) }; }).filter(function (t) { return t.pieces.length; });
   }
   // Montages rangés par thème (menu en colonnes, mode prof) ; un bac ne montre que les thèmes qui ont de ses montages.
-  var THEMES = [["Former une image", ["image", "quatref", "infini", "virtuelle", "projection"]], ["Mesurer une focale", ["bessel", "silbermann", "autocollimation", "badal"]],
+  var THEMES = [[TRAD("Former une image"), ["image", "quatref", "infini", "virtuelle", "projection"]], [TRAD("Mesurer une focale"), ["bessel", "silbermann", "autocollimation", "badal"]],
     ["Instruments", ["loupe", "microscope", "astro", "galilee", "terrestre", "champ", "viseur", "lunette", "photo", "condenseur"]],
-    ["Diaphragmes et œil", ["ouverture", "champIris", "myope"]], ["Aberrations", ["stigmatisme", "aberration", "chromatisme", "astigmatisme"]],
-    ["Interférences", ["young", "youngBlanc", "youngMercure", "youngLaser", "trousLaser", "barretteLaser", "multiples"]],
-    ["Diffraction", ["fenteLaser", "fraunhofer", "fenteBlanc", "airy", "fresnel", "cheveu", "elargir"]], ["Réseaux", ["reseauLaser", "reseauMercure", "reseauBlanc"]],
-    ["Voir le spectre", ["spectreGrille", "spectreTrame"]], ["Filtrer", ["abbe", "strioscopie", "fondNoir", "trame", "lignes", "passeBas", "orientation", "contours"]],
-    ["Polarisation", ["malus", "croises", "demiOnde", "quartOnde", "lameBlanc"]]];
+    [TRAD("Diaphragmes et œil"), ["ouverture", "champIris", "myope"]], ["Aberrations", ["stigmatisme", "aberration", "chromatisme", "astigmatisme"]],
+    [TRAD("Interférences"), ["young", "youngBlanc", "youngMercure", "youngLaser", "trousLaser", "barretteLaser", "multiples"]],
+    ["Diffraction", ["fenteLaser", "fraunhofer", "fenteBlanc", "airy", "fresnel", "cheveu", "elargir"]], [TRAD("Réseaux"), ["reseauLaser", "reseauMercure", "reseauBlanc"]],
+    [TRAD("Voir le spectre"), ["spectreGrille", "spectreTrame"]], [TRAD("Filtrer"), ["abbe", "strioscopie", "fondNoir", "trame", "lignes", "passeBas", "orientation", "contours"]],
+    [TRAD("Polarisation"), ["malus", "croises", "demiOnde", "quartOnde", "lameBlanc"]]];
   // Matériel d'origine de chaque montage (pièces d'un montage lues hors de son matériel : montagePermis).
   var ORIGINE = {};
   Object.keys(BACS).forEach(function (b) { [BACS[b].depart].concat(BACS[b].montages).forEach(function (id) { if (!ORIGINE[id]) ORIGINE[id] = b; }); });
@@ -1851,21 +1871,21 @@
   // (laser, réseau, dépoli comme objet, pas de détecteur, rien n'arrive), sinon {taches: [{l, w, pts: [[x, y]…], essais}],
   // centre: [x, y] ou null (barycentre à la longueur d'onde de référence)} ; (x, y) = repère du détecteur.
   function spotPinceau(seq, hx, hy, ech, n) {
-    if (!seq || !seq.source || !seq.prims || !seq.prims.length) return { raison: "Poser la lanterne sur le banc." };
-    if (!(seq.iDet >= 0)) return { raison: "Pas de détecteur sur le banc." };
+    if (!seq || !seq.source || !seq.prims || !seq.prims.length) return { raison: TRAD("Poser la lanterne sur le banc.") };
+    if (!(seq.iDet >= 0)) return { raison: TRAD("Pas de détecteur sur le banc.") };
     var dep = departPinceau(seq, 1, hy || 0, hx || 0), P = seq.prims, j, cones = [null, null], ax;
-    if (!dep) return { raison: "Pas d'élément après la source." };
-    if (!dep.objet && seq.source.em && seq.source.em.forme === "gauss") return { raison: "Pas de tache pour un faisceau laser." };
-    if (dep.objet && dep.objet.k === K_.DIFFUSEUR) return { raison: "L'objet est un dépoli : la lumière en repart dans toutes les directions." };
-    if (dep.objet && dep.objet.k === K_.MASQUE && formeOpaque(dep.objet, dep.p)) return { raison: "Le point visé est sur un trait opaque de l'objet : aucune lumière n'en part." };
-    for (j = dep.de; j < P.length; j++) if (P[j].k === K_.RESEAU) return { raison: "Pas de tache derrière un réseau (un faisceau par ordre)." };
+    if (!dep) return { raison: TRAD("Pas d'élément après la source.") };
+    if (!dep.objet && seq.source.em && seq.source.em.forme === "gauss") return { raison: TRAD("Pas de tache pour un faisceau laser.") };
+    if (dep.objet && dep.objet.k === K_.DIFFUSEUR) return { raison: TRAD("L'objet est un dépoli : la lumière en repart dans toutes les directions.") };
+    if (dep.objet && dep.objet.k === K_.MASQUE && formeOpaque(dep.objet, dep.p)) return { raison: TRAD("Le point visé est sur un trait opaque de l'objet : aucune lumière n'en part.") };
+    for (j = dep.de; j < P.length; j++) if (P[j].k === K_.RESEAU) return { raison: TRAD("Pas de tache derrière un réseau (un faisceau par ordre).") };
     var src = [{ lo: -1.5, hi: 1.5 }, { lo: -1.5, hi: 1.5 }];
     for (ax = 0; ax < 2; ax++) {
       var cap = dep.objet ? { j: seq.objet } : { j: -1 };
       enveloppe(seq, ax, 1, null, cap);
-      if (dep.objet) { var cs = penteEclairee(cap.M, dep.p[ax]); if (!cs) return { raison: "Ce point de l'objet n'est pas éclairé." }; src[ax] = { lo: Math.max(cs.lo, -1.5), hi: Math.min(cs.hi, 1.5) }; }
+      if (dep.objet) { var cs = penteEclairee(cap.M, dep.p[ax]); if (!cs) return { raison: TRAD("Ce point de l'objet n'est pas éclairé.") }; src[ax] = { lo: Math.max(cs.lo, -1.5), hi: Math.min(cs.hi, 1.5) }; }
       if (cap.M && cap.polyFin && cap.polyFin.length) cones[ax] = penteEclairee({ A: cap.M.A, B: cap.M.B, C: cap.M.C, D: cap.M.D, ty: cap.M.ty, tv: cap.M.tv, poly: cap.polyFin }, dep.p[ax]);
-      if (!cones[ax]) return { raison: "La lumière de ce point n'arrive pas jusqu'au détecteur." };
+      if (!cones[ax]) return { raison: TRAD("La lumière de ce point n'arrive pas jusqu'au détecteur.") };
     }
     n = n || 25;
     var out = [], centre = null, lr = lRef(ech);
@@ -1939,17 +1959,23 @@
 
   // ================= rayons de construction =================
   // Renvoie {raison} si la construction n'a pas de sens, sinon {objet: {z, a, b}, lentilles: [{z, c, f, F, Fp,
-  // image: {z, a, b, infini, virtuelle, formee}, rayons: [{type, segs: [{z1, h1, z2, h2, tirets}]}]}], fin}.
+  // image: {z, a, b, infini, virtuelle, formee, pente}, rayons: [{type, segs: [{z1, h1, z2, h2, tirets}]}]}], fin}.
   // Objet AB : A au centre de la plaque (règle : sur l'axe du banc), B à HAUT_B au-dessus, ou à hB du centre de la plaque
-  // (point B choisi par l'élève, borné à l'objet ; confondu avec A : HAUT_B). Pour chaque lentille, trois rayons issus de (ou dirigés
-  // vers) l'objet du moment : par le centre optique, parallèle à l'axe (émerge par F′), par F (émerge parallèle).
+  // (point B choisi par l'élève, borné à l'objet ; confondu avec A : HAUT_B). Pour chaque lentille, trois rayons issus de (ou
+  // dirigés vers) l'objet du moment : par le centre optique, parallèle à l'axe (émerge par F′), par F (émerge parallèle) ;
+  // deux seulement quand l'image est à l'infini (le rayon par F n'existe plus, voir plus bas).
   // Trait plein : là où la lumière passe (entre la lentille précédente et la suivante, ou l'écran) ; tirets : les
   // prolongements vers un objet ou une image virtuels, ou vers l'image qui se formerait derrière l'écran.
+  // Un conjugué au-delà de SEUIL_INFINI est tenu pour À L'INFINI. L'objet d'une lentille, alors, n'a plus de hauteur :
+  // la gerbe qui lui arrive est parallèle (elle prolonge les rayons sortis de la lentille précédente, même pente, mêmes
+  // hauteurs) et l'image tombe dans le plan focal — c'est cette pente, et non la taille d'un objet, qui porte
+  // l'information. Les rayons sont donc repris de proche en proche au lieu d'être recalculés depuis une hauteur
+  // d'objet devenue géante (le rayon « parallèle à l'axe » d'un objet sans hauteur partait à 300 m, quasi vertical).
   function construction(seq, axe, hB) {
-    if (!seq || !seq.source || !seq.prims) return { raison: "Poser la lanterne et un objet sur le banc." };
-    if (seq.optique !== "parfaite") return { raison: "Les rayons de construction sont ceux d'une lentille mince idéale : passer en optique parfaite." };
+    if (!seq || !seq.source || !seq.prims) return { raison: TRAD("Poser la lanterne et un objet sur le banc.") };
+    if (seq.optique !== "parfaite") return { raison: TRAD("Les rayons de construction sont ceux d'une lentille mince idéale : passer en optique parfaite.") };
     var P = seq.prims, o = seq.objet;
-    if (o < 0 || !HAUT_B[P[o].type]) return { raison: "Poser un objet étendu (lettre F, quadrillage, dépoli, règle) : la construction part du haut de l'objet." };
+    if (o < 0 || !HAUT_B[P[o].type]) return { raison: TRAD("Poser un objet étendu (lettre F, quadrillage, dépoli, règle) : la construction part du haut de l'objet.") };
     var nd = seq.iDet >= 0 ? seq.iDet : P.length, detId = seq.detEl ? seq.detEl.id : null, L = [], j;
     for (j = o + 1; j < nd; j++) {
       if (P[j].k === K_.MIROIR) break;
@@ -1957,9 +1983,9 @@
       // IDEALE sinon traverseraient la construction)
       if (P[j].k === K_.IDEALE && P[j].sens > 0 && P[j].el !== detId && (P[j].type === "lentille" || P[j].type === "condenseur")) L.push(P[j]);
     }
-    if (!L.length) return { raison: "Poser une lentille après l'objet." };
+    if (!L.length) return { raison: TRAD("Poser une lentille après l'objet.") };
     // la construction s'arrête au premier observateur (écran, capteur, œil, viseur, lunette) ou au miroir
-    var zFin = LONGUEUR, GRAND = 1e7;
+    var zFin = LONGUEUR;
     for (j = o + 1; j < P.length; j++) {
       var tj = P[j].type;
       if (P[j].k === K_.MIROIR || tj === "ecran" || tj === "capteur" || tj === "oeil" || tj === "viseur" || tj === "lunette") { zFin = P[j].zp; break; }
@@ -1970,23 +1996,42 @@
     var bB = aA + HAUT_B[P[o].type][axe], mB = ETENDUE[P[o].type] ? ETENDUE[P[o].type][axe] : 0;
     if (hB != null && mB > 0) { var b2 = Co[axe] + clamp(hB, -mB, mB); if (Math.abs(b2 - aA) > 1e-6) bB = b2; }
     var res = { objet: { z: Co[2], a: aA, b: bB }, lentilles: [], fin: zFin };
-    var ob = { z: res.objet.z, a: res.objet.a, b: res.objet.b, infini: false }, zPrec = ob.z;
+    // objet du moment : réel ({z, a, b}) ou gerbe parallèle ({infini, pente, hauts} : la pente commune et la hauteur
+    // de chaque rayon au plan de la lentille qui l'a produite, à reprendre telle quelle)
+    var ob = { z: res.objet.z, a: res.objet.a, b: res.objet.b, infini: false, pente: 0, hauts: null }, zPrec = ob.z;
     L.forEach(function (pr, n) {
-      var zL = pr.zp, c = pr.O[axe], f = pr.p[0], zo = ob.z, hb = ob.b, dern = n === L.length - 1, zSuiv = dern ? Math.max(zFin, zL) : L[n + 1].zp;
-      var p = zo - zL, inf = Math.abs(p + f) < 1e-9, pp = inf ? 0 : p * f / (p + f), zi = zL + pp, g = inf || !p ? 1 : pp / p;
-      var pente = (c - hb) / (zL - zo || 1e-12);        // rayon par le centre optique
-      var im = inf ? { z: Infinity, a: 0, b: 0, infini: true, virtuelle: false, formee: false, pente: pente }
-        : { z: zi, a: c + g * (ob.a - c), b: c + g * (hb - c), infini: false, virtuelle: pp < 0, formee: pp > 0 && zi <= zSuiv + 1e-9 };
-      var Lz = { z: zL, c: c, f: f, F: [zL - f, c], Fp: [zL + f, c], image: im, rayons: [] };
-      var hL = [["centre", c], ["parallele", hb]];
-      if (Math.abs(p + f) > 1e-9) hL.push(["foyer", c + (hb - c) * f / (p + f)]);
+      var zL = pr.zp, c = pr.O[axe], f = pr.p[0], zo = ob.z, hb = ob.infini ? c : ob.b, dern = n === L.length - 1;
+      var zSuiv = dern ? Math.max(zFin, zL) : L[n + 1].zp;
+      // objet à l'infini : image dans le plan focal (p = −∞) ; image à l'infini : au-delà du seuil, ou |p + f| nul
+      // (pp infini, jamais NaN)
+      var p = ob.infini ? -Infinity : zo - zL, pp = ob.infini ? f : p * f / (p + f);
+      var inf = !ob.infini && !(Math.abs(pp) < SEUIL_INFINI), zi = zL + pp, g = inf || !p ? 1 : pp / p;
+      var pente = ob.infini ? ob.pente : (c - hb) / (zL - zo || 1e-12);        // rayon par le centre optique
+      var im = inf ? { z: Infinity, a: c, b: c, infini: true, virtuelle: false, formee: false, pente: pente }
+        : { z: zi, a: ob.infini ? c : c + g * (ob.a - c), b: ob.infini ? c + pente * f : c + g * (hb - c),
+          infini: false, virtuelle: pp < 0, formee: pp > 0 && zi <= zSuiv + 1e-9 };
+      var Lz = { z: zL, c: c, f: f, F: [zL - f, c], Fp: [zL + f, c], suiv: zSuiv, image: im, rayons: [] };
+      // hauteurs des rayons au plan de la lentille : pour un objet réel, les rayons particuliers (par le centre
+      // optique, parallèle à l'axe, par F) ; pour un objet à l'infini, la gerbe parallèle déjà tracée, reprise sans
+      // invention (un objet sans hauteur n'a pas de rayon « parallèle à l'axe »)
+      var hL;
+      if (ob.infini) hL = ob.hauts.map(function (q) { return [q.type, q.h + ob.pente * (zL - ob.z)]; });
+      else {
+        hL = [["centre", c], ["parallele", hb]];
+        var hF = c + (hb - c) * f / (p + f);
+        // rayon par F : hors de la monture quand l'image s'éloigne (il part presque à la verticale) — pas tracé
+        if (!inf && Math.abs(hF - c) <= demiOuverture(pr, axe)) hL.push(["foyer", hF]);
+      }
       if (Math.abs(p) > 1e-9) hL.forEach(function (t) {
         var h0 = t[1], segs = [];
-        function hin(z) { return h0 + (hb - h0) * (z - zL) / p; }
+        function hin(z) { return h0 + (ob.infini ? pente : (hb - h0) / p) * (z - zL); }
         function hout(z) { return inf ? h0 + pente * (z - zL) : h0 + (im.b - h0) * (z - zL) / pp; }
-        function seg(z1, z2, f, tirets) { if (Math.abs(z2 - z1) > 1e-9) segs.push({ z1: z1, h1: f(z1), z2: z2, h2: f(z2), tirets: !!tirets }); }
-        if (p < 0 && (zo >= zPrec - 1e-9)) seg(zo, zL, hin);                         // objet réel, devant la lentille
-        else if (p < 0) { if (!ob.infini) seg(zo, zPrec, hin, true); seg(zPrec, zL, hin); }   // image virtuelle de la lentille précédente
+        // gr = n : tout ce que trace une lentille forme UNE gerbe, de l'image qui la précède à celle qu'elle donne
+        // (le V de part et d'autre du verre) — la couleur change donc au point B, pas sur la lentille
+        function seg(z1, z2, f, tirets) { if (Math.abs(z2 - z1) > 1e-9) segs.push({ z1: z1, h1: f(z1), z2: z2, h2: f(z2), tirets: !!tirets, gr: n }); }
+        if (ob.infini) ;                                                             // gerbe parallèle : la lentille précédente l'a tracée, même couleur
+        else if (p < 0 && (zo >= zPrec - 1e-9)) seg(zo, zL, hin);                    // objet réel, devant la lentille
+        else if (p < 0) { seg(zo, zPrec, hin, true); seg(zPrec, zL, hin); }          // image virtuelle de la lentille précédente
         else { seg(zPrec, zL, hin); seg(zL, zo, hin, true); }                        // objet virtuel
         if (inf) seg(zL, zSuiv, hout);
         else if (pp > 0) { seg(zL, Math.min(zi, zSuiv), hout); if (zi > zSuiv && dern) seg(zSuiv, zi, hout, true); }
@@ -1994,8 +2039,9 @@
         Lz.rayons.push({ type: t[0], segs: segs });
       });
       res.lentilles.push(Lz);
-      // image à l'infini : objet très lointain pour la lentille suivante (A et B sur les rayons passés par le centre optique)
-      ob = inf ? { z: zL - GRAND, a: c - (c - ob.a) / (zL - zo || 1e-12) * GRAND, b: c - pente * GRAND, infini: true } : { z: im.z, a: im.a, b: im.b, infini: false };
+      // image à l'infini : la lentille suivante reçoit une gerbe parallèle, à la pente et aux hauteurs d'ici
+      ob = inf ? { z: zL, a: im.a, b: im.b, infini: true, pente: pente, hauts: hL.map(function (t) { return { type: t[0], h: t[1] }; }) }
+        : { z: im.z, a: im.a, b: im.b, infini: false, pente: 0, hauts: null };
       zPrec = zL;
     });
     return res;
@@ -2075,11 +2121,11 @@
   // = le rendu d'origine, MAX_POINTS_FIN ; 2 pour Normal aurait dégradé ce défaut).
   // Ql.prof : le préréglage ou les réglages du panneau prof remplacent le niveau (rendu à passes fixes).
   var RENDUS = [null,
-    { nom: "Rapide", ap: 256, ms: 10, Nr: 20, bruit: 0.06, plafond: 1000, visible: 5, onde: 1, titre: "Image vite prête, encore un peu granuleuse (bruit 6 %, au plus 1 s)." },
-    { nom: "Normal", ap: 384, ms: 16, Nr: 21, bruit: 0.03, plafond: 3000, visible: 3, onde: 3, titre: "Le rendu par défaut (bruit 3 %, au plus 3 s)." },
-    { nom: "Fin", ap: 512, ms: 25, Nr: 21, bruit: 0.02, plafond: 8000, visible: 2, onde: 4, titre: "Image plus propre (bruit 2 %, au plus 8 s)." },
-    { nom: "Très fin", ap: 512, ms: 33, Nr: 21, bruit: 0.01, plafond: 20000, visible: 1, onde: 5, titre: "Image très propre (bruit 1 %, au plus 20 s)." },
-    { nom: "Maximal", ap: 768, ms: 50, Nr: 21, bruit: 0.005, plafond: 60000, visible: 0, onde: 6, titre: "Le plus fin possible, quitte à attendre (bruit 0,5 %, au plus 1 min ; l'aperçu peut ramer)." }];
+    { nom: TRAD("Rapide"), ap: 256, ms: 10, Nr: 20, bruit: 0.06, plafond: 1000, visible: 5, onde: 1, titre: TRAD("Image vite prête, encore un peu granuleuse (bruit 6 %, au plus 1 s).") },
+    { nom: "Normal", ap: 384, ms: 16, Nr: 21, bruit: 0.03, plafond: 3000, visible: 3, onde: 3, titre: TRAD("Le rendu par défaut (bruit 3 %, au plus 3 s).") },
+    { nom: TRAD("Fin"), ap: 512, ms: 25, Nr: 21, bruit: 0.02, plafond: 8000, visible: 2, onde: 4, titre: TRAD("Image plus propre (bruit 2 %, au plus 8 s).") },
+    { nom: TRAD("Très fin"), ap: 512, ms: 33, Nr: 21, bruit: 0.01, plafond: 20000, visible: 1, onde: 5, titre: TRAD("Image très propre (bruit 1 %, au plus 20 s).") },
+    { nom: TRAD("Maximal"), ap: 768, ms: 50, Nr: 21, bruit: 0.005, plafond: 60000, visible: 0, onde: 6, titre: TRAD("Le plus fin possible, quitte à attendre (bruit 0,5 %, au plus 1 min ; l'aperçu peut ramer).") }];
   var Banc = { RENDUS: RENDUS, LONGUEUR: LONGUEUR, polarisations: polarisations, DEC_MAX: DEC_MAX, PIECES: PIECES, MONTAGES: MONTAGES, BACS: BACS, POSES: POSES, CAPTEUR_N: CAPTEUR_N, PIXEL: PIXEL,
     K_CAPTEUR: K_CAPTEUR, ISOS: ISOS, PUITS: PUITS, CIBLE_POSE: CIBLE_POSE, BARRETTE: BARRETTE, BARRETTE_PARFAITE: BARRETTE_PARFAITE, INTEG: INTEG, integVoulue: integVoulue,
     sensBarrette: sensBarrette, migrerBarrette: migrerBarrette, aParLumen: aParLumen, gainPhotodiode: gainPhotodiode, CALIBRES: CALIBRES, comptesSpec: comptesSpec, SPEC_SAT: SPEC_SAT, COMP_VISIBLE: COMP_VISIBLE, TIRAGE: TIRAGE, visionDe: visionDe, laserDansOeil: laserDansOeil,
@@ -2180,15 +2226,19 @@
   }
 
   var PL = root.VITRINE_PAILLASSE = root.VITRINE_PAILLASSE || { instruments: {} };
-  var COUL = { centre: "#7fd6a0", parallele: "#ff9f7a", foyer: "#8ab6ff" };
+  // Rayons de construction : UNE COULEUR PAR TRONÇON, c'est-à-dire par intervalle entre deux plans conjugués (B → B₁,
+  // B₁ → B′…), pour suivre du regard où va chaque gerbe et où se forme l'image ; celui d'un tronçon dont l'image part à
+  // l'infini a sa couleur propre (la gerbe parallèle se reconnaît d'un coup d'œil).
+  var COUL_TRONCON = ["#ffb27a", "#8ad6a0", "#8ab6ff", "#e6a3e0", "#ffe08a", "#93d8d8"];
+  var COUL_INFINI = "#c9a8ff";
   var MARGE = 34;                                // marge horizontale du banc dessiné (px)
-  function fmt(v, n) { return (+v).toFixed(n == null ? 0 : n).replace(".", ",").replace(/^-/, "−"); }
+  function fmt(v, n) { return nb(v, n == null ? 0 : n).replace(/^-/, "−"); }
   function fmtFin(v, d) { var m = Math.pow(10, d); return fmt(v, Math.abs(v * m - Math.round(v * m)) < 1e-6 ? d : d + 1); }      // une décimale de plus en ultrafin
   function cm(z) { var d = Math.abs(z - Math.round(z)) < 1e-6 ? 1 : Math.abs(z * 10 - Math.round(z * 10)) < 1e-6 ? 2 : 3; return fmt(z / 10, d) + " cm"; }
   // Réglage principal d'une pièce, celui que la molette règle sur sa miniature.
-  var REGLAGE = { iris: "ouverture", lanterne: "tirage du condenseur", trouSource: "diamètre", oeil: "accommodation", miroir: "inclinaison",
-    fenteSource: "largeur", bifentes: "bifente utilisée", fente: "largeur", trousYoung: "écartement", fentesMultiples: "nombre de fentes", reseau: "traits par mm",
-    grilleCroisee: "pas", objetPhase: "forme", pastille: "diamètre", couteau: "position du bord", fil: "orientation", diapo: "image",
+  var REGLAGE = { iris: TRAD("ouverture"), lanterne: TRAD("tirage du condenseur"), trouSource: TRAD("diamètre"), oeil: "accommodation", miroir: TRAD("inclinaison"),
+    fenteSource: TRAD("largeur"), bifentes: TRAD("bifente utilisée"), fente: TRAD("largeur"), trousYoung: TRAD("écartement"), fentesMultiples: TRAD("nombre de fentes"), reseau: TRAD("traits par mm"),
+    grilleCroisee: TRAD("pas"), objetPhase: TRAD("forme"), pastille: TRAD("diamètre"), couteau: TRAD("position du bord"), fil: "orientation", diapo: "image",
     polariseur: "orientation", lame: "orientation" };
   function decouverte(p) { var i = (p.caches || []).indexOf(false); return i < 0 ? 1 : i; }
   function decouvrir(e, i) { e.params.caches = ECARTS.map(function (a, k) { return k !== i; }); }
@@ -2346,10 +2396,10 @@
     // ================= le banc =================
     K.racine.classList.add("pl-banc");
     var D = K.dessus; D.classList.add("bc-dessus"); D.setAttribute("tabindex", "0");
-    D.setAttribute("aria-label", "Banc d'optique : glisser une pièce le long du rail");
+    D.setAttribute("aria-label", TRAD("Banc d'optique : glisser une pièce le long du rail"));
     svg("defs", {}, D).innerHTML = Dessin.DEFS;
     var gFond = svg("g", { "pointer-events": "none" }, D), gFaisceau = svg("g", { "pointer-events": "none" }, D), gElems = svg("g", {}, D);
-    var gRayons = svg("g", { "pointer-events": "none" }, D), gPoignee = svg("g", {}, D), gNotes = svg("g", { "pointer-events": "none" }, D);
+    var gRayons = svg("g", { "pointer-events": "none", class: "bc-rayons" }, D), gPoignee = svg("g", {}, D), gNotes = svg("g", { "pointer-events": "none" }, D);
     var gCadre = svg("g", { "pointer-events": "none" }, D);      // rectangle de Cadrer (jamais effacé par le dessin du banc)
     // Le dessin dans une scène positionnée : boutons de zoom et vue de face de la pièce choisie par-dessus (HTML).
     var SC = el("div", "bc-scene"); D.parentNode.insertBefore(SC, D); SC.appendChild(D);
@@ -2387,13 +2437,13 @@
         if (x < -140 || x > W + 140) return;
         var o = { id: e.id, sel: estSel(e.id), regl: REGLAGE[e.type], dec: !!DECALABLE[e.type] || decentrable(e),
           cls: (pris ? "glisse" : "") + (hors ? " hors" : "") + (REMPL === e.id ? " cible" : ""),
-          titre: PIECES[e.cle].titre + (BAC.clair ? " Position : " + cm(e.z) + "." : "") };
+          titre: PIECES[e.cle].titre + (BAC.clair ? TRAD(" Position : {0}.", [cm(e.z)]) : "") };
         var g = dessus ? Dessin.pieceDessus(figureVue(e), x, Y(dec(e)), G, o) : Dessin.piece(figureVue(e), x, Y(dec(e)), G, o), es = escamote(st, e);
         if (!dessus && decentrable(e)) g = g.replace(/<\/g>$/, visHauteur(e, x) + "</g>");
         if (e.verrou) g = g.replace(/<\/g>$/, '<g transform="translate(' + pf(x + 9) + " " + pf((dessus ? Y0 - 32 : railY - 27)) + ')" color="#e0b84c" pointer-events="none">' + CADENAS + "</g></g>");
         // escamotée : relevée hors du faisceau, grisée, et dite (« relevé d'office » pour un récepteur devant celui qui observe)
         if (es) g = '<g class="bc-esc" transform="translate(0 ' + pf(-Math.min(70, 0.22 * H)) + ')">' + g + "</g>" +
-          '<text x="' + pf(x) + '" y="' + pf((dessus ? Y0 : railY) - 4) + '" class="bc-etiq bc-esc-l" text-anchor="middle">' + (es === "auto" ? "relevé d'office" : "relevé") + "</text>";
+          '<text x="' + pf(x) + '" y="' + pf((dessus ? Y0 : railY) - 4) + '" class="bc-etiq bc-esc-l" text-anchor="middle">' + (es === "auto" ? TRAD("relevé d'office") : TRAD("relevé")) + "</text>";
         s += g;
       });
       if (!dessus) s += vraieForme();
@@ -2440,7 +2490,7 @@
       if (hi < za || lo > zb) return;
       function hDe(z) { return h1 + (h2 - h1) * (z - z1) / (z2 - z1 || 1e-12); }
       var a = clamp(z1, za, zb), b = clamp(z2, za, zb);
-      svg("line", { x1: pf(X(a)), y1: pf(Y(hDe(a))), x2: pf(X(b)), y2: pf(Y(hDe(b))), stroke: o.coul, "stroke-width": o.w || 1.3, "stroke-dasharray": o.tirets ? "5 4" : null, "stroke-opacity": o.op || 1, "stroke-linecap": "round", style: o.additif ? "mix-blend-mode:screen" : null }, par);
+      svg("line", { x1: pf(X(a)), y1: pf(Y(hDe(a))), x2: pf(X(b)), y2: pf(Y(hDe(b))), stroke: o.coul, class: o.cls, "stroke-width": o.w || 1.3, "stroke-dasharray": o.tirets ? "5 4" : null, "stroke-opacity": o.op || 1, "stroke-linecap": "round", style: o.additif ? "mix-blend-mode:screen" : null }, par);
     }
     function fleche(par, z, a, b, o) {       // objet ou image : de A (pied) à B
       if (z < Z(0) - 60 || z > Z(W) + 60) return;
@@ -2449,6 +2499,54 @@
       svg("path", { d: "M" + pf(x) + " " + pf(ya) + "V" + pf(yb) + "M" + pf(x - 4) + " " + pf(yb + 7 * s) + "L" + pf(x) + " " + pf(yb) + "L" + pf(x + 4) + " " + pf(yb + 7 * s),
         fill: "none", stroke: o.coul, "stroke-width": 2.2, "stroke-dasharray": o.tirets ? "4 3" : null, "stroke-linecap": "round", "stroke-linejoin": "round" }, par);
       txt(par, x + 6, ya + (s > 0 ? 12 : -4), o.A, "bc-lab"); txt(par, x + 6, yb + (s > 0 ? -2 : 10), o.B, "bc-lab");
+    }
+    // Une couleur par gerbe (une par lentille, du point qui la précède à celui qu'elle donne) ; celle dont l'image part
+    // à l'infini est à part : la gerbe parallèle se reconnaît, et le zoom la montre là où la marque manque de place.
+    function coulTroncon(gr) { return CONS.lentilles[gr] && CONS.lentilles[gr].image.infini ? COUL_INFINI : COUL_TRONCON[gr % COUL_TRONCON.length]; }
+    // Conjugué à l'infini : rien à dessiner à sa place. Ce qui se lit, c'est la DIRECTION de la gerbe parallèle qui en
+    // sort — l'angle θ, marqué au centre optique entre l'axe et le rayon non dévié (les deux traits existent, l'angle se
+    // lit comme sur une figure de cours), et une flèche le long d'un rayon qui pointe vers l'infini et porte le nom du
+    // point. L'arc est tracé à l'échelle de l'écran (hauteurs dilatées) : sa valeur est dans l'infobulle, pas à côté.
+    function marqueInfini(par, Lz, lbl, gr) {
+      var pente = Lz.image.pente, sorts = [], axe = null;
+      Lz.rayons.forEach(function (r) {
+        var s = null;
+        r.segs.forEach(function (q) { if (q.gr === gr && !q.tirets) s = q; });
+        if (!s) return;
+        sorts.push(s);
+        if (r.type === "centre") axe = s;              // le rayon non dévié : il passe par le centre optique
+      });
+      if (!sorts.length) return;
+      // la place disponible après la lentille, en pixels : sans elle, rien n'est marqué (le zoom la donne, et la couleur
+      // du tronçon dit déjà que la gerbe est parallèle)
+      var dispo = Math.min(X(Lz.suiv), W - 12) - X(Lz.z);
+      if (dispo < 20) return;
+      function hDe(s, z) { return s.h1 + (s.h2 - s.h1) * (z - s.z1) / (s.z2 - s.z1 || 1e-12); }
+      var g = svg("g", { class: "bc-inf" }, par), ref = sorts[0];
+      sorts.forEach(function (s) { if (hDe(s, s.z2) > hDe(ref, ref.z2)) ref = s; });
+      // 1. l'angle, au centre optique : entre l'axe et le rayon non dévié (à défaut, entre l'axe et la gerbe)
+      var vx = X(Lz.z), vy = Y(Lz.c), R = Math.min(30, 0.5 * dispo), k, arc = "";
+      var a1 = Math.atan2(Y(Lz.c + pente * (Lz.suiv - Lz.z)) - vy, X(Lz.suiv) - vx);
+      if (axe) a1 = Math.atan2(Y(hDe(axe, axe.z2)) - vy, X(axe.z2) - vx);
+      if (R >= 12 && Math.abs(a1) > 0.06 && vx > 6 && vx < W - 6 - R) {
+        for (k = 0; k <= 10; k++) arc += (k ? "L" : "M") + pf(vx + R * Math.cos(a1 * k / 10)) + " " + pf(vy + R * Math.sin(a1 * k / 10));
+        svg("path", { d: arc, fill: "none", stroke: COUL_INFINI, "stroke-width": 1.2, "stroke-opacity": 0.85 }, g);
+        // la lettre θ seulement si elle ne tombe pas sur la pièce suivante (elle n'apprend rien de plus que l'arc)
+        if (dispo >= R + 26) txt(g, vx + (R + 10) * Math.cos(a1 / 2) - 2, vy + (R + 10) * Math.sin(a1 / 2) + 4, "θ", "bc-lab", "middle");
+      }
+      // 2. la flèche, le long d'un rayon de la gerbe, au-dessus du plus haut
+      var x0 = vx + 0.22 * dispo, x1 = vx + 0.78 * dispo, off = 12 / sy;
+      if (x1 - x0 >= 12) {
+        var y0 = Y(hDe(ref, Z(x0)) + off), y1 = Y(hDe(ref, Z(x1)) + off);
+        var L = Math.hypot(x1 - x0, y1 - y0) || 1, u = [(x1 - x0) / L, (y1 - y0) / L], v = [-u[1], u[0]];
+        svg("path", { d: "M" + pf(x0) + " " + pf(y0) + "L" + pf(x1) + " " + pf(y1) +
+          "M" + pf(x1 - 9 * u[0] + 4.5 * v[0]) + " " + pf(y1 - 9 * u[1] + 4.5 * v[1]) + "L" + pf(x1) + " " + pf(y1) +
+          "L" + pf(x1 - 9 * u[0] - 4.5 * v[0]) + " " + pf(y1 - 9 * u[1] - 4.5 * v[1]),
+          fill: "none", stroke: COUL_INFINI, "stroke-width": 1.5, "stroke-linecap": "round", "stroke-linejoin": "round" }, g);
+        txt(g, x1 - 3, y1 - 8, lbl, "bc-lab", "end");
+      }
+      svg("title", {}, g).textContent = TRAD("Le point {0} est à l'infini dans cette direction : seule l'inclinaison de la gerbe se lit, θ = {1}° avec l'axe.",
+        [lbl, fmt(Math.atan(pente) * 180 / Math.PI, 1)]);
     }
     var CONS = null, FL = null, ENV = null;
     // Faisceau gardé tant que la séquence ne change pas (zoom, sélection, survol) ; en optique réelle, bords exacts
@@ -2508,7 +2606,7 @@
           var nL = CONS.lentilles.length, blanc = "#f0f3f6";
           fleche(gRayons, CONS.objet.z, CONS.objet.a, CONS.objet.b, { coul: blanc, A: "A", B: "B" });
           // poignée de B : la glisser le long de l'objet (un clic sur l'objet, pinceau éteint, fait de même)
-          svg("title", {}, svg("circle", { cx: X(CONS.objet.z), cy: Y(CONS.objet.b), r: 5, class: "bc-poigneeB" }, gPoignee)).textContent = "Point B de l'objet : le glisser le long de l'objet.";
+          svg("title", {}, svg("circle", { cx: X(CONS.objet.z), cy: Y(CONS.objet.b), r: 5, class: "bc-poigneeB" }, gPoignee)).textContent = TRAD("Point B de l'objet : le glisser le long de l'objet.");
           CONS.lentilles.forEach(function (Lz, n) {
             var ind = nL > 1 ? ["₁", "₂", "₃", "₄", "₅"][n] || "" : "";
             [[Lz.F, "F" + ind], [Lz.Fp, "F′" + ind]].forEach(function (q) {
@@ -2517,9 +2615,10 @@
               svg("line", { x1: x, x2: x, y1: y - 4, y2: y + 4, stroke: blanc, "stroke-width": 1.4 }, gRayons);
               txt(gRayons, x, y + 16, q[1], "bc-lab", "middle");
             });
-            Lz.rayons.forEach(function (r) { r.segs.forEach(function (s) { ligne(gRayons, s.z1, s.h1, s.z2, s.h2, { coul: COUL[r.type], tirets: s.tirets, op: s.tirets ? 0.75 : 1 }); }); });
+            Lz.rayons.forEach(function (r) { r.segs.forEach(function (s) { ligne(gRayons, s.z1, s.h1, s.z2, s.h2, { coul: coulTroncon(s.gr), cls: "bc-cons", tirets: s.tirets, op: s.tirets ? 0.75 : 1 }); }); });
             var im = Lz.image, dern = n === nL - 1;
             if (!im.infini) fleche(gRayons, im.z, im.a, im.b, { coul: blanc, tirets: !im.formee, A: dern ? "A′" : "A" + ind, B: dern ? "B′" : "B" + ind });
+            else marqueInfini(gRayons, Lz, (dern ? "B′" : "B" + ind) + "∞", n);
           });
         }
       }
@@ -2542,7 +2641,7 @@
           }
           if (dep.objet && ETENDUE[dep.objet.type] && ETENDUE[dep.objet.type][ax] > 0) {
             var c = svg("circle", { cx: X(dep.p[2]), cy: Y(dep.p[ax]), r: 5.5, class: "bc-poignee" }, gPoignee);
-            svg("title", {}, c).textContent = "Point de départ du pinceau : le glisser le long de l'objet.";
+            svg("title", {}, c).textContent = TRAD("Point de départ du pinceau : le glisser le long de l'objet.");
           }
         }
       }
@@ -2590,7 +2689,7 @@
     function dessinerPola() {
       var P = polarisations(st), R = 11, g = svg("g", { class: "bc-pola" }, gRayons), y = Y(0);
       if (!P.etats.length) return;
-      svg("title", {}, g).textContent = "La vibration de la lumière entre les pièces, vue depuis la source" + (P.l === 550 ? " (lumière blanche : à 550 nm)." : " (à " + fmt(P.l, 1) + " nm).");
+      svg("title", {}, g).textContent = TRAD("La vibration de la lumière entre les pièces, vue depuis la source") + (P.l === 550 ? TRAD(" (lumière blanche : à 550 nm).") : TRAD(" (à {0} nm).", [fmt(P.l, 1)]));
       P.etats.forEach(function (q) {
         var x = X(q.z);
         if (x < -20 || x > W + 20) return;
@@ -2627,8 +2726,8 @@
     // J = [Re Ex, Im Ex, Re Ey, Im Ey] (axes du cœur), |J|² = ½ : le rayon plein du médaillon.
     function apercuPola(parent) {
       var r = Math.SQRT1_2, c35 = Math.cos(35 * Math.PI / 180), s35 = Math.sin(35 * Math.PI / 180), c60 = Math.cos(Math.PI / 3), s60 = Math.sin(Math.PI / 3);
-      var Q = [[{ nat: true }, "naturelle"], [{ J: [r * Math.cos(Math.PI / 6), 0, r * Math.sin(Math.PI / 6), 0] }, "rectiligne"],
-        [{ J: [r * c35, 0, r * s35 * c60, r * s35 * s60] }, "elliptique"], [{ J: [0.5, 0, 0, 0.5] }, "circulaire"]];
+      var Q = [[{ nat: true }, TRAD("naturelle")], [{ J: [r * Math.cos(Math.PI / 6), 0, r * Math.sin(Math.PI / 6), 0] }, TRAD("rectiligne")],
+        [{ J: [r * c35, 0, r * s35 * c60, r * s35 * s60] }, TRAD("elliptique")], [{ J: [0.5, 0, 0, 0.5] }, TRAD("circulaire")]];
       var G = svg("svg", { viewBox: "0 0 72 72", width: "100%", height: "100%" }, parent);
       svg("path", { d: "M36 2V70M2 36H70", stroke: "#262d36", "stroke-width": 0.6 }, G);
       Q.forEach(function (t, i) {
@@ -2648,14 +2747,16 @@
     function dessinerNotes() {
       gNotes.innerHTML = "";
       var NE = neutralisees(st, P());
-      if (NE.length) txt(gNotes, 12, 58, "Niveau " + NIV + " : " + (P().decentrable ? "inclinaison" : "décentrement" + (P().inclinable ? "" : " et inclinaison")) + " de " + NE.map(function (q) { return PIECES[q.cle].court; }).join(", ") + " neutralisés, pas effacés : ils reviennent au niveau 3.", "bc-note");
+      if (NE.length) txt(gNotes, 12, 58, TRAD("Niveau {0} : {1} de {2} neutralisés, pas effacés : ils reviennent au niveau 3.", [NIV,
+        P().decentrable ? TRAD("inclinaison") : TRAD("décentrement") + (P().inclinable ? "" : TRAD(" et inclinaison")),
+        NE.map(function (q) { return PIECES[q.cle].court; }).join(", ")]), "bc-note");
       var dil = dilat(), dessus = st.vue === "dessus";
-      txt(gNotes, 12, 18, (dessus ? "Vue de dessus" : "Vue de profil") + " · " + (dil > 1.05 ? (dessus ? "largeurs" : "hauteurs") + " dilatées " + fmt(dil, dil < 2 ? 1 : 0) + " fois" : "échelle vraie"), "bc-note");
+      txt(gNotes, 12, 18, (dessus ? TRAD("Vue de dessus") : TRAD("Vue de profil")) + " · " + (dil > 1.05 ? (dessus ? TRAD("largeurs dilatées {0} fois", [fmt(dil, dil < 2 ? 1 : 0)]) : TRAD("hauteurs dilatées {0} fois", [fmt(dil, dil < 2 ? 1 : 0)])) : TRAD("échelle vraie")), "bc-note");
       if (st.aides.construction && CONS && CONS.raison && optq() === "parfaite") txt(gNotes, 12, 72, CONS.raison, "bc-note bc-alerte");
       if (st.aides.rebours) {
         var yr = 90, rr = RET && RET.seq === SEQ && RET.fini ? RET.raison : null;
         if (rr) txt(gNotes, 12, yr, rr, "bc-note bc-alerte");
-        else txt(gNotes, 12, yr, "Cliquer un point de l'observation : des rayons de la lumière qui y arrive.", "bc-note");
+        else txt(gNotes, 12, yr, TRAD("Cliquer un point de l'observation : des rayons de la lumière qui y arrive."), "bc-note");
       }
     }
     function dessinerBanc() {
@@ -2720,12 +2821,12 @@
       cam = { k: k, zc: z0 + (W / 2 - MARGE) / (sx0 * k), pres: false, mont: true };
     }
     var ZBt = {};
-    [["ens", "Tout le banc", "<b>Tout le banc</b>, ses 2 m · double-clic sur le fond · touche <span class=\"k\">0</span>", function () { vueEnsemble(); modifie("dessin"); }],
-      ["mont", "Montage", "<b>Montage</b> — toutes les pièces posées, au plus près", function () { vueMontage(); modifie("dessin"); }],
-      ["moins", "−", "<b>Voir plus large</b> · touche <span class=\"k\">−</span>", function () { zoomerBanc(0.5); }], ["k", "", ""],
-      ["plus", "+", "<b>Agrandir</b> autour de la pièce choisie · touche <span class=\"k\">+</span>", function () { zoomerBanc(2); }],
-      ["cadrer", "Cadrer", "<b>Cadrer</b> — puis glisser un rectangle sur le banc : il cadre cette zone · Échap : annuler", function () { armerCadre("banc"); }],
-      ["pres", "De près", "<b>De près</b> — la pièce choisie seule, de très près, à l'échelle vraie · double-clic sur la pièce", dePres]].forEach(function (q) {
+    [["ens", TRAD("Tout le banc"), TRAD("<b>Tout le banc</b>, ses 2 m · double-clic sur le fond · touche <span class=\"k\">0</span>"), function () { vueEnsemble(); modifie("dessin"); }],
+      ["mont", TRAD("Montage"), TRAD("<b>Montage</b> — toutes les pièces posées, au plus près"), function () { vueMontage(); modifie("dessin"); }],
+      ["moins", "−", TRAD("<b>Voir plus large</b> · touche <span class=\"k\">−</span>"), function () { zoomerBanc(0.5); }], ["k", "", ""],
+      ["plus", "+", TRAD("<b>Agrandir</b> autour de la pièce choisie · touche <span class=\"k\">+</span>"), function () { zoomerBanc(2); }],
+      ["cadrer", TRAD("Cadrer"), TRAD("<b>Cadrer</b> — puis glisser un rectangle sur le banc : il cadre cette zone · Échap : annuler"), function () { armerCadre("banc"); }],
+      ["pres", TRAD("De près"), TRAD("<b>De près</b> — la pièce choisie seule, de très près, à l'échelle vraie · double-clic sur la pièce"), dePres]].forEach(function (q) {
       if (q[0] === "k") { ZBt.k = el("span", "bc-zoom-k", ZB); return; }
       ZBt[q[0]] = K.bouton(ZB, q[1], function () { q[3](); }, "pl-btn-p"); ZBt[q[0]].setAttribute("data-a3", q[2]);
     });
@@ -2751,12 +2852,12 @@
     function entete(e, sous) {
       var ep = st.faceFix === e.id;
       var nb = FACE.querySelector("b");
-      nb.textContent = e.id === st.sel ? PIECES[e.cle].court : nomDe(e); nb.title = nomDe(e) + (ep && e.id !== st.sel ? " (épinglée : ce n'est pas la pièce choisie)" : "");
+      nb.textContent = e.id === st.sel ? PIECES[e.cle].court : nomDe(e); nb.title = nomDe(e) + (ep && e.id !== st.sel ? TRAD(" (épinglée : ce n'est pas la pièce choisie)") : "");
       FACE.querySelector(".bc-face-t span").textContent = sous;
       var b = FACE.querySelector(".bc-face-pin");
       b.innerHTML = '<svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true"><path d="M10.5 1.5l4 4-1.6.6-2.3 2.6.3 3-1.2 1.2-2.6-2.6-4.2 4.2-.7-.7 4.2-4.2L3.8 6.2 5 5l3 .3 2.6-2.3z" fill="currentColor"/></svg>';
-      b.setAttribute("aria-pressed", ep ? "true" : "false"); b.setAttribute("aria-label", ep ? "Désépingler la vue de face" : "Épingler la vue de face");
-      b.title = ep ? "Épinglée sur " + nomDe(e) + " — désépingler : la vue de face redevient celle de la pièce choisie." : "Épingler : la vue de face reste sur cette pièce quand on en choisit une autre.";
+      b.setAttribute("aria-pressed", ep ? "true" : "false"); b.setAttribute("aria-label", ep ? TRAD("Désépingler la vue de face") : TRAD("Épingler la vue de face"));
+      b.title = ep ? TRAD("Épinglée sur {0} — désépingler : la vue de face redevient celle de la pièce choisie.", [nomDe(e)]) : TRAD("Épingler : la vue de face reste sur cette pièce quand on en choisit une autre.");
       b.addEventListener("click", function () { st.faceFix = ep ? null : e.id; modifie("dessin"); });
       FACE.querySelector(".bc-face-x").addEventListener("click", function () { st.aides.face = false; if (cam.mont) vueMontage(); modifie("dessin"); majAides(); });
     }
@@ -2877,7 +2978,7 @@
         var elI = instrumentDe(SEQ, st) || (SEQ.detEl && /^(oeil|capteur|ecran)$/.test(SEQ.detEl.type) ? SEQ.detEl : null);
         var qI = elI ? neutre(elI, P()) : { x: 0, y: 0 };
         g += '<circle cx="' + pf(PX(qI.x || 0)) + '" cy="' + pf(PY(qI.y || 0)) + '" r="' + pf(Math.max(2, ch * k)) + '" fill="rgba(224,184,76,.07)" stroke="#e0b84c" stroke-width="1.2" stroke-dasharray="4 3"/>';
-        tChamp = " Cercle ambré : champ vu par " + (elI ? nomP(elI) : "le détecteur") + " (±" + fmt(ch) + " mm sur cette pièce).";
+        tChamp = TRAD(" Cercle ambré : champ vu par {0} (±{1} mm sur cette pièce).", [elI ? nomP(elI) : TRAD("le détecteur"), fmt(ch)]);
       }
       // axe du banc (croix ambre) et échelle
       g += '<path d="M' + pf(PX(0) - 7) + " " + pf(PY(0)) + "h14M" + pf(PX(0)) + " " + pf(PY(0) - 7) + 'v14" stroke="#e0b84c" stroke-width="1.1"/>';
@@ -2890,19 +2991,19 @@
         var mx = pcx + (st.pinceau.hx || 0) * k, my = pcy - (st.pinceau.h || 0) * k;
         g += '<circle cx="' + pf(mx) + '" cy="' + pf(my) + '" r="4.5" fill="none" stroke="#ff7a59" stroke-width="1.6"/><circle cx="' + pf(mx) + '" cy="' + pf(my) + '" r="1.4" fill="#ff7a59"/>';
       }
-      var t = z && z.source ? "La lumière sort de cette pièce." : z && z.diffus ? "Derrière la fente : la lumière est diffractée, on la voit sur l'observation." : z && z.laser ? "La tache du laser sur la pièce." : z && z.x ? "La zone qu'éclaire le faisceau." : "Rien n'éclaire cette pièce.";
+      var t = z && z.source ? TRAD("La lumière sort de cette pièce.") : z && z.diffus ? TRAD("Derrière la fente : la lumière est diffractée, on la voit sur l'observation.") : z && z.laser ? TRAD("La tache du laser sur la pièce.") : z && z.x ? TRAD("La zone qu'éclaire le faisceau.") : TRAD("Rien n'éclaire cette pièce.");
       t += tChamp;
-      if (mob) t += e.verrou ? " Pièce verrouillée." : " Glisser la pièce dans son plan pour la décentrer (Maj : fin · Ctrl+Maj : ultrafin) ; la croix marque l'axe du banc.";
-      else if (Math.abs(ox) > 1e-9 || Math.abs(oy) > 1e-9) t += " Pièce décalée : la croix marque l'axe du banc.";
-      if (cliquable) t += " Un clic ici choisit le point d'où part le pinceau (vues de profil et de dessus).";
+      if (mob) t += e.verrou ? TRAD(" Pièce verrouillée.") : TRAD(" Glisser la pièce dans son plan pour la décentrer (Maj : fin · Ctrl+Maj : ultrafin) ; la croix marque l'axe du banc.");
+      else if (Math.abs(ox) > 1e-9 || Math.abs(oy) > 1e-9) t += TRAD(" Pièce décalée : la croix marque l'axe du banc.");
+      if (cliquable) t += TRAD(" Un clic ici choisit le point d'où part le pinceau (vues de profil et de dessus).");
       FACE.innerHTML = '<div class="bc-face-t"><b></b><span></span><button type="button" class="bc-face-pin"></button><button type="button" class="bc-face-x" title="Masquer (touche X)">×</button></div>' +
         '<svg class="bc-face-d" viewBox="0 0 ' + S + " " + S + '" aria-hidden="true"><defs><radialGradient id="bcLaserF"><stop offset="0" stop-color="' + cLaser(SEQ, 1, true) + '" stop-opacity=".95"/><stop offset=".5" stop-color="' + cLaser(SEQ, 1) + '" stop-opacity=".5"/><stop offset="1" stop-color="' + cLaser(SEQ, 1) + '" stop-opacity="0"/></radialGradient></defs>' + g + "</svg>" +
         '<div class="bc-face-p"></div>';
-      FACE.querySelector(".bc-face-p").textContent = t; entete(e, "de face");
+      FACE.querySelector(".bc-face-p").textContent = t; entete(e, TRAD("de face"));
       var sv = FACE.querySelector("svg.bc-face-d");      // pas le premier <svg> de l'encart : l'icône du bouton punaise
       if (mob && !e.verrou) {      // glisser : décentrer (le geste vit sur la page, le dessin est refait pendant qu'il dure)
         sv.style.cursor = "move";
-        sv.setAttribute("data-a3", "<b>Vue de face</b> (niveau 3) — glisser la pièce dans son plan (Maj : fin · Ctrl+Maj : ultrafin) · croix ambre : l'axe du banc" + (cliquable ? " · clic : le point d'où part le pinceau" : ""));
+        sv.setAttribute("data-a3", TRAD("<b>Vue de face</b> (niveau 3) — glisser la pièce dans son plan (Maj : fin · Ctrl+Maj : ultrafin) · croix ambre : l'axe du banc") + (cliquable ? TRAD(" · clic : le point d'où part le pinceau") : ""));
         sv.addEventListener("pointerdown", function (ev) {
           if (ev.button) return;
           var r = sv.getBoundingClientRect(); if (!r.width) return;
@@ -2959,11 +3060,11 @@
         g += '<path d="M' + pf(u2x(RETINE)) + " " + pf(v2y(vR)) + "L" + pf(u2x(Ufin)) + " " + pf(v2y(vF)) + '" fill="none" stroke="' + coul + '" stroke-width=".8" stroke-dasharray="2.5 2.5" opacity=".55"/>';
       });
       var t, cr = D && D.croise;
-      if (!SEQ || !SEQ.source) t = "Pas de lumière sur le banc.";
-      else if (!D || !D.rayons.length) t = "Aucun rayon du pinceau n'entre dans l'œil.";
-      else if (!cr || cr.u < 0) t = "Les rayons s'écartent : ils ne se croiseraient que derrière la rétine. L'image est floue.";
-      else if (Math.abs(cr.u - RETINE) < 0.05) t = "Les rayons se croisent sur la rétine : l'image est nette.";
-      else t = "Les rayons se croisent " + (cr.u < RETINE ? "avant" : "derrière") + " la rétine : l'image est floue.";
+      if (!SEQ || !SEQ.source) t = TRAD("Pas de lumière sur le banc.");
+      else if (!D || !D.rayons.length) t = TRAD("Aucun rayon du pinceau n'entre dans l'œil.");
+      else if (!cr || cr.u < 0) t = TRAD("Les rayons s'écartent : ils ne se croiseraient que derrière la rétine. L'image est floue.");
+      else if (Math.abs(cr.u - RETINE) < 0.05) t = TRAD("Les rayons se croisent sur la rétine : l'image est nette.");
+      else t = cr.u < RETINE ? TRAD("Les rayons se croisent avant la rétine : l'image est floue.") : TRAD("Les rayons se croisent derrière la rétine : l'image est floue.");
       if (cr && cr.u > 0 && cr.u < Ufin) g += '<circle cx="' + pf(u2x(cr.u)) + '" cy="' + pf(v2y(cr.v)) + '" r="2.4" fill="none" stroke="#e0b84c" stroke-width="1.1"/>';
       // Loupe sur la rétine quand les rayons se croisent à moins de 2 mm d'elle (à l'échelle de l'encart, 0,5 mm = 4 px) :
       // rond agrandi en bas à droite, centré entre le croisement et la rétine (rétine droite à cette échelle).
@@ -2986,10 +3087,10 @@
         g += '<circle cx="' + pf(LX(cr.u)) + '" cy="' + pf(LY(cr.v)) + '" r="2.4" fill="none" stroke="#e0b84c" stroke-width="1.1"/></g>';
         g += '<circle cx="' + pf(Lx) + '" cy="' + pf(Ly) + '" r="' + LR + '" fill="none" stroke="#8791a0" stroke-width="1.2"/>';
       }
-      t += acc < 0.01 ? " Le cristallin est au repos." : acc > 0.99 ? " Le cristallin accommode autant qu'il peut." : " Le cristallin accommode : il se bombe.";
+      t += acc < 0.01 ? TRAD(" Le cristallin est au repos.") : acc > 0.99 ? TRAD(" Le cristallin accommode autant qu'il peut.") : TRAD(" Le cristallin accommode : il se bombe.");
       FACE.innerHTML = '<div class="bc-face-t"><b></b><span></span><button type="button" class="bc-face-pin"></button><button type="button" class="bc-face-x" title="Masquer (menu Voir)">×</button></div>' +
         '<svg viewBox="0 0 ' + W + " " + H + '" aria-hidden="true">' + g + "</svg>" + '<div class="bc-face-p"></div>';
-      FACE.querySelector(".bc-face-p").textContent = t; entete(e, "dans l'œil");
+      FACE.querySelector(".bc-face-p").textContent = t; entete(e, TRAD("dans l'œil"));
     }
 
     // ----- gestes sur le banc -----
@@ -3073,7 +3174,7 @@
       } else geste = { type: "fond", x0: ev.clientX, y0: ev.clientY, bouge: false, px0: p.x, zc: cam.zc, py0: p.y, hc: cam.hc || 0 };
       K.racine.classList.add("pl-glisse");
     });
-    function nomsSel(n, un) { return n > 1 ? n + " pièces" : un; }
+    function nomsSel(n, un) { return n > 1 ? TRAD("{0} pièces", [n]) : un; }
     // Pièce que viserait un lâcher-remplacer en x (pixels du dessin) : la plus proche à moins de 12 px, hors `sauf` et hors
     // une pièce identique (la remplacer par elle-même ne change rien).
     function cibleRemplacer(px, sauf, cle) {
@@ -3090,7 +3191,7 @@
         geste.bouge = FACE_BOUGE = true;
         var fm = (ev.shiftKey ? ((ev.ctrlKey || ev.metaKey) ? 0.01 : 0.1) : 1) / (geste.k * geste.r);
         fixerDec(fe, "x", geste.dx + (ev.clientX - geste.x0) * fm); fixerDec(fe, "y", geste.dy - (ev.clientY - geste.y0) * fm);
-        K.texteGeste("<b>" + K.esc(nomP(fe)) + "</b> décentrée : côté " + fmt(fe.x || 0, 2) + " mm · hauteur " + fmt(fe.y || 0, 2) + " mm" + (ev.shiftKey ? ((ev.ctrlKey || ev.metaKey) ? " · ultrafin" : " · fin") : " · Maj : fin · Ctrl+Maj : ultrafin"));
+        K.texteGeste(TRAD("<b>{0}</b> décentrée : côté {1} mm · hauteur {2} mm", [K.esc(nomP(fe)), fmt(fe.x || 0, 2), fmt(fe.y || 0, 2)]) + (ev.shiftKey ? ((ev.ctrlKey || ev.metaKey) ? TRAD(" · ultrafin") : TRAD(" · fin")) : TRAD(" · Maj : fin · Ctrl+Maj : ultrafin")));
         modifie("dessin"); return;
       }
       var p = K.ptSvg(ev), e;
@@ -3105,7 +3206,7 @@
         geste.bouge = true;
       }
       if (geste.type === "el") {
-        if (!geste.ids.length) { K.texteGeste("<b>Verrouillée</b> — elle ne bouge pas · " + k_("L") + " : la déverrouiller"); majL3(); return; }
+        if (!geste.ids.length) { K.texteGeste(TRAD("<b>Verrouillée</b> — elle ne bouge pas · {0} : la déverrouiller", [k_("L")])); majL3(); return; }
         var lo = Math.min.apply(null, geste.z0), hi = Math.max.apply(null, geste.z0);
         // Démultiplié : le pointeur virtuel zv n'avance que de 1/10 (Maj) ou 1/100 (Ctrl+Maj) du mouvement réel, arrondi
         // au pas du mode ; relâcher Maj reprend le 1:1 depuis là où la pièce est (pas de saut vers le pointeur).
@@ -3114,8 +3215,8 @@
         geste.ids.forEach(function (id, i) { var q = trouver(st, id); if (q) deplacer(q, arrondi(geste.z0[i] + dz, 0.01)); });
         geste.hors = p.y > H;
         var un = trouver(st, geste.el), n = geste.ids.length;
-        K.texteGeste(geste.hors ? "Lâcher : <b>ranger</b> " + (n > 1 ? "les " + n + " pièces" : "la pièce")
-          : "<b>" + nomsSel(n, un ? K.esc(nomP(un)) : "") + "</b>" + (BAC.clair && un ? " · " + cm(un.z) : "") + (ev.shiftKey ? ((ev.ctrlKey || ev.metaKey) ? " · ultrafin, au 0,01 mm" : " · fin, au 0,1 mm") : " · Maj : fin · Ctrl+Maj : ultrafin") + " · sous le banc : ranger");
+        K.texteGeste(geste.hors ? TRAD("Lâcher : <b>ranger</b> {0}", [n > 1 ? TRAD("les {0} pièces", [n]) : TRAD("la pièce")])
+          : "<b>" + nomsSel(n, un ? K.esc(nomP(un)) : "") + "</b>" + (BAC.clair && un ? " · " + cm(un.z) : "") + (ev.shiftKey ? ((ev.ctrlKey || ev.metaKey) ? TRAD(" · ultrafin, au 0,01 mm") : TRAD(" · fin, au 0,1 mm")) : TRAD(" · Maj : fin · Ctrl+Maj : ultrafin")) + TRAD(" · sous le banc : ranger"));
         modifie("seq"); majBandeau();
       } else if (geste.type === "fond") {          // zoomé : glisser le fond = se déplacer le long du banc
         if (cam.k <= 1 && !cam.dil) return;
@@ -3165,14 +3266,15 @@
       if (cib) {          // lâchée SUR une pièce : elle la remplacera (la pièce en essai est retirée, la visée éclairée)
         if (e) { ranger(st, e.id); geste.el = null; sale.bandeau = sale.etagere = true; modifie("seq"); }
         if (REMPL !== cib.id) { REMPL = cib.id; sale.dessin = true; }
-        var tx = "Lâcher : <b>remplacer " + K.esc(nomDe(cib)) + "</b> par " + K.esc(PIECES[geste.cle].court) + " (même position" + (DECALABLE[cib.type] || cib.x || cib.y ? ", même décalage" : "") + ")";
+        var tx = TRAD("Lâcher : <b>remplacer {0}</b> par {1} (même position", [K.esc(nomDe(cib)), K.esc(PIECES[geste.cle].court)]) + (DECALABLE[cib.type] || cib.x || cib.y ? TRAD(", même décalage") : "") + ")";
         K.modifie(); return { fantome: true, texte: tx };
       }
       if (REMPL) { REMPL = null; sale.dessin = true; }
       if (dedans && !e) { e = poser(st, geste.cle, 0); geste.el = e.id; choisir(e.id); sale.etagere = true; }
       if (!dedans && e) { ranger(st, e.id); geste.el = null; sale.bandeau = sale.etagere = true; }
       if (dedans && e) deplacer(e, arrondi(Z(p.x), ev.shiftKey ? 0.1 : 1));
-      var texte = dedans ? "Lâcher : poser " + K.esc(PIECES[geste.cle].court) + (BAC.clair && e ? " à " + cm(e.z) : "") + " · lâchée sur une pièce : la remplacer" : "Glisser sur le banc pour poser " + K.esc(PIECES[geste.cle].court);
+      var texte = dedans ? TRAD("Lâcher : poser {0}", [K.esc(PIECES[geste.cle].court)]) + (BAC.clair && e ? TRAD(" à {0}", [cm(e.z)]) : "") + TRAD(" · lâchée sur une pièce : la remplacer")
+        : TRAD("Glisser sur le banc pour poser {0}", [K.esc(PIECES[geste.cle].court)]);
       modifie("seq"); majBandeau();
       return { fantome: !dedans, texte: texte };
     }
@@ -3202,7 +3304,7 @@
     function menuPiece(e, sous) {
       var L = [], multi = sels().length > 1 && estSel(e.id);
       if (sous.length > 1) {      // pièces collées : laquelle choisir
-        L.push({ tit: "Pièces sous le pointeur" });
+        L.push({ tit: TRAD("Pièces sous le pointeur") });
         sous.forEach(function (q) { L.push({ lab: nomP(q) + (BAC.clair ? " · " + cm(q.z) : ""), coche: q.id === e.id, act: function () { choisir(q.id); modifie("dessin bandeau"); } }); });
         L.push({ sep: 1 });
       }
@@ -3210,22 +3312,22 @@
       var TS = tiroirs(), mien = TS.filter(function (T) { return T.pieces.indexOf(e.cle) >= 0; })[0];
       function par(T) { return T.pieces.filter(function (c) { return c !== e.cle; }).map(function (c) { return { lab: PIECES[c].nom, dis: plein(c), act: function () { remplacerA(e, c); } }; }); }
       var sub = mien ? par(mien) : [];
-      TS.forEach(function (T) { if (T !== mien) { var r = par(T); if (r.length) sub.push({ lab: T.nom, sub: r }); } });
-      L.push({ lab: "Remplacer par", sub: sub, dis: !!e.verrou });
-      L.push({ lab: "Position…", k: "clic sur le nombre", dis: !positionsVues() || !!e.verrou, act: function () { choisir(e.id); taperPosition(); } });
-      L.push({ lab: e.esc ? "Rabaisser" : "Escamoter", k: "E", act: function () { if (!multi) choisir(e.id); escamoter(); } });
-      L.push({ lab: e.verrou ? "Déverrouiller" : "Verrouiller", k: "L", act: function () { if (!multi) choisir(e.id); verrouiller(); } });
-      L.push({ lab: "De près", k: "double-clic", act: function () { choisir(e.id); dePres(); } });
-      if (decentrable(e)) L.push({ lab: "Recentrer", dis: !(e.x || e.y) || !!e.verrou, act: function () { recentrer(e); } });
-      L.push({ sep: 1 }, { lab: multi ? "Ranger les " + sels().length + " pièces" : "Ranger", k: "Suppr", dis: !libres().length, act: function () { if (!multi) choisir(e.id); rangerSel(); } });
+      TS.forEach(function (T) { if (T !== mien) { var r = par(T); if (r.length) sub.push({ lab: TIROIR_LONG[T.nom] || T.nom, sub: r }); } });
+      L.push({ lab: TRAD("Remplacer par"), sub: sub, dis: !!e.verrou });
+      L.push({ lab: TRAD("Position…"), k: TRAD("clic sur le nombre"), dis: !positionsVues() || !!e.verrou, act: function () { choisir(e.id); taperPosition(); } });
+      L.push({ lab: e.esc ? TRAD("Rabaisser") : TRAD("Escamoter"), k: "E", act: function () { if (!multi) choisir(e.id); escamoter(); } });
+      L.push({ lab: e.verrou ? TRAD("Déverrouiller") : TRAD("Verrouiller"), k: "L", act: function () { if (!multi) choisir(e.id); verrouiller(); } });
+      L.push({ lab: TRAD("De près"), k: "double-clic", act: function () { choisir(e.id); dePres(); } });
+      if (decentrable(e)) L.push({ lab: TRAD("Recentrer"), dis: !(e.x || e.y) || !!e.verrou, act: function () { recentrer(e); } });
+      L.push({ sep: 1 }, { lab: multi ? TRAD("Ranger les {0} pièces", [sels().length]) : TRAD("Ranger"), k: TRAD("Suppr"), dis: !libres().length, act: function () { if (!multi) choisir(e.id); rangerSel(); } });
       return L;
     }
     function menuFond(z) {
-      var sub = tiroirs().map(function (T) { return { lab: T.nom, sub: T.pieces.map(function (c) { return { lab: PIECES[c].nom, dis: plein(c), act: function () { poserA(c, z); } }; }) }; });
-      return [{ lab: "Poser ici" + (positionsVues() ? " (" + cm(arrondi(z, 1)) + ")" : ""), sub: sub },
-        { lab: "Tout le banc", k: "double-clic · 0", act: function () { vueEnsemble(); modifie("dessin"); } },
-        { lab: "Montage", act: function () { vueMontage(); modifie("dessin"); } },
-        { lab: "Cadrer…", act: function () { armerCadre("banc"); } }];
+      var sub = tiroirs().map(function (T) { return { lab: TIROIR_LONG[T.nom] || T.nom, sub: T.pieces.map(function (c) { return { lab: PIECES[c].nom, dis: plein(c), act: function () { poserA(c, z); } }; }) }; });
+      return [{ lab: TRAD("Poser ici") + (positionsVues() ? " (" + cm(arrondi(z, 1)) + ")" : ""), sub: sub },
+        { lab: TRAD("Tout le banc"), k: TRAD("double-clic · 0"), act: function () { vueEnsemble(); modifie("dessin"); } },
+        { lab: TRAD("Montage"), act: function () { vueMontage(); modifie("dessin"); } },
+        { lab: TRAD("Cadrer…"), act: function () { armerCadre("banc"); } }];
     }
     D.addEventListener("contextmenu", function (ev) {
       ev.preventDefault();
@@ -3380,22 +3482,22 @@
     function texteVise(e) {
       var p = C.params(e), vz = SEQ && SEQ.detEl && SEQ.detEl.id === e.id ? visee(SEQ, e) : null, am = amplitude(p.type);
       if (!vz) return "";
-      var sur = vz.quoi === "reticule" ? "le réticule" : vz.quoi === "source" ? "la source" : "l'objet";
-      return vz.P > am[0] + am[1] + 0.05 ? sur + " : trop près pour être vu net" : vz.P < am[0] - 0.05 ? sur + " : trop loin pour être vu net" : "sur " + sur + ", " + netA(e);
+      var sur = vz.quoi === "reticule" ? TRAD("le réticule") : vz.quoi === "source" ? TRAD("la source") : "l'objet";
+      return vz.P > am[0] + am[1] + 0.05 ? TRAD("{0} : trop près pour être vu net", [sur]) : vz.P < am[0] - 0.05 ? TRAD("{0} : trop loin pour être vu net", [sur]) : TRAD("sur {0}, {1}", [sur, netA(e)]);
     }
-    function netA(e) { var d = distanceNette(C.params(e)); return d === Infinity ? "net à l'infini" : d >= 1000 ? "net à " + fmt(d / 1000, 2) + " m" : "net à " + fmt(d / 10, 1) + " cm"; }
+    function netA(e) { var d = distanceNette(C.params(e)); return d === Infinity ? TRAD("net à l'infini") : d >= 1000 ? TRAD("net à {0} m", [fmt(d / 1000, 2)]) : TRAD("net à {0} cm", [fmt(d / 10, 1)]); }
     function reglagesOeil(host, e, quoi) {
       var p = C.params(e);
       seg(host, YEUX.map(function (y) { return [y[0], y[1]]; }), p.type, function (v) { e.params.type = v; e.params.acc = clamp(C.params(e).acc || 0, 0, amplitude(v)[1]); modifie("seq " + quoi); });
-      var rm = el("span", "bc-reg", host); el("span", "", rm, "Mise au point");
-      seg(rm, [["objet", "automatique", "L'œil met au point de lui-même sur ce qu'il regarde, comme en vrai."], ["curseur", "à la main", "Régler soi-même l'accommodation."]], p.mode === "objet" ? "objet" : "curseur",
+      var rm = el("span", "bc-reg", host); el("span", "", rm, TRAD("Mise au point"));
+      seg(rm, [["objet", TRAD("automatique"), TRAD("L'œil met au point de lui-même sur ce qu'il regarde, comme en vrai.")], ["curseur", TRAD("à la main"), TRAD("Régler soi-même l'accommodation.")]], p.mode === "objet" ? "objet" : "curseur",
         function (v) { if (v === "curseur") e.params.acc = clamp(puissance(C.params(e)) - amplitude(C.params(e).type)[0], 0, amplitude(C.params(e).type)[1]); e.params.mode = v; modifie("seq " + quoi); });
       if (p.mode === "objet") {
         var vs = el("span", "bc-reg bc-vise", host, texteVise(e));
-        vs.title = "Ce que l'œil regarde, et la distance à laquelle il le voit (l'image que lui en donnent les lentilles).";
+        vs.title = TRAD("Ce que l'œil regarde, et la distance à laquelle il le voit (l'image que lui en donnent les lentilles).");
         return vs;
       } else curseur(host, "Accommodation", 0, amplitude(p.type)[1], 0.05, function () { return C.params(e).acc || 0; }, function (v) { e.params.acc = v; }, function () { return netA(e); })
-        .title = "L'œil au repos voit net au plus loin ; en accommodant, il voit net de plus en plus près.";
+        .title = TRAD("L'œil au repos voit net au plus loin ; en accommodant, il voit net de plus en plus près.");
     }
     // Réglette de platine (décalage latéral) : glissière ±10 mm graduée au mm, repère de l'axe au milieu, la miniature
     // de la pièce en curseur ; molette dessus 0,1 mm (Maj : 0,01 ; Ctrl+Maj : 0,001 ; Ctrl : 1), glisser le curseur, − et + aux bouts. Composant prévu
@@ -3403,10 +3505,10 @@
     function platine(host, e) {
       var w = el("span", "bc-platine", host), Wd = 150, m = 12, kx = (Wd - 2 * m) / (2 * DEC_MAX);
       function xv(v) { return Wd / 2 + v * kx; }
-      el("span", "", w, "Décalage");
-      var bm = K.bouton(w, "−", function (ev) { decaler(e, -fois(ev, 0.01, 0.1, 1)); }); bm.title = "Vers la gauche, vu depuis la source (Maj : 0,01 mm ; Ctrl+Maj : 1 µm ; Ctrl : 1 mm).";
+      el("span", "", w, TRAD("Décalage"));
+      var bm = K.bouton(w, "−", function (ev) { decaler(e, -fois(ev, 0.01, 0.1, 1)); }); bm.title = TRAD("Vers la gauche, vu depuis la source (Maj : 0,01 mm ; Ctrl+Maj : 1 µm ; Ctrl : 1 mm).");
       var sv = svg("svg", { viewBox: "0 0 " + Wd + " 30", "aria-hidden": "true" }, w);
-      var bp = K.bouton(w, "+", function (ev) { decaler(e, fois(ev, 0.01, 0.1, 1)); }); bp.title = "Vers la droite (Maj : 0,01 mm ; Ctrl+Maj : 1 µm ; Ctrl : 1 mm).";
+      var bp = K.bouton(w, "+", function (ev) { decaler(e, fois(ev, 0.01, 0.1, 1)); }); bp.title = TRAD("Vers la droite (Maj : 0,01 mm ; Ctrl+Maj : 1 µm ; Ctrl : 1 mm).");
       var out = el("output", "", w);
       function rendu() {
         var s = '<rect x="' + (m - 4) + '" y="17" width="' + (Wd - 2 * m + 8) + '" height="6" rx="3" fill="#1b2027" stroke="#3a424d" stroke-width=".7"/>', v;
@@ -3415,14 +3517,14 @@
         var x = xv(e.x || 0);
         s += '<g transform="translate(' + pf(x - 9) + ' 1) scale(.45)">' + Dessin.miniature(Dessin.figure(e)) + '</g><path d="M' + pf(x) + ' 19.5l-3.2 4.5h6.4z" fill="#f3dc9a"/>';
         sv.innerHTML = s;
-        out.textContent = Math.abs(e.x || 0) < 0.005 ? "sur l'axe" : fmt(e.x, 2) + " mm";
+        out.textContent = Math.abs(e.x || 0) < 0.005 ? TRAD("sur l'axe") : fmt(e.x, 2) + " mm";
       }
       var g = false;
       function viserP(ev) { var R = sv.getBoundingClientRect(), v = ((ev.clientX - R.left) * Wd / (R.width || Wd) - Wd / 2) / kx; fixerDec(e, "x", Math.round(v * 10) / 10); rendu(); }
       sv.addEventListener("pointerdown", function (ev) { g = true; try { sv.setPointerCapture(ev.pointerId); } catch (e9) {} viserP(ev); });
       sv.addEventListener("pointermove", function (ev) { if (g) viserP(ev); });
       sv.addEventListener("pointerup", function () { g = false; });
-      w.title = "Décalage latéral de la pièce (platine de translation) ; aussi à la molette sur la vis du cavalier, vue de dessus.";
+      w.title = TRAD("Décalage latéral de la pièce (platine de translation) ; aussi à la molette sur la vis du cavalier, vue de dessus.");
       rendu(); bdPlatine = rendu;
     }
     // Liste déroulante libellée (temps d'intégration, calibre) : f(indice) ; rend le <select>.
@@ -3452,7 +3554,7 @@
     // Champ de saisie du bandeau (position, décentrement) : Entrée valide, Échap ou sortie du champ annule.
     function champTape(host, lab) {
       var i = el("input", "bc-bd-tape", host); i.type = "text"; i.value = TAPE.val; i.setAttribute("aria-label", lab);
-      i.setAttribute("data-a3", "<b>" + lab + "</b> — " + k_("Entrée") + " : valider · " + k_("Échap") + " : annuler");
+      i.setAttribute("data-a3", TRAD("<b>{0}</b> — {1} : valider · {2} : annuler", [lab, k_(TRAD("Entrée")), k_(TRAD("Échap"))]));
       i.addEventListener("input", function () { if (TAPE) TAPE.val = i.value; });
       i.addEventListener("keydown", function (ev) { if (ev.key === "Enter") { ev.preventDefault(); validerPosition(); } });
       i.addEventListener("blur", function () { if (TAPE) annulerPosition(); });
@@ -3461,137 +3563,145 @@
     }
     // Décentrement (niveau 3) : les deux valeurs (clic : les taper, en mm), Recentrer ; la vue de face et les vis aussi.
     function decentrement(host, e) {
-      var w = el("span", "bc-reg bc-dec", host), vals = {}; el("span", "", w, "Décentrement");
-      [["x", "côté"], ["y", "hauteur"]].forEach(function (q) {
+      var w = el("span", "bc-reg bc-dec", host), vals = {}; el("span", "", w, TRAD("Décentrement"));
+      [["x", TRAD("côté")], ["y", TRAD("hauteur")]].forEach(function (q) {
         el("span", "bc-dec-l", w, q[1]);
-        if (TAPE && TAPE.ax === q[0]) { champTape(w, "Décentrement, " + q[1] + " (mm)").style.width = "4.5em"; return; }
+        if (TAPE && TAPE.ax === q[0]) { champTape(w, TRAD("Décentrement, {0} (mm)", [q[1]])).style.width = "4.5em"; return; }
         var b = vals[q[0]] = el("b", "bc-bd-n", w, fmt(e[q[0]] || 0, Math.abs((e[q[0]] || 0) * 100 - Math.round((e[q[0]] || 0) * 100)) < 1e-6 ? 2 : 3) + " mm");
-        b.setAttribute("data-a3", e.verrou ? "<b>Décentrement</b> — pièce verrouillée" : "<b>Décentrement, " + q[1] + "</b> — clic : le taper (mm, ±" + DEC_MAX + ") · aussi : glisser la pièce dans sa vue de face, molette sur la vis " + (q[0] === "y" ? "de la tige (vue de profil)" : "du cavalier (vue de dessus)"));
+        b.setAttribute("data-a3", e.verrou ? TRAD("<b>Décentrement</b> — pièce verrouillée")
+          : TRAD("<b>Décentrement, {0}</b> — clic : le taper (mm, ±{1}) · aussi : glisser la pièce dans sa vue de face, molette sur la vis {2}",
+            [q[1], DEC_MAX, q[0] === "y" ? TRAD("de la tige (vue de profil)") : TRAD("du cavalier (vue de dessus)")]));
         if (!e.verrou) b.addEventListener("click", function () { taperDec(q[0]); });
       });
-      var rc = K.bouton(w, "Recentrer", function () { recentrer(e); }, "pl-btn-p"); rc.disabled = !(e.x || e.y) || !!e.verrou;
-      rc.setAttribute("data-a3", "<b>Recentrer</b> — la pièce revient sur l'axe du banc");
+      var rc = K.bouton(w, TRAD("Recentrer"), function () { recentrer(e); }, "pl-btn-p"); rc.disabled = !(e.x || e.y) || !!e.verrou;
+      rc.setAttribute("data-a3", TRAD("<b>Recentrer</b> — la pièce revient sur l'axe du banc"));
       bdPlatine = function () { Object.keys(vals).forEach(function (a) { vals[a].textContent = fmt(e[a] || 0, 2) + " mm"; }); rc.disabled = !(e.x || e.y) || !!e.verrou; };
     }
     function flechesPos(pos, multi) {
       var bloque = !multi && selEl() && selEl().verrou;
-      [[-1, "◂", "1 mm vers la source"], [1, "▸", "1 mm vers le bout du banc"]].forEach(function (q, k) {
+      [[-1, "◂", TRAD("1 mm vers la source")], [1, "▸", TRAD("1 mm vers le bout du banc")]].forEach(function (q, k) {
         if (k === 1 && !multi && positionsVues()) {          // entre les flèches : le nombre (clic : le taper), ou le champ
           if (TAPE && !TAPE.ax) {
-            champTape(pos, "Position en cm");
+            champTape(pos, TRAD("Position en cm"));
           } else {
             bdPos = el("b", "bc-bd-n", pos);
-            bdPos.setAttribute("data-a3", bloque ? "<b>Position</b> — pièce verrouillée (" + k_("L") + " : la déverrouiller)" : "<b>Position</b> — clic : la taper (en cm ; " + k_("Entrée") + " valide, " + k_("Échap") + " annule)");
+            bdPos.setAttribute("data-a3", bloque ? TRAD("<b>Position</b> — pièce verrouillée ({0} : la déverrouiller)", [k_("L")])
+          : TRAD("<b>Position</b> — clic : la taper (en cm ; {0} valide, {1} annule)", [k_(TRAD("Entrée")), k_(TRAD("Échap"))]));
             bdPos.addEventListener("click", taperPosition);
           }
         }
         var b = el("button", "", pos, q[1]); b.type = "button"; b.disabled = !!bloque;
-        b.setAttribute("data-a3", "<b>" + q[2] + "</b>" + (multi ? ", toute la sélection" : "") + " · " + k_(q[0] < 0 ? "←" : "→") + " (Maj 0,1 mm · Ctrl+Maj 0,01 mm · Ctrl 1 cm)");
+        b.setAttribute("data-a3", "<b>" + q[2] + "</b>" + (multi ? TRAD(", toute la sélection") : "") + " · " + k_(q[0] < 0 ? "←" : "→") + " (Maj 0,1 mm · Ctrl+Maj 0,01 mm · Ctrl 1 cm)");
         b.addEventListener("click", function (ev) { bougerSel(q[0] * fois(ev, 0.1, 1, 10)); });
       });
     }
     // Escamoter et verrouiller la sélection (la dernière choisie donne le sens) ; cadenas allumé quand elle est verrouillée.
     function boutonsEscVerrou(e) {
-      var be = K.bouton(BD, e.esc ? "Rabaisser" : "Escamoter", escamoter, "pl-btn-p");
-      be.setAttribute("data-a3", e.esc ? "<b>Rabaisser</b> — la pièce revient dans le faisceau · " + k_("E") : "<b>Escamoter</b> — la pièce reste à sa place, relevée hors du faisceau · " + k_("E"));
-      var bv = K.bouton(BD, CADENAS.replace(' x="-6" y="-6"', "") + (e.verrou ? " verrouillée" : ""), verrouiller, "pl-btn-p bc-verrou");
+      var be = K.bouton(BD, e.esc ? TRAD("Rabaisser") : TRAD("Escamoter"), escamoter, "pl-btn-p");
+      be.setAttribute("data-a3", e.esc ? TRAD("<b>Rabaisser</b> — la pièce revient dans le faisceau · {0}", [k_("E")])
+        : TRAD("<b>Escamoter</b> — la pièce reste à sa place, relevée hors du faisceau · {0}", [k_("E")]));
+      var bv = K.bouton(BD, CADENAS.replace(' x="-6" y="-6"', "") + (e.verrou ? TRAD(" verrouillée") : ""), verrouiller, "pl-btn-p bc-verrou");
       bv.setAttribute("aria-pressed", e.verrou ? "true" : "false");
-      bv.setAttribute("data-a3", "<b>" + (e.verrou ? "Déverrouiller" : "Verrouiller") + "</b> — verrouillée, la pièce ne bouge plus : ni glisser, ni molette, ni flèches, ni ranger, ni remplacer, ni décentrer ; ses réglages restent libres · " + k_("L"));
+      bv.setAttribute("data-a3", "<b>" + (e.verrou ? TRAD("Déverrouiller") : TRAD("Verrouiller")) + "</b>"
+        + TRAD(" — verrouillée, la pièce ne bouge plus : ni glisser, ni molette, ni flèches, ni ranger, ni remplacer, ni décentrer ; ses réglages restent libres · {0}", [k_("L")]));
     }
     function dessinerBandeau() {
       BD.innerHTML = ""; bdPos = null; bdPlatine = null;
       var e = selEl(), L = sels();
-      if (!e) { TAPE = null; el("span", "bc-vide", BD, "Cliquer une pièce du banc pour la régler (Ctrl+clic : plusieurs), ou en prendre une dans l'étagère."); return; }
+      if (!e) { TAPE = null; el("span", "bc-vide", BD, TRAD("Cliquer une pièce du banc pour la régler (Ctrl+clic : plusieurs), ou en prendre une dans l'étagère.")); return; }
       if (L.length > 1) {          // plusieurs pièces choisies : on les déplace ou les range d'un bloc ; régler = une seule
         TAPE = null;
-        var mn = el("span", "bc-bd-nom bc-bd-multi", BD, "<b>" + L.length + " pièces choisies</b> <i></i>");
+        var mn = el("span", "bc-bd-nom bc-bd-multi", BD, TRAD("<b>{0} pièces choisies</b> <i></i>", [L.length]));
         mn.lastChild.textContent = L.slice().sort(function (a, b) { return a.z - b.z; }).map(function (q) { return PIECES[q.cle].court; }).join(" · ");
         flechesPos(el("span", "bc-bd-pos", BD), true);
         el("span", "bc-pousse", BD);
         boutonsEscVerrou(e);
-        K.bouton(BD, "Une seule", function () { choisir(e.id); modifie("dessin bandeau"); }, "pl-btn-p").setAttribute("data-a3", "<b>Une seule</b> — ne garder que la dernière choisie (" + K.esc(PIECES[e.cle].court) + ") pour la régler");
-        K.bouton(BD, "Ranger les " + L.length, rangerSel, "pl-btn-p").setAttribute("data-a3", "<b>Ranger</b> les pièces choisies · " + k_("Suppr"));
+        K.bouton(BD, TRAD("Une seule"), function () { choisir(e.id); modifie("dessin bandeau"); }, "pl-btn-p").setAttribute("data-a3", TRAD("<b>Une seule</b> — ne garder que la dernière choisie ({0}) pour la régler", [K.esc(PIECES[e.cle].court)]));
+        K.bouton(BD, TRAD("Ranger les {0}", [L.length]), rangerSel, "pl-btn-p").setAttribute("data-a3", TRAD("<b>Ranger</b> les pièces choisies · {0}", [k_(TRAD("Suppr"))]));
         return;
       }
       var p = C.params(e), PC = PIECES[e.cle];
       var nom = el("span", "bc-bd-nom", BD, Dessin.svgMini(Dessin.figure(e)) + "<span></span>");
-      nom.lastChild.textContent = e.type === "lentille" ? "Lentille " + (p.f > 0 ? "convergente " : "divergente ") + signe(p.f) + " mm, Ø " + p.D + " mm" : PC.nom;
+      nom.lastChild.textContent = e.type === "lentille" ? TRAD("Lentille {0} {1} mm, Ø {2} mm", [p.f > 0 ? TRAD("convergente") : TRAD("divergente"), signe(p.f), p.D]) : PC.nom;
       nom.title = PC.titre;
       flechesPos(el("span", "bc-bd-pos", BD), false);
       majBandeau();
       if (e.type === "lanterne") {
-        var rc = el("span", "bc-reg", BD); el("span", "", rc, "Condenseur");
-        seg(rc, [["cond", "oui", "Condenseur de " + F_COND + " mm : il forme une image du filament."], ["rien", "non", "Filament nu : la lampe éclaire dans toutes les directions."],
-          ["depoli", "dépoli", "Un dépoli devant le filament : source étendue qui éclaire dans toutes les directions."]], p.cond || "cond", function (v) { e.params.cond = v; modifie("seq bandeau dessin"); });
-        curseur(BD, p.cond === "cond" ? "Tirage du condenseur" : "Filament derrière la sortie", TIRAGE[0], TIRAGE[1], 0.5, function () { return C.params(e).tirage; }, function (v) { e.params.tirage = v; }, function (v) { return fmtFin(v, 1) + " mm"; })
-          .title = p.cond === "cond" ? "Distance du filament au condenseur (focale " + F_COND + " mm) : elle fixe l'endroit où se forme l'image du filament." : "Distance du filament à la sortie de la lanterne.";
+        var rc = el("span", "bc-reg", BD); el("span", "", rc, TRAD("Condenseur"));
+        seg(rc, [["cond", TRAD("oui"), TRAD("Condenseur de {0} mm : il forme une image du filament.", [F_COND])], ["rien", TRAD("non"), TRAD("Filament nu : la lampe éclaire dans toutes les directions.")],
+          ["depoli", TRAD("dépoli"), TRAD("Un dépoli devant le filament : source étendue qui éclaire dans toutes les directions.")]], p.cond || "cond", function (v) { e.params.cond = v; modifie("seq bandeau dessin"); });
+        curseur(BD, p.cond === "cond" ? TRAD("Tirage du condenseur") : TRAD("Filament derrière la sortie"), TIRAGE[0], TIRAGE[1], 0.5, function () { return C.params(e).tirage; }, function (v) { e.params.tirage = v; }, function (v) { return fmtFin(v, 1) + " mm"; })
+          .title = p.cond === "cond" ? TRAD("Distance du filament au condenseur (focale {0} mm) : elle fixe l'endroit où se forme l'image du filament.", [F_COND]) : TRAD("Distance du filament à la sortie de la lanterne.");
       }
       if (e.type === "lanterne") {
         // Forme de la source : le filament spiralé (4 × 2 mm) ou le rectangle uniforme de même taille (source idéale).
         var rs = el("span", "bc-reg", BD); el("span", "", rs, "Source");
-        seg(rs, [["filament", "filament", "Filament spiralé de 4 × 2 mm : l'image de la source montre les spires."], ["carre", "idéale", "Source idéale : rectangle uniforme de 4 × 2 mm, sans structure."]],
+        seg(rs, [["filament", "filament", TRAD("Filament spiralé de 4 × 2 mm : l'image de la source montre les spires.")], ["carre", TRAD("idéale"), TRAD("Source idéale : rectangle uniforme de 4 × 2 mm, sans structure.")]],
           p.emet || "filament", function (v) { e.params.emet = v; modifie("seq bandeau dessin"); });
       }
-      if (e.type === "iris") curseur(BD, "Ouverture", 1, 40, 0.5, function () { return C.params(e).D; }, function (v) { e.params.D = v; }, function (v) { return fmtFin(v, 1) + " mm"; });
-      if (e.type === "miroir") curseur(BD, "Inclinaison", -INCL_MAX, INCL_MAX, 0.05, function () { return inclinaison(e); }, function (v) { incliner(e, v); }, function (v) { return fmt(v, 2) + "°"; }, 0)
-        .title = "Le miroir bascule vers le haut ou vers le bas : la lumière renvoyée revient plus haut ou plus bas dans le plan de l'objet. Double-clic : retour à 0°.";
-      if (e.type === "trouSource") { var r = el("span", "bc-reg", BD); el("span", "", r, "Diamètre");
+      if (e.type === "iris") curseur(BD, TRAD("Ouverture"), 1, 40, 0.5, function () { return C.params(e).D; }, function (v) { e.params.D = v; }, function (v) { return fmtFin(v, 1) + " mm"; });
+      if (e.type === "miroir") curseur(BD, TRAD("Inclinaison"), -INCL_MAX, INCL_MAX, 0.05, function () { return inclinaison(e); }, function (v) { incliner(e, v); }, function (v) { return fmt(v, 2) + "°"; }, 0)
+        .title = TRAD("Le miroir bascule vers le haut ou vers le bas : la lumière renvoyée revient plus haut ou plus bas dans le plan de l'objet. Double-clic : retour à 0°.");
+      if (e.type === "trouSource") { var r = el("span", "bc-reg", BD); el("span", "", r, TRAD("Diamètre"));
         seg(r, TROUS.map(function (d) { return [d, fmt(d, 1) + " mm"]; }), p.d, function (d) { e.params.d = d; modifie("seq bandeau"); }); }
-      if (e.type === "ecran") seg(BD, [[false, "blanc"], [true, "quadrillé", "Écran quadrillé au centimètre (au millimètre, de près)."]], !!p.quadrille, function (v) { e.params.quadrille = v; modifie("seq bandeau"); });
-      if (e.type === "lentille" && P().inclinable) curseur(BD, "Inclinaison", -INCL_LENTILLE, INCL_LENTILLE, 0.5, function () { return inclinaison(e); }, function (v) { incliner(e, v); sale.dessin = true; }, function (v) { return fmt(v, 1) + "°"; }, 0)
-        .title = "La lentille bascule autour d'un axe horizontal perpendiculaire au banc : en optique réelle, l'image d'un point devient deux petits traits (astigmatisme) et une virgule (coma). Double-clic : retour à 0°.";
+      if (e.type === "ecran") seg(BD, [[false, TRAD("blanc")], [true, TRAD("quadrillé"), TRAD("Écran quadrillé au centimètre (au millimètre, de près).")]], !!p.quadrille, function (v) { e.params.quadrille = v; modifie("seq bandeau"); });
+      if (e.type === "lentille" && P().inclinable) curseur(BD, TRAD("Inclinaison"), -INCL_LENTILLE, INCL_LENTILLE, 0.5, function () { return inclinaison(e); }, function (v) { incliner(e, v); sale.dessin = true; }, function (v) { return fmt(v, 1) + "°"; }, 0)
+        .title = TRAD("La lentille bascule autour d'un axe horizontal perpendiculaire au banc : en optique réelle, l'image d'un point devient deux petits traits (astigmatisme) et une virgule (coma). Double-clic : retour à 0°.");
       if (e.type === "lentille" && optq() === "reelle" && p.f > 0 && p.forme !== "objectif") {
-        seg(BD, [["bicv", "biconvexe"], ["pcv", "plan-convexe"]], p.forme, function (v) { e.params.forme = v; if (v === "bicv") e.params.retournee = false; modifie("seq bandeau dessin"); });
-        if (p.forme === "pcv") K.bouton(BD, "Retourner", function () { e.params.retournee = !C.params(e).retournee; modifie("seq dessin"); }, "pl-btn-p").title = "Présenter l'autre face à la lumière.";
+        seg(BD, [["bicv", TRAD("biconvexe")], ["pcv", TRAD("plan-convexe")]], p.forme, function (v) { e.params.forme = v; if (v === "bicv") e.params.retournee = false; modifie("seq bandeau dessin"); });
+        if (p.forme === "pcv") K.bouton(BD, TRAD("Retourner"), function () { e.params.retournee = !C.params(e).retournee; modifie("seq dessin"); }, "pl-btn-p").title = TRAD("Présenter l'autre face à la lumière.");
       }
       if (e.type === "oeil" && !oeilObserve(e)) reglagesOeil(BD, e, "bandeau");
       if (e.type === "fenteSource") {
-        curseur(BD, "Largeur", 0, 2, 0.005, function () { return C.params(e).b; }, function (v) { e.params.b = v; }, function (v) { return v < 0.995 ? fmt(1000 * v) + " µm" : fmt(v, 2) + " mm"; })
-          .title = "Largeur de la fente, de 0 à 2 mm.";
+        curseur(BD, TRAD("Largeur"), 0, 2, 0.005, function () { return C.params(e).b; }, function (v) { e.params.b = v; }, function (v) { return v < 0.995 ? fmt(1000 * v) + " µm" : fmt(v, 2) + " mm"; })
+          .title = TRAD("Largeur de la fente, de 0 à 2 mm.");
         curseur(BD, "Orientation", -90, 90, 0.5, function () { return (e.rot || 0) * 180 / Math.PI; }, function (v) { e.rot = v * Math.PI / 180; sale.dessin = true; }, function (v) { return fmt(v, 1) + "°"; }, 0)
-          .title = "Rotation de la fente autour de l'axe du banc (0° : verticale). Double-clic : retour à 0°.";
+          .title = TRAD("Rotation de la fente autour de l'axe du banc (0° : verticale). Double-clic : retour à 0°.");
       }
-      if (e.type === "couteau") curseur(BD, "Bord", -XC_MAX, XC_MAX, 0.005, function () { return C.params(e).xc; }, function (v) { e.params.xc = v; sale.dessin = true; }, function (v) { return fmt(1000 * v) + " µm"; }, 0)
-        .title = "Position du bord de la lame par rapport à l'axe du banc (vis de translation). Double-clic : retour sur l'axe.";
+      if (e.type === "couteau") curseur(BD, TRAD("Bord"), -XC_MAX, XC_MAX, 0.005, function () { return C.params(e).xc; }, function (v) { e.params.xc = v; sale.dessin = true; }, function (v) { return fmt(1000 * v) + " µm"; }, 0)
+        .title = TRAD("Position du bord de la lame par rapport à l'axe du banc (vis de translation). Double-clic : retour sur l'axe.");
       var tour = e.type === "couteau" || e.type === "polariseur" || e.type === "lame";
       if (PC.orientable && e.type !== "fenteSource")
         curseur(BD, "Orientation", tour ? -180 : -90, tour ? 180 : 90, 0.5, function () { return (e.rot || 0) * 180 / Math.PI; }, function (v) { e.rot = v * Math.PI / 180; sale.dessin = true; }, function (v) { return fmt(v, 1) + "°"; }, 0)
-          .title = (e.type === "couteau" ? "Rotation de la lame autour de l'axe du banc (à 180°, elle arrête l'autre côté)." : e.type === "polariseur" ? "Rotation du polariseur autour de l'axe du banc (0° : axe vertical), graduée en degrés." :
-            e.type === "lame" ? "Rotation de la lame autour de l'axe du banc (0° : une ligne neutre verticale), graduée en degrés." : "Rotation autour de l'axe du banc (0° : verticale).") + " Double-clic : retour à 0°.";
+          .title = (e.type === "couteau" ? TRAD("Rotation de la lame autour de l'axe du banc (à 180°, elle arrête l'autre côté).") : e.type === "polariseur" ? TRAD("Rotation du polariseur autour de l'axe du banc (0° : axe vertical), graduée en degrés.") :
+            e.type === "lame" ? TRAD("Rotation de la lame autour de l'axe du banc (0° : une ligne neutre verticale), graduée en degrés.") : TRAD("Rotation autour de l'axe du banc (0° : verticale).")) + TRAD(" Double-clic : retour à 0°.");
       if (e.type === "spectrale" && C.params(e).gaz === "hg")
-        seg(BD, [[true, "filtre vert", "Seule la raie verte (546,1 nm) passe."], [false, "sans filtre", "Toutes les raies du mercure : violet, bleu, vert, jaune."]], !!p.filtre, function (v) { e.params.filtre = v; modifie("seq bandeau"); });
-      if (e.type === "bifentes") { var rb = el("span", "bc-reg", BD); el("span", "", rb, "Bifente utilisée");
+        seg(BD, [[true, TRAD("filtre vert"), TRAD("Seule la raie verte (546,1 nm) passe.")], [false, TRAD("sans filtre"), TRAD("Toutes les raies du mercure : violet, bleu, vert, jaune.")]], !!p.filtre, function (v) { e.params.filtre = v; modifie("seq bandeau"); });
+      if (e.type === "bifentes") { var rb = el("span", "bc-reg", BD); el("span", "", rb, TRAD("Bifente utilisée"));
         seg(rb, ECARTS.map(function (a, i) { return [i, "a = " + fmtV(a) + " mm"]; }), decouverte(p), function (i) { decouvrir(e, i); modifie("seq bandeau"); })
-          .title = "Les deux autres bifentes du support sont masquées."; }
+          .title = TRAD("Les deux autres bifentes du support sont masquées."); }
       if (VARIANTES[e.type]) { var Vr = VARIANTES[e.type];
         seg(BD, Vr[1].map(function (v) { return [v, Vr[2](v)]; }), p[Vr[0]], function (v) { e.params[Vr[0]] = v; modifie("seq bandeau"); }); }
       if (decentrable(e)) decentrement(BD, e); else if (DECALABLE[e.type]) platine(BD, e);
       if (e.type === "viseur" || e.type === "lunette") {
-        var ro = el("span", "bc-reg", BD); el("span", "", ro, "Œil");
-        seg(ro, [["integre", "intégré", "Un œil est placé derrière l'oculaire ; on le déplace en glissant sur la vue (cercle oculaire)."],
-          ["aucun", "aucun", "L'instrument seul : poser l'œil de l'étagère derrière l'oculaire, à la main."]], p.oeil || "integre", function (v) { e.params.oeil = v; modifie("seq bandeau"); });
+        var ro = el("span", "bc-reg", BD); el("span", "", ro, TRAD("Œil"));
+        seg(ro, [["integre", TRAD("intégré"), TRAD("Un œil est placé derrière l'oculaire ; on le déplace en glissant sur la vue (cercle oculaire).")],
+          ["aucun", TRAD("aucun"), TRAD("L'instrument seul : poser l'œil de l'étagère derrière l'oculaire, à la main.")]], p.oeil || "integre", function (v) { e.params.oeil = v; modifie("seq bandeau"); });
       }
-      if (e.type === "lunette") seg(BD, [[false, "à l'infini"], [true, "avec bonnette", "Une lentille de 100 mm devant l'objectif : la lunette vise alors à 100 mm."]], !!p.bonnette, function (v) { e.params.bonnette = v; modifie("seq bandeau"); });
+      if (e.type === "lunette") seg(BD, [[false, TRAD("à l'infini")], [true, TRAD("avec bonnette"), TRAD("Une lentille de 100 mm devant l'objectif : la lunette vise alors à 100 mm.")]], !!p.bonnette, function (v) { e.params.bonnette = v; modifie("seq bandeau"); });
       el("span", "bc-pousse", BD);
       boutonsEscVerrou(e);
-      var bR = K.bouton(BD, "Ranger", rangerSel, "pl-btn-p"); bR.disabled = !!e.verrou;
-      bR.setAttribute("data-a3", "<b>Ranger</b> — remettre la pièce dans l'étagère (ou l'y ramener en la glissant) · " + k_("Suppr"));
+      var bR = K.bouton(BD, TRAD("Ranger"), rangerSel, "pl-btn-p"); bR.disabled = !!e.verrou;
+      bR.setAttribute("data-a3", TRAD("<b>Ranger</b> — remettre la pièce dans l'étagère (ou l'y ramener en la glissant) · {0}", [k_(TRAD("Suppr"))]));
     }
 
     // Tiroirs du profil (tiroirsDe : niveau 1, étagère réduite et « Observer » sans capteur ni densité) ; le tiroir
     // ouvert est gardé par son NOM (l'étagère de la coque), car les tiroirs changent avec le niveau.
     function tiroirs() { return tiroirsDe(st.bac, P()); }
     // Noms courts des onglets (la rangée porte aussi Montages, Nouveau banc et le matériel : tenir à 1366 px).
-    var NOM_TIROIR = { "Objets et diaphragmes": "Objets", "Lentilles et miroirs": "Lentilles", "Fentes et réseaux": "Fentes", "Young et diffraction": "Young" };
+    var NOM_TIROIR = { "Objets et diaphragmes": TRAD("Objets"), "Lentilles et miroirs": TRAD("Lentilles"), "Fentes et réseaux": TRAD("Fentes"), "Young et diffraction": "Young", "Observer": TRAD("Observer"), "Autres": TRAD("Autres") };
+    // Nom long du tiroir (a3 de l'onglet, sous-menus du clic droit) : ceux qui changent d'une langue à l'autre.
+    var TIROIR_LONG = { "Objets et diaphragmes": TRAD("Objets et diaphragmes"), "Lentilles et miroirs": TRAD("Lentilles et miroirs"),
+      "Fentes et réseaux": TRAD("Fentes et réseaux"), "Young et diffraction": TRAD("Young et diffraction") };
     function ongletsEtagere() {
       return tiroirs().map(function (T) {
-        return { nom: T.nom, pieces: T.pieces, lab: K.esc(NOM_TIROIR[T.nom] || T.nom) + "<i>" + T.pieces.length + "</i>", a3: NOM_TIROIR[T.nom] ? "<b>" + K.esc(T.nom) + "</b>" : null };
+        return { nom: T.nom, pieces: T.pieces, lab: K.esc(NOM_TIROIR[T.nom] || TRAD(T.nom)) + "<i>" + T.pieces.length + "</i>", a3: TIROIR_LONG[T.nom] ? "<b>" + K.esc(TIROIR_LONG[T.nom]) + "</b>" : null };
       });
     }
     function cartesEtagere(T) {
       return T.pieces.map(function (cle) {
         var Pc = PIECES[cle], plein = compte(st, cle) >= Pc.max;
-        return { cle: cle, mini: Dessin.svgMini(figurePiece(cle)), nom: Pc.court, dis: plein, titre: Pc.titre + (plein ? " Déjà sur le banc." : ""), cls: "bc-piece" };
+        return { cle: cle, mini: Dessin.svgMini(figurePiece(cle)), nom: Pc.court, dis: plein, titre: Pc.titre + (plein ? TRAD(" Déjà sur le banc.") : ""), cls: "bc-piece" };
       });
     }
     // au clavier (ou sans pointeur) : Entrée ou Espace posent la pièce
@@ -3600,39 +3710,39 @@
 
     // ================= observation =================
     var cvWrap = el("div", "pl-cv bc-cv", K.obs);
-    cvWrap.tabIndex = 0; cvWrap.setAttribute("aria-label", "Observation : molette pour agrandir, glisser pour se déplacer, Maj ou Ctrl + glisser pour déplacer l'œil");
+    cvWrap.tabIndex = 0; cvWrap.setAttribute("aria-label", TRAD("Observation : molette pour agrandir, glisser pour se déplacer, Maj ou Ctrl + glisser pour déplacer l'œil"));
     var cv = el("canvas", "", cvWrap), Wc = 480; cv.width = cv.height = Wc;
     var surc = svg("svg", { class: "pl-surc", viewBox: "0 0 100 100", preserveAspectRatio: "none" }, cvWrap), msg = el("div", "bc-msg", cvWrap), danger = el("div", "bc-danger", cvWrap);
-    danger.hidden = true; danger.textContent = "Faisceau laser dans l'œil ! Au TP, on ne regarde jamais dans l'axe d'un laser : on observe sa lumière sur un écran.";
+    danger.hidden = true; danger.textContent = TRAD("Faisceau laser dans l'œil ! Au TP, on ne regarde jamais dans l'axe d'un laser : on observe sa lumière sur un écran.");
     // aperçu pendant un geste : 2^nivApercu rayons, ajusté au temps mesuré de la passe (rester fluide)
     // ----- Qualité du moteur (mode prof) : réglages libres + 6 préréglages globaux, 7 niveaux (le 3 = les valeurs d'origine). Valeurs
     // gardées dans la mémoire du navigateur (clé `qualite`), communes à tous les bacs. `rFinRes` 0 = la résolution de la fenêtre
     // (l'écran et l'œil seulement : un capteur garde la sienne, qui est celle de ses pixels).
-    function puis(e) { return (1 << e).toString().replace(/\B(?=(\d{3})+(?!\d))/g, "\u202f"); }
-    function labExp(e) { return "2^" + e + " = " + puis(e) + " rayons"; }
-    function labPx(v) { return v ? v + " × " + v + " px" : "celle de la fenêtre"; }
+    function puis(e) { return (1 << e).toString().replace(/\B(?=(\d{3})+(?!\d))/g, I18N && I18N.dec() === "." ? "," : "\u202f"); }
+    function labExp(e) { return TRAD("2^{0} = {1} rayons", [e, puis(e)]); }
+    function labPx(v) { return v ? v + " × " + v + " px" : TRAD("celle de la fenêtre"); }
     function labN(v) { return String(v); }
-    function labCell(e) { return "2^" + e + " = " + puis(e) + " mailles"; }
+    function labCell(e) { return TRAD("2^{0} = {1} mailles", [e, puis(e)]); }
     var QP = [
-      { g: "Rayons : aperçu pendant le réglage", k: "rApRes", nom: "Résolution (au plus celle de l'observation)", v: [96, 128, 192, 256, 384, 512, 768, 1024, 1536, 2048], lab: labPx, pre: [192, 256, 384, 512, 512, 768, 1024] },
-      { g: "Rayons : aperçu pendant le réglage", k: "rApExp", nom: "Rayons par passe (plafond)", v: [14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26], lab: labExp, pre: [18, 19, 21, 22, 24, 24, 24] },
-      { g: "Rayons : image fine", k: "rFinRes", nom: "Résolution (au plus celle de l'observation)", v: [0, 256, 384, 512, 768, 1024, 1536, 2048], lab: labPx, pre: [256, 384, 0, 1024, 2048, 2048, 2048] },
-      { g: "Rayons : image fine", k: "rFinExp", nom: "Rayons par passe", v: [16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26], lab: labExp, pre: [19, 20, 21, 22, 24, 24, 24] },
-      { g: "Rayons : image fine", k: "rFinPasses", nom: "Nombre de passes", v: [2, 4, 8, 10, 16, 20, 40, 80, 160, 320, 640, 1280], lab: labN, pre: [10, 20, 40, 60, 80, 160, 320] },
-      { g: "Ondes : aperçu pendant le réglage", k: "oApRes", nom: "Résolution de l'image", v: [64, 96, 128, 192, 256, 384, 512, 768, 1024, 1536, 2048], lab: labPx, pre: [128, 192, 256, 384, 512, 768, 768] },
-      { g: "Ondes : aperçu pendant le réglage", k: "oApNs", nom: "Strates de la source (par axe)", v: [1, 2, 3, 4, 6, 8, 12, 16, 24, 32], lab: labN, pre: [2, 3, 4, 6, 8, 12, 12] },
-      { g: "Ondes : aperçu pendant le réglage", k: "oApNp", nom: "Couples source × λ par passe", v: [1, 2, 4, 6, 8, 12, 16, 32, 64, 128], lab: labN, pre: [4, 6, 8, 12, 16, 24, 24] },
-      { g: "Ondes : aperçu pendant le réglage", k: "oApNl", nom: "Longueurs d'onde d'un continu", v: [2, 3, 4, 6, 8, 12, 16, 32, 48, 64], lab: labN, pre: [3, 4, 6, 8, 12, 16, 16] },
-      { g: "Ondes : aperçu pendant le réglage", k: "oApCell", nom: "Grille de calcul (plafond)", v: [14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24], lab: labCell, pre: [16, 17, 18, 19, 20, 21, 21] },
-      { g: "Ondes : aperçu pendant le réglage", k: "oApMail", nom: "Mailles par plus petit détail", v: [2, 4, 6, 8, 10, 12, 16, 24, 32], lab: labN, pre: [4, 6, 8, 10, 12, 16, 16] },
-      { g: "Ondes : image fine", k: "oFinRes", nom: "Résolution de l'image", v: [128, 192, 256, 384, 512, 768, 1024, 1536, 2048], lab: labPx, pre: [256, 384, 512, 768, 1024, 1536, 1536] },
-      { g: "Ondes : image fine", k: "oFinNs", nom: "Strates de la source (par axe)", v: [1, 2, 4, 6, 8, 12, 16, 24, 32, 48, 64], lab: labN, pre: [4, 6, 8, 12, 16, 24, 24] },
-      { g: "Ondes : image fine", k: "oFinNp", nom: "Couples source × λ par passe", v: [1, 2, 4, 8, 12, 16, 24, 32, 64, 128, 256], lab: labN, pre: [8, 12, 16, 24, 32, 48, 48] },
-      { g: "Ondes : image fine", k: "oFinPasses", nom: "Passes (sans somme brute)", v: [1, 2, 4, 6, 8, 16, 32, 64, 128, 256], lab: labN, pre: [4, 6, 8, 16, 32, 32, 32] },
-      { g: "Ondes : image fine", k: "oFinPts", nom: "Points de source au plus (somme brute)", v: [10, 20, 40, 60, 100, 200, 400, 800, 1600], lab: labN, pre: [20, 40, 60, 100, 200, 400, 400] },
-      { g: "Ondes : image fine", k: "oFinNl", nom: "Longueurs d'onde d'un continu", v: [4, 8, 12, 16, 24, 32, 48, 64, 96, 128], lab: labN, pre: [8, 12, 16, 24, 32, 48, 48] },
-      { g: "Ondes : image fine", k: "oFinCell", nom: "Grille de calcul (plafond)", v: [16, 17, 18, 19, 20, 21, 22, 23, 24, 25], lab: labCell, pre: [18, 19, 20, 21, 22, 23, 23] },
-      { g: "Ondes : image fine", k: "oFinMail", nom: "Mailles par plus petit détail", v: [2, 4, 6, 8, 12, 16, 24, 32, 48], lab: labN, pre: [6, 8, 8, 12, 16, 24, 24] }
+      { g: TRAD("Rayons : aperçu pendant le réglage"), k: "rApRes", nom: TRAD("Résolution (au plus celle de l'observation)"), v: [96, 128, 192, 256, 384, 512, 768, 1024, 1536, 2048], lab: labPx, pre: [192, 256, 384, 512, 512, 768, 1024] },
+      { g: TRAD("Rayons : aperçu pendant le réglage"), k: "rApExp", nom: TRAD("Rayons par passe (plafond)"), v: [14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26], lab: labExp, pre: [18, 19, 21, 22, 24, 24, 24] },
+      { g: TRAD("Rayons : image fine"), k: "rFinRes", nom: TRAD("Résolution (au plus celle de l'observation)"), v: [0, 256, 384, 512, 768, 1024, 1536, 2048], lab: labPx, pre: [256, 384, 0, 1024, 2048, 2048, 2048] },
+      { g: TRAD("Rayons : image fine"), k: "rFinExp", nom: TRAD("Rayons par passe"), v: [16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26], lab: labExp, pre: [19, 20, 21, 22, 24, 24, 24] },
+      { g: TRAD("Rayons : image fine"), k: "rFinPasses", nom: TRAD("Nombre de passes"), v: [2, 4, 8, 10, 16, 20, 40, 80, 160, 320, 640, 1280], lab: labN, pre: [10, 20, 40, 60, 80, 160, 320] },
+      { g: TRAD("Ondes : aperçu pendant le réglage"), k: "oApRes", nom: TRAD("Résolution de l'image"), v: [64, 96, 128, 192, 256, 384, 512, 768, 1024, 1536, 2048], lab: labPx, pre: [128, 192, 256, 384, 512, 768, 768] },
+      { g: TRAD("Ondes : aperçu pendant le réglage"), k: "oApNs", nom: TRAD("Strates de la source (par axe)"), v: [1, 2, 3, 4, 6, 8, 12, 16, 24, 32], lab: labN, pre: [2, 3, 4, 6, 8, 12, 12] },
+      { g: TRAD("Ondes : aperçu pendant le réglage"), k: "oApNp", nom: TRAD("Couples source × λ par passe"), v: [1, 2, 4, 6, 8, 12, 16, 32, 64, 128], lab: labN, pre: [4, 6, 8, 12, 16, 24, 24] },
+      { g: TRAD("Ondes : aperçu pendant le réglage"), k: "oApNl", nom: TRAD("Longueurs d'onde d'un continu"), v: [2, 3, 4, 6, 8, 12, 16, 32, 48, 64], lab: labN, pre: [3, 4, 6, 8, 12, 16, 16] },
+      { g: TRAD("Ondes : aperçu pendant le réglage"), k: "oApCell", nom: TRAD("Grille de calcul (plafond)"), v: [14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24], lab: labCell, pre: [16, 17, 18, 19, 20, 21, 21] },
+      { g: TRAD("Ondes : aperçu pendant le réglage"), k: "oApMail", nom: TRAD("Mailles par plus petit détail"), v: [2, 4, 6, 8, 10, 12, 16, 24, 32], lab: labN, pre: [4, 6, 8, 10, 12, 16, 16] },
+      { g: TRAD("Ondes : image fine"), k: "oFinRes", nom: TRAD("Résolution de l'image"), v: [128, 192, 256, 384, 512, 768, 1024, 1536, 2048], lab: labPx, pre: [256, 384, 512, 768, 1024, 1536, 1536] },
+      { g: TRAD("Ondes : image fine"), k: "oFinNs", nom: TRAD("Strates de la source (par axe)"), v: [1, 2, 4, 6, 8, 12, 16, 24, 32, 48, 64], lab: labN, pre: [4, 6, 8, 12, 16, 24, 24] },
+      { g: TRAD("Ondes : image fine"), k: "oFinNp", nom: TRAD("Couples source × λ par passe"), v: [1, 2, 4, 8, 12, 16, 24, 32, 64, 128, 256], lab: labN, pre: [8, 12, 16, 24, 32, 48, 48] },
+      { g: TRAD("Ondes : image fine"), k: "oFinPasses", nom: TRAD("Passes (sans somme brute)"), v: [1, 2, 4, 6, 8, 16, 32, 64, 128, 256], lab: labN, pre: [4, 6, 8, 16, 32, 32, 32] },
+      { g: TRAD("Ondes : image fine"), k: "oFinPts", nom: TRAD("Points de source au plus (somme brute)"), v: [10, 20, 40, 60, 100, 200, 400, 800, 1600], lab: labN, pre: [20, 40, 60, 100, 200, 400, 400] },
+      { g: TRAD("Ondes : image fine"), k: "oFinNl", nom: TRAD("Longueurs d'onde d'un continu"), v: [4, 8, 12, 16, 24, 32, 48, 64, 96, 128], lab: labN, pre: [8, 12, 16, 24, 32, 48, 48] },
+      { g: TRAD("Ondes : image fine"), k: "oFinCell", nom: TRAD("Grille de calcul (plafond)"), v: [16, 17, 18, 19, 20, 21, 22, 23, 24, 25], lab: labCell, pre: [18, 19, 20, 21, 22, 23, 23] },
+      { g: TRAD("Ondes : image fine"), k: "oFinMail", nom: TRAD("Mailles par plus petit détail"), v: [2, 4, 6, 8, 12, 16, 24, 32, 48], lab: labN, pre: [6, 8, 8, 12, 16, 24, 24] }
     ];
     var Ql = { niveau: 3, perso: false, moteur: "auto", delai: 150, adapt: true, rendu: 2, prof: false, guide: true };
     function niveauQ(n) { QP.forEach(function (q) { Ql[q.k] = q.pre[n - 1]; }); Ql.niveau = n; Ql.perso = false; }
@@ -3705,22 +3815,13 @@
     }
     // Affichage de la fenêtre : capteur tel quel (pose) ; vue « œil » (écran, plaque, œil) en luminosité
     // réelle (`vision`, le même calcul sous les deux moteurs) ou toujours visible (exposition automatique de la fenêtre).
-    // Scène du banc, pour l'ancrage du niveau d'adaptation de l'œil (`aff.scene`, lu par le moteur) : ce que l'élève
-    // refait en regardant le champ — la source (lampe, spectre, laser), le dépoli, les verres qu'il met devant (filtre
-    // et sa couleur, densité et sa valeur, polariseur, lame, diapo et son image), le mode de luminosité, la vue.
-    // N'en sont PAS : l'iris, la mise au point, les positions, la rotation d'un polariseur — réglés ou déplacés en
-    // regardant le champ, ceux-là doivent fondre comme une rotation de lunette.
-    var TYPES_SCENE = { depoli: 1, filtre: 1, densite: 1, polariseur: 1, lame: 1, diapo: 1 };
+    // Scène du banc, pour l'ancrage du niveau d'adaptation de l'œil (`aff.scene`, lu par le moteur) : l'ARRIVÉE dans un
+    // montage (le charger, c'est refaire le banc, pas un réglage), la vue (écran ou rétine) et le mode de luminosité.
+    // Tout ce que l'élève manipule SUR le banc FOND au contraire : poser ou retirer un dépoli, glisser une densité,
+    // changer de filtre ou de lampe se fait en regardant l'écran, et la transition rétinienne y a un sens — c'est même
+    // la variation qu'on veut montrer. Les positions, l'iris et la mise au point n'entrent pas dans la scène du tout.
     function sceneSig() {
-      var S = SEQ && SEQ.source, src = S ? S.el + ":" + S.nomSpectre : "";
-      var verres = (st.elements || []).filter(function (e) { return TYPES_SCENE[e.type]; }).map(function (e) {
-        var q = C.params(e) || {};
-        return e.type + (e.type === "filtre" ? ":" + q.couleur : e.type === "densite" ? ":" + q.d
-          : e.type === "diapo" ? ":" + q.image + (q.eclairee ? ":clair" : "") : "");
-      });
-      // le MONTAGE chargé en est un aussi (on refait le banc, pas un réglage) : `st.montage` ne bouge plus ensuite, même
-      // si l'élève déplace les pièces — sinon un montage bien plus sombre que le précédent se fondrait pendant 10 s
-      return [st.montage || "", src, verres.join(","), FEN && FEN.vue ? (FEN.vue.retine ? "retine" : "ecran") : "", lumq()].join("|");
+      return [st.montage || "", FEN && FEN.vue ? (FEN.vue.retine ? "retine" : "ecran") : "", lumq()].join("|");
     }
     function affichage() {
       var a = { W: FEN.W, cx: FEN.cx, cy: FEN.cy, expo: FEN.expo, auto: !!FEN.auto, absolu: !!FEN.absolu, bruit: FEN.bruit || 0, photo: FEN.photo || null, comp: FEN.comp, fond: FEN.fond, net: FEN.net };
@@ -3745,8 +3846,8 @@
     }
     function demanderObs() {
       DET = detecteur(SEQ, st); INS = DET === "oeil" ? instrumentDe(SEQ, st) : null; FEN = DET ? fenetre(st, DET) : null;
-      var t = !SEQ || !SEQ.source ? "Poser la lanterne sur le banc." : !DET ? (SEQ.miroir ? "Le miroir renvoie la lumière vers la source : poser la lettre F entre la lanterne et le miroir, sa face blanche sert d'écran (celle du trou source aussi)." : "Poser un écran, un capteur, l'œil, le viseur ou la lunette sur le banc pour observer.") :
-        !MOT ? "Le tracé des rayons a besoin de la carte graphique (WebGL2), indisponible dans ce navigateur." : "";
+      var t = !SEQ || !SEQ.source ? TRAD("Poser la lanterne sur le banc.") : !DET ? (SEQ.miroir ? TRAD("Le miroir renvoie la lumière vers la source : poser la lettre F entre la lanterne et le miroir, sa face blanche sert d'écran (celle du trou source aussi).") : TRAD("Poser un écran, un capteur, l'œil, le viseur ou la lunette sur le banc pour observer.")) :
+        !MOT ? TRAD("Le tracé des rayons a besoin de la carte graphique (WebGL2), indisponible dans ce navigateur.") : "";
       msg.textContent = t; msg.hidden = !t;
       danger.hidden = !laserDansOeil(SEQ, st, DET);
       if (MOT) {
@@ -3920,18 +4021,18 @@
     function toutVoir() { if (!DET) return; var oe = oeilMobile(); if (oe && (oe.x || oe.y)) { oe.x = oe.y = 0; modifie("seq"); if (bdPlatine) bdPlatine(); } var o = st.obs[DET]; o.cx = o.cy = 0; if (DET === "capteur") o.N = CAPTEUR_N[0]; else o.zoom = 1; modifie("obs tete dessin"); }
     cvWrap.addEventListener("dblclick", function () { if (!CADRE) toutVoir(); });
     // Clic droit sur l'image : tout voir, recentrer l'œil posé, le récepteur qui observe, poser ici une mesure (écran).
-    function nomRecep(r, RS) { return { ecran: "Écran", capteur: "Capteur", oeil: "Œil", viseur: "Viseur", lunette: "Lunette" }[r.type] + (BAC.clair && RS.filter(function (q) { return q.type === r.type; }).length > 1 ? " " + fmt(r.z / 10, 0) + " cm" : ""); }
+    function nomRecep(r, RS) { return { ecran: TRAD("Écran"), capteur: TRAD("Capteur"), oeil: TRAD("Œil"), viseur: TRAD("Viseur"), lunette: TRAD("Lunette") }[r.type] + (BAC.clair && RS.filter(function (q) { return q.type === r.type; }).length > 1 ? " " + fmt(r.z / 10, 0) + " cm" : ""); }
     function recepObserve(r) { return !!SEQ && (r.id === (SEQ.detEl && SEQ.detEl.id) || (SEQ.implicite && instrumentDe(SEQ, st) === r)); }
     cvWrap.addEventListener("contextmenu", function (ev) {
       ev.preventDefault();
       var L = [], oe = oeilMobile(), RS = recepteurs(st), q = DET && FEN ? versDet(ev) : null;
-      if (DET) L.push({ lab: "Tout voir", k: "double-clic", act: toutVoir });
-      if (oe) L.push({ lab: "Recentrer l'œil", dis: !(oe.x || oe.y), act: function () { oe.x = oe.y = 0; modifie("seq"); if (bdPlatine) bdPlatine(); } });
-      if (RS.length > 1) L.push({ lab: "Récepteur", sub: RS.map(function (r) { return { lab: nomRecep(r, RS), coche: recepObserve(r), act: function () { st.recep = r.id; modifie("seq dessin tete bandeau"); } }; }) });
+      if (DET) L.push({ lab: TRAD("Tout voir"), k: "double-clic", act: toutVoir });
+      if (oe) L.push({ lab: TRAD("Recentrer l'œil"), dis: !(oe.x || oe.y), act: function () { oe.x = oe.y = 0; modifie("seq"); if (bdPlatine) bdPlatine(); } });
+      if (RS.length > 1) L.push({ lab: TRAD("Récepteur"), sub: RS.map(function (r) { return { lab: nomRecep(r, RS), coche: recepObserve(r), act: function () { st.recep = r.id; modifie("seq dessin tete bandeau"); } }; }) });
       if (q && DET === "ecran" && MOT && P().mesures) {
         if (L.length) L.push({ sep: 1 });
-        [["barr", "la barrette", "barr"], ["photo", "la photodiode", "photo"], ["fibre", "la fibre du spectromètre", "spec"]].forEach(function (m) {
-          L.push({ lab: "Poser ici " + m[1], act: function () {
+        [["barr", TRAD("la barrette"), "barr"], ["photo", TRAD("la photodiode"), "photo"], ["fibre", TRAD("la fibre du spectromètre"), "spec"]].forEach(function (m) {
+          L.push({ lab: TRAD("Poser ici {0}", [m[1]]), act: function () {
             st.barr.on = st.photo.on = st.fibre.on = false; st[m[0]].on = true;
             st[m[0]].x = Math.round(q.x * 1000) / 1000; st[m[0]].y = Math.round(q.y * 1000) / 1000;
             modifie("spec photo barr tete");
@@ -3959,16 +4060,16 @@
     function dessinerTete() {
       var T = K.obsTete, Pd = K.obsPied;
       T.innerHTML = ""; Pd.innerHTML = ""; selPose = null; selIso = null;
-      el("span", "pl-obs-t", T, DET === "capteur" ? "Sur le capteur" : DET === "ecran" ? "Sur l'écran" : DET === "plaque" ? "Sur la plaque de l'objet" : DET === "oeil" ? (INS ? (INS.type === "viseur" ? "Dans le viseur" : "Dans la lunette") : "À l'œil") : "Observation");
+      el("span", "pl-obs-t", T, DET === "capteur" ? TRAD("Sur le capteur") : DET === "ecran" ? TRAD("Sur l'écran") : DET === "plaque" ? TRAD("Sur la plaque de l'objet") : DET === "oeil" ? (INS ? (INS.type === "viseur" ? TRAD("Dans le viseur") : TRAD("Dans la lunette")) : TRAD("À l'œil")) : "Observation");
       if (DET) {
         var zb = el("span", "pl-obs-b", T);
-        K.bouton(zb, "−", function () { zoomer(-1); }, "pl-btn-p").setAttribute("data-a3", "<b>Voir plus large</b> · molette sur l'image");
-        K.bouton(zb, "+", function () { zoomer(1); }, "pl-btn-p").setAttribute("data-a3", "<b>Agrandir</b> · molette sur l'image, autour du pointeur");
-        K.bouton(zb, DET === "capteur" ? "Tout le capteur" : DET === "oeil" ? "Tout le champ" : DET === "plaque" ? "Toute la plaque" : "Tout l'écran", toutVoir, "pl-btn-p").setAttribute("data-a3", "<b>Tout voir</b> · double-clic sur l'image");
-        var bcd = K.bouton(zb, "Cadrer", function () { armerCadre("image"); }, "pl-btn-p");
+        K.bouton(zb, "−", function () { zoomer(-1); }, "pl-btn-p").setAttribute("data-a3", TRAD("<b>Voir plus large</b> · molette sur l'image"));
+        K.bouton(zb, "+", function () { zoomer(1); }, "pl-btn-p").setAttribute("data-a3", TRAD("<b>Agrandir</b> · molette sur l'image, autour du pointeur"));
+        K.bouton(zb, DET === "capteur" ? TRAD("Tout le capteur") : DET === "oeil" ? TRAD("Tout le champ") : DET === "plaque" ? TRAD("Toute la plaque") : TRAD("Tout l'écran"), toutVoir, "pl-btn-p").setAttribute("data-a3", TRAD("<b>Tout voir</b> · double-clic sur l'image"));
+        var bcd = K.bouton(zb, TRAD("Cadrer"), function () { armerCadre("image"); }, "pl-btn-p");
         bcd.setAttribute("aria-pressed", CADRE === "image" ? "true" : "false");
-        bcd.setAttribute("data-a3", "<b>Cadrer</b> — puis glisser un rectangle sur l'image : zoom sur la zone · Échap : annuler");
-        if (MOT) K.bouton(zb, "Enregistrer", enregistrerImage, "pl-btn-p").setAttribute("data-a3", "<b>Enregistrer l'image</b> — l'image affichée, en fichier PNG (sans les tracés posés dessus : barrette, tache, quadrillage)");
+        bcd.setAttribute("data-a3", TRAD("<b>Cadrer</b> — puis glisser un rectangle sur l'image : zoom sur la zone · Échap : annuler"));
+        if (MOT) K.bouton(zb, TRAD("Enregistrer"), enregistrerImage, "pl-btn-p").setAttribute("data-a3", TRAD("<b>Enregistrer l'image</b> — l'image affichée, en fichier PNG (sans les tracés posés dessus : barrette, tache, quadrillage)"));
       }
       // Pastilles des récepteurs : une par récepteur posé, dès qu'il y en a deux ; celle
       // qui observe allumée ; en choisir une relève d'office ceux qui sont devant elle (`escamote`, rien de stocké).
@@ -3980,30 +4081,30 @@
           b.textContent = nomRecep(r, RS);
           var on = recepObserve(r);
           b.setAttribute("aria-pressed", on ? "true" : "false");
-          b.setAttribute("data-a3", "<b>Récepteur</b> — choisir celui qui observe ; ceux qui sont devant lui sont relevés d'office (rabaissés quand on en choisit un autre)");
+          b.setAttribute("data-a3", TRAD("<b>Récepteur</b> — choisir celui qui observe ; ceux qui sont devant lui sont relevés d'office (rabaissés quand on en choisit un autre)"));
           b.addEventListener("click", function () { st.recep = r.id; modifie("seq dessin tete bandeau"); });
         });
       }
       pied = el("span", "pl-obs-n bc-pied", Pd);
       COURBE = null; ANG = null; PHOTO = null; blocOeil = { id: null, vise: null };
       if (oeilObserve(null)) {
-        var eo = SEQ.detEl, bo = el("div", "bc-bloc", Pd), bt = el("div", "bc-bloc-t", bo, Dessin.svgMini(Dessin.figure(eo)) + "<b>Œil</b>");
-        if (BAC.clair) el("span", "", bt, "à " + cm(eo.z));
+        var eo = SEQ.detEl, bo = el("div", "bc-bloc", Pd), bt = el("div", "bc-bloc-t", bo, Dessin.svgMini(Dessin.figure(eo)) + TRAD("<b>Œil</b>"));
+        if (BAC.clair) el("span", "", bt, TRAD("à {0}", [cm(eo.z)]));
         el("span", "bc-pousse", bt);
-        if (eo.id !== st.sel) K.bouton(bt, "Choisir", function () { choisir(eo.id); modifie("dessin bandeau"); }, "pl-btn-p").title = "Faire de l'œil la pièce choisie (sur le banc).";
+        if (eo.id !== st.sel) K.bouton(bt, TRAD("Choisir"), function () { choisir(eo.id); modifie("dessin bandeau"); }, "pl-btn-p").title = TRAD("Faire de l'œil la pièce choisie (sur le banc).");
         var lg = el("div", "bc-bloc-l", bo);
         blocOeil = { id: eo.id, vise: reglagesOeil(lg, eo, "tete") || null };
       }
       GSPEC = null; GR.ctl.innerHTML = "";
       // Mesurer ▾ (niveaux 2 et 3, sur l'écran) : barrette, photodiode, spectromètre, exclusifs entre eux.
       if (DET === "ecran" && MOT && P().mesures) {
-        var MES = [["barr", "Barrette CCD", "la barrette CCD", "réelle (Sony ILX511 : 2048 pixels de 14 µm, 28,7 mm, saturée à 0,8 V) ou parfaite (jusqu'à 20 cm de long au choix, pixels de 7 µm, saturation à 10 V, sans défaut d'uniformité) : la tension des pixels le long de la barrette ; on la glisse et la tourne sur l'écran"],
-          ["photo", "Photodiode", "la photodiode", "surface sensible de 1 mm de diamètre : une tension proportionnelle au flux lumineux reçu"],
-          ["fibre", "Spectromètre", "la fibre du spectromètre", "la fibre posée sur l'écran : le spectre de la lumière en ce point"]];
+        var MES = [["barr", TRAD("Barrette CCD"), TRAD("la barrette CCD"), TRAD("réelle (Sony ILX511 : 2048 pixels de 14 µm, 28,7 mm, saturée à 0,8 V) ou parfaite (jusqu'à 20 cm de long au choix, pixels de 7 µm, saturation à 10 V, sans défaut d'uniformité) : la tension des pixels le long de la barrette ; on la glisse et la tourne sur l'écran")],
+          ["photo", "Photodiode", TRAD("la photodiode"), TRAD("surface sensible de 1 mm de diamètre : une tension proportionnelle au flux lumineux reçu")],
+          ["fibre", TRAD("Spectromètre"), TRAD("la fibre du spectromètre"), TRAD("la fibre posée sur l'écran : le spectre de la lumière en ce point")]];
         if (st.bac !== "polarisation") MES = MES.filter(function (q) { return q[0] !== "photo"; });      // la photodiode ne sert qu'à la polarisation (loi de Malus)
         var mis = MES.filter(function (q) { return st[q[0]].on; })[0];
-        var bm = K.bouton(zb, mis ? mis[1] + " ▾" : "Mesurer ▾", function () {}, "pl-btn-p bc-dm-b");
-        bm.setAttribute("data-a3", "<b>Mesurer</b> — poser sur l'écran une barrette CCD, une photodiode ou la fibre d'un spectromètre (une à la fois)");
+        var bm = K.bouton(zb, mis ? mis[1] + " ▾" : TRAD("Mesurer ▾"), function () {}, "pl-btn-p bc-dm-b");
+        bm.setAttribute("data-a3", TRAD("<b>Mesurer</b> — poser sur l'écran une barrette CCD, une photodiode ou la fibre d'un spectromètre (une à la fois)"));
         deroulant(bm, function () {
           return MES.map(function (q) {
             return { lab: (st[q[0]].on ? "Retirer " : "Poser ") + q[2], coche: st[q[0]].on, a3: "<b>" + q[1] + "</b> — " + q[3],
@@ -4019,7 +4120,7 @@
       GR.veut = false;
       HISTO = null;
       if (DET === "capteur") {
-        var w = el("label", "bc-cur", Pd); el("span", "bc-cur-l", w, "Temps de pose");
+        var w = el("label", "bc-cur", Pd); el("span", "bc-cur-l", w, TRAD("Temps de pose"));
         selPose = el("select", "bc-sel", w);
         POSES.forEach(function (p, i) { var o = el("option", "", selPose, nomPose(i)); o.value = String(i); });
         selPose.value = String(st.pose);
@@ -4028,11 +4129,11 @@
         selIso = el("select", "bc-sel", wi);
         ISOS.forEach(function (v, i) { var o = el("option", "", selIso, String(v)); o.value = String(i); });
         selIso.value = String(st.iso || 0);
-        wi.title = "Sensibilité : monter l'ISO éclaircit l'image sans allonger la pose, mais chaque pixel compte moins de photons : le bruit apparaît.";
+        wi.title = TRAD("Sensibilité : monter l'ISO éclaircit l'image sans allonger la pose, mais chaque pixel compte moins de photons : le bruit apparaît.");
         selIso.addEventListener("change", function () { st.iso = parseInt(selIso.value, 10); notePose = ""; FEN = fenetre(st, DET); majPied(); if (MOT) MOT.reafficher(affichage()); majHisto(); K.modifie(); });
-        K.bouton(Pd, "Pose automatique", function () { st.poseAuto = true; poseAuto(); }, "pl-btn-p").title = "Choisir le temps de pose d'après la lumière reçue, à l'ISO choisi.";
-        var bh = K.bouton(zb, "Histogramme", function () { st.histo = !st.histo; modifie("tete"); }, "pl-btn-p");
-        bh.title = st.histo ? "Retirer l'histogramme." : "Histogramme de la photo : combien de pixels à chaque niveau, du noir (à gauche) au blanc (à droite), pour le rouge, le vert et le bleu.";
+        K.bouton(Pd, TRAD("Pose automatique"), function () { st.poseAuto = true; poseAuto(); }, "pl-btn-p").title = TRAD("Choisir le temps de pose d'après la lumière reçue, à l'ISO choisi.");
+        var bh = K.bouton(zb, TRAD("Histogramme"), function () { st.histo = !st.histo; modifie("tete"); }, "pl-btn-p");
+        bh.title = st.histo ? TRAD("Retirer l'histogramme.") : TRAD("Histogramme de la photo : combien de pixels à chaque niveau, du noir (à gauche) au blanc (à droite), pour le rouge, le vert et le bleu.");
         bh.setAttribute("aria-pressed", st.histo ? "true" : "false");
         if (st.histo) { HISTO = el("canvas", "bc-histo", Pd); HISTO.width = 400; HISTO.height = 110; majHisto(); }
       }
@@ -4088,7 +4189,7 @@
       });
       var hx = cx + (l + 3.4) * ex, hy = cy + (l + 3.4) * ey;
       var gp = svg("circle", { class: "bc-barr-p", cx: pf(hx), cy: pf(hy), r: 1.7, fill: "#0f1317", stroke: "#63c59a", "stroke-width": 1.4, "vector-effect": "non-scaling-stroke", style: "cursor:grab;touch-action:none" }, surc);
-      gp.setAttribute("data-a3", "<b>Poignée</b> de la barrette — glisser : la tourner autour de son centre (Maj : au degré)");
+      gp.setAttribute("data-a3", TRAD("<b>Poignée</b> de la barrette — glisser : la tourner autour de son centre (Maj : au degré)"));
       gp.addEventListener("pointerdown", function (ev) {
         if (ev.button) return;
         ev.preventDefault(); ev.stopPropagation(); prB = { tourne: true };
@@ -4135,7 +4236,9 @@
       svg("path", { d: "M" + g0 + " " + q(V(A.Usat)) + "H" + Lw, stroke: "#8a5a3a", "stroke-width": 1, "stroke-dasharray": "4 3", fill: "none" }, COURBE);
       svg("text", { x: 2, y: q(V(A.Usat) + 4) }, COURBE).textContent = fmt(A.Usat, A.Usat < 1 ? 2 : 0) + " V";
       svg("text", { x: 2, y: bas }, COURBE).textContent = "0";
-      svg("title", {}, COURBE).textContent = "Tension des pixels le long de la barrette (" + (st.barr.reel ? BARRETTE.nom : "parfaite, " + fmt(L, 0) + " mm, pixels de " + fmt(1000 * A.pixel, 0) + " µm") + "), depuis son premier pixel (point jaune) ; pointillés : saturation (" + fmt(A.Usat, A.Usat < 1 ? 2 : 0) + " V) ; graduations en millimètres.";
+      svg("title", {}, COURBE).textContent = st.barr.reel
+        ? TRAD("Tension des pixels le long de la barrette ({0}), depuis son premier pixel (point jaune) ; pointillés : saturation ({1} V) ; graduations en millimètres.", [BARRETTE.nom, fmt(A.Usat, A.Usat < 1 ? 2 : 0)])
+        : TRAD("Tension des pixels le long de la barrette (parfaite, {0} mm, pixels de {1} µm), depuis son premier pixel (point jaune) ; pointillés : saturation ({2} V) ; graduations en millimètres.", [fmt(L, 0), fmt(1000 * A.pixel, 0), fmt(A.Usat, A.Usat < 1 ? 2 : 0)]);
       var D = donneesBarrette();
       if (!D) { donnerGrand(null); return; }
       var dd = "", lev = true;
@@ -4145,8 +4248,10 @@
       });
       if (dd) svg("path", { d: dd, stroke: "#7fd6a0", "stroke-width": 1.3, fill: "none", "stroke-linejoin": "round" }, COURBE);
       donnerGrand({ type: "barr", x: D.map(function (p) { return p[0]; }), y: D.map(function (p) { return p[1]; }), plein: [0, L], ymax: 1.05 * A.Usat, sat: A.Usat, satTxt: fmt(A.Usat, A.Usat < 1 ? 2 : 0) + " V",
-        xlab: "position le long de la barrette (mm)", xu: " mm", dx: 2, minw: 0.5, fmtY: function (v) { return fmt(v, 3) + " V"; }, couleur: "#7fd6a0",
-        note: "Tension des pixels le long de la barrette. " + (st.barr.reel ? BARRETTE.nom + "." : "Barrette parfaite : " + fmt(L, 0) + " mm de long, pixels de " + fmt(1000 * A.pixel, 0) + " µm, saturation à " + fmt(A.Usat, 0) + " V, sans PRNU — bien plus longue, plus fine et plus de dynamique que la réelle.") + " Molette sur le profil : resserrer ou élargir la fenêtre autour du pointeur ; le pointeur donne la position.",
+        xlab: TRAD("position le long de la barrette (mm)"), xu: " mm", dx: 2, minw: 0.5, fmtY: function (v) { return fmt(v, 3) + " V"; }, couleur: "#7fd6a0",
+        note: TRAD("Tension des pixels le long de la barrette.") + (st.barr.reel ? " " + BARRETTE.nom + "."
+            : TRAD(" Barrette parfaite : {0} mm de long, pixels de {1} µm, saturation à {2} V, sans PRNU — bien plus longue, plus fine et plus de dynamique que la réelle.", [fmt(L, 0), fmt(1000 * A.pixel, 0), fmt(A.Usat, 0)]))
+          + TRAD(" Molette sur le profil : resserrer ou élargir la fenêtre autour du pointeur ; le pointeur donne la position."),
         csv: { nom: "barrette.csv", entetes: ["position_mm", "eclairement_lux", "tension_V"], lignes: D.filter(function (p) { return p[1] != null; }).map(function (p) { return [p[0], p[2], p[1]]; }) } });
     }
     // Tension des pixels le long de la barrette : [position (mm), tension (V) ou null hors de l'image, éclairement (lx)].
@@ -4167,33 +4272,33 @@
       var l = el("div", "bc-bloc-l", Pd);
       // Barrette réelle ou parfaite (comme le spectromètre du banc) : la parfaite est plus longue, plus fine, plus de
       // dynamique ; on en règle la longueur. Le panneau est refait par le seg (le slider n'existe qu'en parfaite).
-      seg(l, [[true, "réel", BARRETTE.nom], [false, "parfait", BARRETTE_PARFAITE.nom]], !!st.barr.reel, function (v) {
+      seg(l, [[true, TRAD("réel"), BARRETTE.nom], [false, TRAD("parfait"), BARRETTE_PARFAITE.nom]], !!st.barr.reel, function (v) {
         st.barr.reel = v; GR.fen = null;
-        BARR.note = v ? "" : "saturation 12,5 fois plus haute (10 V) : « Intégration automatique » en profite";
+        BARR.note = v ? "" : TRAD("saturation 12,5 fois plus haute (10 V) : « Intégration automatique » en profite");
         elargirFenetreBarr(); modifie("barr tete");
       });
       if (!st.barr.reel) {
-        var rl = el("label", "bc-reg", l); el("span", "", rl, "Longueur");
+        var rl = el("label", "bc-reg", l); el("span", "", rl, TRAD("Longueur"));
         var il = el("input", "", rl); il.type = "range"; il.min = BARRETTE_PARFAITE.Lmin; il.max = BARRETTE_PARFAITE.Lmax; il.step = 5;
         var ol = el("output", "", rl);
-        rl.title = "Longueur de la barrette parfaite, posée sur un écran de 20 cm de côté.";
+        rl.title = TRAD("Longueur de la barrette parfaite, posée sur un écran de 20 cm de côté.");
         il.value = String(Math.round(st.barr.L)); ol.textContent = fmt(st.barr.L, 0) + " mm";
         il.addEventListener("input", function () { st.barr.L = parseInt(il.value, 10); ol.textContent = il.value + " mm"; elargirFenetreBarr(); modifie("barr"); });
       }
       var ra = el("label", "bc-reg", l); el("span", "", ra, "Angle");
       var ia = el("input", "", ra); ia.type = "range"; ia.min = 0; ia.max = 359; ia.step = 1;
       var oa = el("output", "", ra);
-      ra.title = "Orientation de la barrette sur l'écran (ou sa poignée ronde, sur l'image).";
+      ra.title = TRAD("Orientation de la barrette sur l'écran (ou sa poignée ronde, sur l'image).");
       ANG = { sync: function () { ia.value = String(Math.round(st.barr.ang)); oa.textContent = fmt(st.barr.ang, st.barr.ang % 1 ? 1 : 0) + "°"; } };
       ANG.sync();
       ia.addEventListener("input", function () { st.barr.ang = parseFloat(ia.value); oa.textContent = ia.value + "°"; modifie("barr"); });
-      var sel = selListe(l, "Intégration", INTEG.map(function (v, i) { return nomInteg(i); }), st.integ, function (i) { st.integ = i; BARR.note = ""; majCourbe(); majPied(); K.modifie(); },
-        "Durée pendant laquelle les pixels accumulent la lumière avant d'être lus : la tension est proportionnelle à l'éclairement × cette durée, jusqu'à la saturation.");
-      K.bouton(l, "Intégration automatique", function () {
+      var sel = selListe(l, TRAD("Intégration"), INTEG.map(function (v, i) { return nomInteg(i); }), st.integ, function (i) { st.integ = i; BARR.note = ""; majCourbe(); majPied(); K.modifie(); },
+        TRAD("Durée pendant laquelle les pixels accumulent la lumière avant d'être lus : la tension est proportionnelle à l'éclairement × cette durée, jusqu'à la saturation."));
+      K.bouton(l, TRAD("Intégration automatique"), function () {
         var i = integVoulue(BARR.parS, 0.75 * appaBarr().Usat);
-        BARR.note = !(BARR.parS > 0) ? "aucune lumière sur la barrette" : i < 0 ? "trop de lumière, même à " + nomInteg(0) + " : poser une densité neutre" : "";
+        BARR.note = !(BARR.parS > 0) ? TRAD("aucune lumière sur la barrette") : i < 0 ? TRAD("trop de lumière, même à {0} : poser une densité neutre", [nomInteg(0)]) : "";
         st.integ = Math.max(0, i); sel.value = String(st.integ); majCourbe(); majPied(); K.modifie();
-      }, "pl-btn-p").title = "Choisir la durée d'intégration qui amène le pixel le plus éclairé aux trois quarts de la saturation.";
+      }, "pl-btn-p").title = TRAD("Choisir la durée d'intégration qui amène le pixel le plus éclairé aux trois quarts de la saturation.");
     }
     // ================= photodiode =================
     // Posée sur l'écran d'un clic (exclusive de la fibre du spectromètre). Flux = éclairement moyen des texels de
@@ -4239,7 +4344,7 @@
       var f = MOT && MOT.etat !== "repos" && !MOT.stats.rayons ? null : fluxPhoto(), sat = false;
       PHOTO.u = f == null ? null : gainPhotodiode(SEQ, st.photo.cal) * f;
       if (PHOTO.u > U_SAT) { PHOTO.u = U_SAT; sat = true; }
-      PHOTO.val.textContent = sat ? "saturée (" + U_SAT + " V)" : texteTension(PHOTO.u) + (MOT && MOT.etat !== "repos" ? " …" : "");
+      PHOTO.val.textContent = sat ? TRAD("saturée ({0} V)", [U_SAT]) : texteTension(PHOTO.u) + (MOT && MOT.etat !== "repos" ? " …" : "");
       var e = tourneChoisie();
       if (e && PHOTO.u != null && MOT && MOT.etat === "repos") {
         var k = cleSerie(e), a = Math.round((e.rot || 0) * 1800 / Math.PI) / 10;
@@ -4256,9 +4361,10 @@
       G.setAttribute("viewBox", "0 0 " + Lw + " " + Hh);
       var pts = e && SERIE.cle === cleSerie(e) ? SERIE.pts : [];
       var lame = e && e.type === "lame";
-      PHOTO.aide.textContent = !e ? "Choisir un polariseur ou une lame sur le banc, puis le tourner : la tension se trace en fonction de son angle."
-        : pts.length < 2 ? "Tourner " + (lame ? "la lame" : "le polariseur") + " (molette sur sa miniature ou curseur du bandeau) : un point par angle."
-        : "Tension en fonction de l'angle " + (lame ? "de la lame" : "du polariseur") + " choisi" + (lame ? "e" : "") + " ; « Noter » ajoute la valeur au cahier.";
+      PHOTO.aide.textContent = !e ? TRAD("Choisir un polariseur ou une lame sur le banc, puis le tourner : la tension se trace en fonction de son angle.")
+        : pts.length < 2 ? TRAD("Tourner {0} (molette sur sa miniature ou curseur du bandeau) : un point par angle.", [lame ? TRAD("la lame") : TRAD("le polariseur")])
+        : lame ? TRAD("Tension en fonction de l'angle de la lame choisie ; « Noter » ajoute la valeur au cahier.")
+          : TRAD("Tension en fonction de l'angle du polariseur choisi ; « Noter » ajoute la valeur au cahier.");
       var a0 = -180, a1 = 180;
       if (pts.length) { a0 = Math.floor(pts[0][0] / 30) * 30; a1 = Math.ceil(pts[pts.length - 1][0] / 30) * 30; if (a1 - a0 < 90) { var m = (a0 + a1) / 2; a0 = Math.floor((m - 45) / 30) * 30; a1 = a0 + 90; } }
       var um = 0; pts.forEach(function (q) { um = Math.max(um, q[1]); }); um = um > 0 ? um * 1.1 : 1;
@@ -4272,7 +4378,7 @@
       svg("text", { x: 4, y: bas }, G).textContent = "0";
       if (pts.length > 1) svg("path", { d: "M" + pts.map(function (p) { return q(U(p[0])) + " " + q(V(p[1])); }).join("L"), stroke: "#7fd6a0", "stroke-width": 1, fill: "none", opacity: 0.55 }, G);
       pts.forEach(function (p) { svg("circle", { cx: q(U(p[0])), cy: q(V(p[1])), r: 2.4, fill: "#7fd6a0" }, G); });
-      donnerGrand(pts.length ? { type: "photo", x: pts.map(function (p) { return p[0]; }), y: pts.map(function (p) { return p[1]; }), plein: [a0, a1], ymax: um, xlab: "angle " + (lame ? "de la lame" : "du polariseur") + " (°)", xu: "°", dx: 1, minw: 5,
+      donnerGrand(pts.length ? { type: "photo", x: pts.map(function (p) { return p[0]; }), y: pts.map(function (p) { return p[1]; }), plein: [a0, a1], ymax: um, xlab: "angle " + (lame ? TRAD("de la lame") : TRAD("du polariseur")) + " (°)", xu: "°", dx: 1, minw: 5,
         points: true, fmtY: texteTension, couleur: "#7fd6a0", note: PHOTO.aide.textContent,
         csv: { nom: "photodiode.csv", entetes: ["angle_deg", "tension_V"], lignes: pts.map(function (p) { return [p[0], p[1]]; }) } }
         : { type: "photo", vide: PHOTO.aide.textContent });
@@ -4281,20 +4387,20 @@
       var bo = el("div", "bc-bloc bc-photo-b", Pd), bt = el("div", "bc-bloc-t", bo, Dessin.svgMini({ med: "photodiode" }) + "<b>Photodiode</b>");
       var val = el("span", "bc-photo-v", bt, "…");
       el("span", "bc-pousse", bt);
-      var bn = K.bouton(bt, "Noter", function () {
+      var bn = K.bouton(bt, TRAD("Noter"), function () {
         if (!PHOTO || PHOTO.u == null || (MOT && MOT.etat !== "repos")) return;
         var o = orientations(), mv = Math.abs(PHOTO.u) >= 1e-3, v = (mv ? 1e3 : 1e6) * PHOTO.u;
-        st.cahier.push({ lib: "photodiode" + (o ? " (" + o + ")" : ""), val: String(+v.toPrecision(3)).replace(".", ","), u: mv ? "mV" : "µV", inc: "" });
+        st.cahier.push({ lib: "photodiode" + (o ? " (" + o + ")" : ""), val: nb(String(+v.toPrecision(3))), u: mv ? "mV" : "µV", inc: "" });
         K.modifie(); if (CA && CA.redessiner) CA.redessiner();
       }, "pl-btn-p");
-      bn.title = "Ajouter la tension au cahier de mesures, avec l'orientation des polariseurs et des lames du banc.";
+      bn.title = TRAD("Ajouter la tension au cahier de mesures, avec l'orientation des polariseurs et des lames du banc.");
       var lc = el("div", "bc-bloc-l", bo);
-      selListe(lc, "Résistance", CALIBRES.map(function (v, i) { return nomCalibre(i); }), st.photo.cal, function (i) { st.photo.cal = i; SERIE = { cle: "", pts: [] }; majPhoto(); K.modifie(); },
-        "Le courant de la photodiode traverse cette résistance : la tension lue est proportionnelle à la résistance, jusqu'à la saturation de l'amplificateur (" + U_SAT + " V).");
+      selListe(lc, TRAD("Résistance"), CALIBRES.map(function (v, i) { return nomCalibre(i); }), st.photo.cal, function (i) { st.photo.cal = i; SERIE = { cle: "", pts: [] }; majPhoto(); K.modifie(); },
+        TRAD("Le courant de la photodiode traverse cette résistance : la tension lue est proportionnelle à la résistance, jusqu'à la saturation de l'amplificateur ({0} V).", [U_SAT]));
       var sv = svg("svg", { class: "bc-courbe", viewBox: "0 0 400 130" }, bo);
-      svg("title", {}, sv).textContent = "Tension de la photodiode en fonction de l'angle de la pièce choisie.";
+      svg("title", {}, sv).textContent = TRAD("Tension de la photodiode en fonction de l'angle de la pièce choisie.");
       var aide = el("div", "bc-bloc-l", bo, "");
-      el("div", "bc-bloc-l", bo, "Cliquer sur l'écran pour y poser la photodiode.");
+      el("div", "bc-bloc-l", bo, TRAD("Cliquer sur l'écran pour y poser la photodiode."));
       PHOTO = { val: val, u: null, svg: sv, aide: aide }; tPhoto = 0; majPhoto();
     }
     // ================= spectromètre à fibre =================
@@ -4309,8 +4415,8 @@
     // Affichage : raies = gaussiennes (largeur de la raie et résolution), continu = densité lissée par la résolution,
     // rapporté au maximum. Appareil PARFAIT ou RÉEL, comme les capteurs du Michelson (réel : le doublet du sodium n'est
     // pas séparé).
-    var FIBRES = { parfait: { r: 0.025, res: 0.02, nom: "spectromètre parfait : fibre de 50 µm, résolution 0,02 nm" },
-      reel: { r: 0.2, res: 1.5, nom: "spectromètre fibré réel (type Ocean Optics) : fibre de 400 µm, résolution 1,5 nm" } };
+    var FIBRES = { parfait: { r: 0.025, res: 0.02, nom: TRAD("spectromètre parfait : fibre de 50 µm, résolution 0,02 nm") },
+      reel: { r: 0.2, res: 1.5, nom: TRAD("spectromètre fibré réel (type Ocean Optics) : fibre de 400 µm, résolution 1,5 nm") } };
     var ZOOMS = { na: [587.6, 591.0], hg: [536, 556], laser: [631.8, 633.8], laserVert: [531, 533] };      // fenêtre resserrée sur les raies
     var SPEC_NB = 200, SPEC_NL = 120, SPEC_PASSES = 400, SPEC_TOURS = 4, SPEC_NP = 8;
     // ----- aide « Rayons vers un point » -----
@@ -4332,7 +4438,7 @@
         sale.dessin = true;
         if (MOT.moteur === "onde" || !MOT.seqTrace) {
           a.fini = true;
-          a.raison = MOT.moteur === "onde" ? "Figure de diffraction ou d'interférences : la lumière n'y suit plus des rayons." : "Pas de lumière tracée vers l'observation.";
+          a.raison = MOT.moteur === "onde" ? TRAD("Figure de diffraction ou d'interférences : la lumière n'y suit plus des rayons.") : TRAD("Pas de lumière tracée vers l'observation.");
           majPied(); return;
         }
         a.sq = MOT.seqTrace; a.emb = MOT.emb; a.zone = { x: st.pointObs.x, y: st.pointObs.y, r: RET_ZONE * FEN.W };
@@ -4350,7 +4456,7 @@
         if (r.etat === "detecte" && Math.hypot(r.x - a.zone.x, r.y - a.zone.y) < 1.5 * a.zone.r) a.rayons.push(r); else a.laisses++;
       });
       a.fini = true; a.sq = a.emb = null;
-      if (!a.rayons.length) a.raison = "Aucune lumière n'arrive en ce point.";
+      if (!a.rayons.length) a.raison = TRAD("Aucune lumière n'arrive en ce point.");
       sale.dessin = true; majPied();
     }
     var SPC = null, T2 = null, GSPEC = null, tSpec = 0, SPECR = { parS: 0, note: "" };
@@ -4506,36 +4612,37 @@
         svg("text", { x: q(der && U(g) > Lw - 30 ? Lw - 2 : U(g)), y: Hh - 4, "text-anchor": der && U(g) > Lw - 30 ? "end" : "middle" }, GSPEC).textContent = fmt(g, pas < 1 ? 1 : 0) + (der ? " nm" : "");
       }
       svg("path", { d: d, stroke: "#2a313a", "stroke-width": 1, fill: "none" }, GSPEC);
-      svg("title", {}, GSPEC).textContent = st.fibre.reel ? "Spectre de la lumière reçue par la fibre : comptes des pixels du spectromètre (saturation à 65 535) ; graduations en nanomètres."
-        : "Spectre de la lumière reçue par la fibre : densité spectrale (par nanomètre), rapportée à son maximum ; graduations en nanomètres.";
+      svg("title", {}, GSPEC).textContent = st.fibre.reel ? TRAD("Spectre de la lumière reçue par la fibre : comptes des pixels du spectromètre (saturation à 65 535) ; graduations en nanomètres.")
+        : TRAD("Spectre de la lumière reçue par la fibre : densité spectrale (par nanomètre), rapportée à son maximum ; graduations en nanomètres.");
       // réel : comptes = densité × comptesSpec × temps d'intégration + bruit (obscurité, photons), écrêtés à
       // 65 535 ; échelle fixe, ligne de saturation. Parfait : rapporté au maximum.
       var reel = !!st.fibre.reel, tI = INTEG[st.fibre.t] * 1e-3;
       if (reel) {
         var ys = bas - 1 - (bas - 8) / 1.08;
         svg("path", { d: "M0 " + q(ys) + "H" + Lw, stroke: "#8a5a3a", "stroke-width": 1, "stroke-dasharray": "4 3", fill: "none" }, GSPEC);
-        svg("text", { x: 4, y: q(ys - 3) }, GSPEC).textContent = "65 535 comptes";
+        svg("text", { x: 4, y: q(ys - 3) }, GSPEC).textContent = TRAD("65 535 comptes");
       }
       if (!SPC) {                              // le spectre attend que l'image soit au repos (image fine finie)
-        var att = T2 === false ? "" : "le spectre se calcule une fois l'image finie…";
+        var att = T2 === false ? "" : TRAD("le spectre se calcule une fois l'image finie…");
         if (att) svg("text", { x: Lw / 2, y: bas / 2, "text-anchor": "middle" }, GSPEC).textContent = att;
-        donnerGrand(att ? { type: "fibre", vide: "Le spectre se calcule une fois l'image finie." } : null); return;
+        donnerGrand(att ? { type: "fibre", vide: TRAD("Le spectre se calcule une fois l'image finie.") } : null); return;
       }
       var nx = GR.pan.ouvert() ? 1600 : Math.max(100, Math.min(800, Lw - 12)), D = donneesSpec(nx, f0, f1), Pf = D && D.Pf, m = D ? D.m : 0, k;
       if (!D) { donnerGrand(null); return; }
       if (D.vide) {
-        svg("text", { x: Lw / 2, y: bas / 2, "text-anchor": "middle" }, GSPEC).textContent = SPC.fini ? "aucune lumière dans la fibre" : "en attente de rayons dans la fibre…";
-        donnerGrand({ type: "fibre", vide: SPC.fini ? "Aucune lumière dans la fibre." : "Calcul en cours…" }); return;
+        svg("text", { x: Lw / 2, y: bas / 2, "text-anchor": "middle" }, GSPEC).textContent = SPC.fini ? TRAD("aucune lumière dans la fibre") : TRAD("en attente de rayons dans la fibre…");
+        donnerGrand({ type: "fibre", vide: SPC.fini ? TRAD("Aucune lumière dans la fibre.") : TRAD("Calcul en cours…") }); return;
       }
       var pts = [];
       for (k = 0; k < nx; k++) pts.push(q(U(f0 + (k + 0.5) * (f1 - f0) / nx)) + " " + q(bas - 1 - (bas - 8) * Pf[k] / m));
       svg("path", { d: "M" + q(U(f0)) + " " + (bas - 1) + "L" + pts.join("L") + "L" + q(U(f1)) + " " + (bas - 1), stroke: "#e8c36a", "stroke-width": 1.3, fill: "rgba(232,195,106,0.12)", "stroke-linejoin": "round" }, GSPEC);
       var xv = [], yv = [];
       for (k = 0; k < nx; k++) { xv.push(f0 + (k + 0.5) * (f1 - f0) / nx); yv.push(reel ? Pf[k] : Pf[k] / m); }
-      donnerGrand({ type: "fibre", x: xv, y: yv, plein: [f0, f1], ymax: reel ? 1.08 * SPEC_SAT : 1.05, sat: reel ? SPEC_SAT : null, satTxt: "65 535 comptes",
-        xlab: "longueur d'onde (nm)", xu: " nm", dx: (f1 - f0) < 100 ? 2 : 1, minw: Math.max(0.2, (f1 - f0) / 400), aire: true, spectre: true, couleur: "#e8c36a",
-        fmtY: function (v) { return reel ? fmt(v, 0) : fmt(v, 2); }, ylab: reel ? "comptes" : "intensité relative",
-        note: (reel ? "Comptes des pixels du spectromètre (saturation à 65 535)." : "Densité spectrale rapportée à son maximum.") + " Molette sur le spectre : resserrer ou élargir la fenêtre autour du pointeur ; le pointeur donne la longueur d'onde.",
+      donnerGrand({ type: "fibre", x: xv, y: yv, plein: [f0, f1], ymax: reel ? 1.08 * SPEC_SAT : 1.05, sat: reel ? SPEC_SAT : null, satTxt: TRAD("65 535 comptes"),
+        xlab: TRAD("longueur d'onde (nm)"), xu: " nm", dx: (f1 - f0) < 100 ? 2 : 1, minw: Math.max(0.2, (f1 - f0) / 400), aire: true, spectre: true, couleur: "#e8c36a",
+        fmtY: function (v) { return reel ? fmt(v, 0) : fmt(v, 2); }, ylab: reel ? "comptes" : TRAD("intensité relative"),
+        note: (reel ? TRAD("Comptes des pixels du spectromètre (saturation à 65 535).") : TRAD("Densité spectrale rapportée à son maximum."))
+          + TRAD(" Molette sur le spectre : resserrer ou élargir la fenêtre autour du pointeur ; le pointeur donne la longueur d'onde."),
         csv: { nom: "spectre.csv", entetes: ["longueur_onde_nm", reel ? "comptes" : "intensite_relative"], lignes: xv.map(function (x, i) { return [x, yv[i]]; }) } });
     }
     // Spectre sur nx points de la fenêtre [f0, f1] : { Pf, m (le haut de l'échelle), vide }, ou null tant qu'il n'y a pas de profil.
@@ -4558,18 +4665,18 @@
 
     function blocSpec(Pd) {
       var f = st.fibre, bo = el("div", "bc-spec", Pd), l = el("div", "bc-bloc-l", bo);
-      seg(l, [[false, "parfait", FIBRES.parfait.nom], [true, "réel", FIBRES.reel.nom]], !!f.reel, function (v) { f.reel = v; modifie("spec tete"); });
-      if (SEQ && SEQ.source && ZOOMS[SEQ.source.nomSpectre]) seg(l, [[false, "380 – 780 nm"], [true, "sur les raies", "Fenêtre resserrée autour des raies de la source."]], !!f.zoom, function (v) { f.zoom = v; modifie("spec tete"); });
-      el("span", "bc-spec-n", l, "Cliquer sur l'écran pour y poser la fibre.");
+      seg(l, [[false, TRAD("parfait"), FIBRES.parfait.nom], [true, TRAD("réel"), FIBRES.reel.nom]], !!f.reel, function (v) { f.reel = v; modifie("spec tete"); });
+      if (SEQ && SEQ.source && ZOOMS[SEQ.source.nomSpectre]) seg(l, [[false, "380 – 780 nm"], [true, TRAD("sur les raies"), TRAD("Fenêtre resserrée autour des raies de la source.")]], !!f.zoom, function (v) { f.zoom = v; modifie("spec tete"); });
+      el("span", "bc-spec-n", l, TRAD("Cliquer sur l'écran pour y poser la fibre."));
       GSPEC = svg("svg", { class: "bc-courbe", viewBox: "0 0 400 130" }, bo);
       if (f.reel) {
-        var li = el("div", "bc-bloc-l", bo), sel = selListe(li, "Intégration", INTEG.map(function (v, i) { return nomInteg(i); }), f.t, function (i) { f.t = i; SPECR.note = ""; majSpec(); majPied(); K.modifie(); },
-          "Durée pendant laquelle les pixels du spectromètre accumulent la lumière : les comptes lui sont proportionnels, jusqu'à 65 535.");
-        K.bouton(li, "Intégration automatique", function () {
+        var li = el("div", "bc-bloc-l", bo), sel = selListe(li, TRAD("Intégration"), INTEG.map(function (v, i) { return nomInteg(i); }), f.t, function (i) { f.t = i; SPECR.note = ""; majSpec(); majPied(); K.modifie(); },
+          TRAD("Durée pendant laquelle les pixels du spectromètre accumulent la lumière : les comptes lui sont proportionnels, jusqu'à 65 535."));
+        K.bouton(li, TRAD("Intégration automatique"), function () {
           var i = integVoulue(SPECR.parS, 0.8 * SPEC_SAT);
-          SPECR.note = !(SPECR.parS > 0) ? "aucune lumière dans la fibre" : i < 0 ? "trop de lumière, même à " + nomInteg(0) + " : poser une densité neutre" : "";
+          SPECR.note = !(SPECR.parS > 0) ? TRAD("aucune lumière dans la fibre") : i < 0 ? TRAD("trop de lumière, même à {0} : poser une densité neutre", [nomInteg(0)]) : "";
           f.t = Math.max(0, i); sel.value = String(f.t); majSpec(); majPied(); K.modifie();
-        }, "pl-btn-p").title = "Choisir la durée d'intégration qui amène le pic le plus haut à 80 % de la saturation.";
+        }, "pl-btn-p").title = TRAD("Choisir la durée d'intégration qui amène le pic le plus haut à 80 % de la saturation.");
       }
       majSpec();
     }
@@ -4579,7 +4686,7 @@
     // graphe = resserrer ou élargir la fenêtre autour du pointeur, export CSV des valeurs calculées. Les petits dessins
     // (`majCourbe`, `courbePhoto`, `majSpec`) donnent leurs données par `donnerGrand` : un seul calcul. La fenêtre vit hors
     // de l'état (ni sauvée, ni annulée). Ouvert quand on pose un capteur ; × le ferme sans retirer le capteur.
-    var GR = { pan: K.panneau("pl-capteur", "Capteur", { libre: true }), data: null, fen: null, px: null, type: null, veut: false, geo: null };
+    var GR = { pan: K.panneau("pl-capteur", TRAD("Capteur"), { libre: true }), data: null, fen: null, px: null, type: null, veut: false, geo: null };
     (function () {
       GR.pan.el.classList.add("pl-cap-grand", "bc-capteur");
       // Deux places : ANCRÉ sous l'écran, à sa largeur (défaut : on lit la courbe en regardant l'image), ou FLOTTANT sur toute la
@@ -4593,8 +4700,8 @@
         pe.style.left = pe.style.top = pe.style.right = pe.style.bottom = pe.style.width = pe.style.height = "";      // position et taille du mode précédent
         pe.classList.toggle("pl-dock", GR.dock); pe.classList.toggle("pl-flot", !GR.dock);
         if (GR.dock) K.obsPied.parentNode.insertBefore(pe, K.obsPied); else K.racine.appendChild(pe);
-        GR.bPlace.textContent = GR.dock ? "⇱ Flotter" : "⇲ Sous l'écran";
-        GR.bPlace.title = GR.dock ? "Détacher la fenêtre : la placer où on veut sur la paillasse et l'agrandir par son coin." : "Ranger la fenêtre sous l'écran, à sa largeur.";
+        GR.bPlace.textContent = GR.dock ? TRAD("⇱ Flotter") : TRAD("⇲ Sous l'écran");
+        GR.bPlace.title = GR.dock ? TRAD("Détacher la fenêtre : la placer où on veut sur la paillasse et l'agrandir par son coin.") : TRAD("Ranger la fenêtre sous l'écran, à sa largeur.");
         tracerGrand();
       };
       GR.bPlace.addEventListener("click", function () { GR.dock = !GR.dock; GR.placer(); });
@@ -4603,13 +4710,13 @@
       if (root.ResizeObserver) new root.ResizeObserver(function () { tracerGrand(); }).observe(GR.svg);
       GR.pied = el("div", "pl-cap-pied", GR.pan.corps);
       GR.ctl = el("div", "pl-cap-ctl", GR.pan.corps);      // réglages du capteur posé (angle, intégration, résistance…) : sous la courbe, dans les deux positions
-      GR.bFen = K.bouton(GR.pied, "Fenêtre entière", function () { GR.fen = null; tracerGrand(); }, "pl-btn-p");
-      GR.bCsv = K.bouton(GR.pied, "Exporter (CSV)", function () {
+      GR.bFen = K.bouton(GR.pied, TRAD("Fenêtre entière"), function () { GR.fen = null; tracerGrand(); }, "pl-btn-p");
+      GR.bCsv = K.bouton(GR.pied, TRAD("Exporter (CSV)"), function () {
         var o = csvGrand();
-        if (!o) { GR.bCsv.title = "Pas encore de courbe à exporter."; return; }
-        if (!K.exporterCsv(o.nom, o.entetes, o.lignes)) GR.bCsv.title = "Export impossible dans ce navigateur.";
+        if (!o) { GR.bCsv.title = TRAD("Pas encore de courbe à exporter."); return; }
+        if (!K.exporterCsv(o.nom, o.entetes, o.lignes)) GR.bCsv.title = TRAD("Export impossible dans ce navigateur.");
       }, "pl-btn-p");
-      GR.bCsv.title = "Les valeurs calculées de la courbe, en fichier .csv à lire avec Python (point décimal, séparateur virgule).";
+      GR.bCsv.title = TRAD("Les valeurs calculées de la courbe, en fichier .csv à lire avec Python (point décimal, séparateur virgule).");
       GR.note = el("span", "pl-cap-n", GR.pied, "");
       GR.pan.surBascule = function (ouv) { if (ouv) { if (COURBE) majCourbe(); if (PHOTO) majPhoto(); if (GSPEC) majSpec(); tracerGrand(); } };
       GR.svg.addEventListener("pointermove", function (ev) { GR.px = ev.clientX - GR.svg.getBoundingClientRect().left; tracerGrand(); });
@@ -4692,36 +4799,41 @@
     function fmtLum(L) {
       if (L >= 1e4 || L < 0.01) { var e = Math.floor(Math.log10(L)), m = L / Math.pow(10, e); if (m >= 9.95) { m = 1; e++; }
         return fmt(m, 1) + " × 10" + String(e).replace("-", "⁻").replace(/\d/g, function (c) { return "⁰¹²³⁴⁵⁶⁷⁸⁹"[c]; }) + " cd/m²"; }
-      return (L >= 100 ? Math.round(L).toLocaleString("fr-FR") : fmt(L, L >= 1 ? 1 : 3)) + " cd/m²";
+      return (L >= 100 ? nbEntier(L) : fmt(L, L >= 1 ? 1 : 3)) + " cd/m²";
     }
     function majPied() {
       if (!pied) return;
       if (!DET || !FEN) { pied.textContent = ""; return; }
-      var t = DET === "capteur" ? "Largeur affichée : " + (FEN.W >= 0.5 ? fmt(2 * FEN.W, 1) + " mm" : fmt(2000 * FEN.W) + " µm") + " (" + st.obs.capteur.N + " pixels)"
-        : DET === "oeil" ? "Champ affiché : " + fmt(2 * Math.atan(FEN.W / RETINE) * 180 / Math.PI, FEN.W < 1.5 ? 1 : 0) + "°" + (INS ? "" : " · image vue à l'endroit")
-        : "Largeur affichée : " + (FEN.W >= 5 ? fmt(FEN.W / 5, FEN.W >= 50 ? 0 : 1) + " cm" : fmt(2 * FEN.W, 1) + " mm");
-      if (DET === "ecran") t += " · écran vu du côté de la lumière";
-      if (DET === "ecran" && st.barr.on) t += " · barrette " + (st.barr.reel ? "réelle (28,7 mm, saturation 0,8 V)" : "parfaite (" + fmt(appaBarr().L, 0) + " mm, saturation 10 V)") + " : intégration " + nomInteg(st.integ) + ", courbe lue dans l'image (texel de " + Math.round(2000 * FEN.W / (MOT && MOT.traceur ? MOT.traceur.res : 512)) + " µm : agrandir l'écran l'affine)" + (BARR.hors ? " · une partie de la barrette est hors de l'image affichée" : "") + (BARR.note ? " · " + BARR.note : "");
-      if (st.aides.spot && SPOT && SPOT.raison) t += " · tache : " + SPOT.raison;
-      else if (st.aides.spot && SPOT && SPOT.taches && !SPOT.centre) t += " · tache : aucun rayon de ce point n'arrive sur le détecteur";
-      if (DET === "plaque") t += " · face blanche de la plaque, vue du côté du miroir";
-      if (MOT) t += MOT.moteur === "onde" ? " · calcul ondulatoire" : " · tracé des rayons";
+      var t = DET === "capteur" ? (FEN.W >= 0.5 ? TRAD("Largeur affichée : {0} mm ({1} pixels)", [fmt(2 * FEN.W, 1), st.obs.capteur.N])
+          : TRAD("Largeur affichée : {0} µm ({1} pixels)", [fmt(2000 * FEN.W), st.obs.capteur.N]))
+        : DET === "oeil" ? TRAD("Champ affiché : {0}°", [fmt(2 * Math.atan(FEN.W / RETINE) * 180 / Math.PI, FEN.W < 1.5 ? 1 : 0)]) + (INS ? "" : TRAD(" · image vue à l'endroit"))
+        : (FEN.W >= 5 ? TRAD("Largeur affichée : {0} cm", [fmt(FEN.W / 5, FEN.W >= 50 ? 0 : 1)]) : TRAD("Largeur affichée : {0} mm", [fmt(2 * FEN.W, 1)]));
+      if (DET === "ecran") t += TRAD(" · écran vu du côté de la lumière");
+      if (DET === "ecran" && st.barr.on) t += " · " + (st.barr.reel ? TRAD("barrette réelle (28,7 mm, saturation 0,8 V)")
+          : TRAD("barrette parfaite ({0} mm, saturation 10 V)", [fmt(appaBarr().L, 0)]))
+        + TRAD(" : intégration {0}, courbe lue dans l'image (texel de {1} µm : agrandir l'écran l'affine)", [nomInteg(st.integ), Math.round(2000 * FEN.W / (MOT && MOT.traceur ? MOT.traceur.res : 512))])
+        + (BARR.hors ? TRAD(" · une partie de la barrette est hors de l'image affichée") : "") + (BARR.note ? " · " + BARR.note : "");
+      if (st.aides.spot && SPOT && SPOT.raison) t += TRAD(" · tache : {0}", [SPOT.raison]);
+      else if (st.aides.spot && SPOT && SPOT.taches && !SPOT.centre) t += TRAD(" · tache : aucun rayon de ce point n'arrive sur le détecteur");
+      if (DET === "plaque") t += TRAD(" · face blanche de la plaque, vue du côté du miroir");
+      if (MOT) t += MOT.moteur === "onde" ? TRAD(" · calcul ondulatoire") : TRAD(" · tracé des rayons");
       // le calcul ondulatoire suit les lentilles au paraxial, sur l'axe : décentrement et inclinaison n'y entrent pas
       if (MOT && MOT.moteur === "onde" && st.elements.some(function (q) { var n = neutre(q, P()); return q.type === "lentille" && !escamote(st, q) && (n.x || n.y || (n.incl && n.incl[0])); }))
-        t += " · (lentille décentrée ou inclinée : le calcul ondulatoire la prend sur l'axe)";
-      if (MOT && MOT.etat !== "repos") t += " · image en cours d'affinage";
+        t += TRAD(" · (lentille décentrée ou inclinée : le calcul ondulatoire la prend sur l'axe)");
+      if (MOT && MOT.etat !== "repos") t += TRAD(" · image en cours d'affinage");
       else if (MOT && MOT.stats.vision && DET !== "capteur") {
         var VS = MOT.stats.vision, laAff = lumq() !== "visible" && MOT.stats.adaptLa, relaxe = lumq() !== "visible" && MOT.relax;
-        t += VS.visible ? " · œil adapté à " + fmtLum(laAff || VS.La) + (relaxe ? " (vers " + fmtLum(VS.La) + ")" : "") +
-          " (pupille " + fmt(VS.D, 1) + " mm)" : " · trop peu de lumière pour l'œil";
+        t += VS.visible ? TRAD(" · œil adapté à {0}", [fmtLum(laAff || VS.La)]) + (relaxe ? TRAD(" (vers {0})", [fmtLum(VS.La)]) : "") +
+          TRAD(" (pupille {0} mm)", [fmt(VS.D, 1)]) : TRAD(" · trop peu de lumière pour l'œil");
       }
       if (DET === "capteur" && notePose) t += " · " + notePose;
-      if (st.aides.rebours && RET && RET.seq === SEQ && !RET.fini) t += " · rayons vers le point : recherche en cours";
+      if (st.aides.rebours && RET && RET.seq === SEQ && !RET.fini) t += TRAD(" · rayons vers le point : recherche en cours");
       if (spectreVisible()) {
-        t += " · fibre en (" + fmt(st.fibre.x, 2) + " ; " + fmt(st.fibre.y, 2) + ") mm, " + appareil().nom + (st.fibre.reel ? ", intégration " + nomInteg(st.fibre.t) + (SPECR.note ? " · " + SPECR.note : "") : "")
-          + (SPC && !SPC.onde && !SPC.raies && SPC.passes ? (function (Lz) { return Lz.g > Lz.gRes ? " · peu de rayons dans la fibre : spectre lissé sur " + fmt(Lz.nm, 0) + " nm (zoomer sur la fibre en apporte plus)" : ""; })(lissageSpec(SPC)) : "");
-        if (SPC && !SPC.fini) t += " · spectre en cours";
-        if (T2 === false) t += " · spectromètre indisponible (pas de seconde carte graphique WebGL2)";
+        t += TRAD(" · fibre en ({0} ; {1}) mm, {2}", [fmt(st.fibre.x, 2), fmt(st.fibre.y, 2), appareil().nom])
+          + (st.fibre.reel ? TRAD(", intégration {0}", [nomInteg(st.fibre.t)]) + (SPECR.note ? " · " + SPECR.note : "") : "")
+          + (SPC && !SPC.onde && !SPC.raies && SPC.passes ? (function (Lz) { return Lz.g > Lz.gRes ? TRAD(" · peu de rayons dans la fibre : spectre lissé sur {0} nm (zoomer sur la fibre en apporte plus)", [fmt(Lz.nm, 0)]) : ""; })(lissageSpec(SPC)) : "");
+        if (SPC && !SPC.fini) t += TRAD(" · spectre en cours");
+        if (T2 === false) t += TRAD(" · spectromètre indisponible (pas de seconde carte graphique WebGL2)");
       }
       pied.textContent = t;
     }
@@ -4770,7 +4882,7 @@
         var x0 = t[0] ? Wd - 4 : 4, s2 = t[0] ? -1 : 1, on = t[1] > 0.005 * n;
         ctx.fillStyle = on ? (t[0] ? "#fff" : "#6aa0ff") : "#3a4048"; ctx.beginPath(); ctx.moveTo(x0, 4); ctx.lineTo(x0 + 10 * s2, 4); ctx.lineTo(x0, 14); ctx.closePath(); ctx.fill();
       });
-      HISTO.title = "Histogramme de la photo (" + n.toLocaleString("fr-FR") + " points) : " + Math.round(100 * bas[1] / n) + " % de pixels saturés, " + Math.round(100 * bas[0] / n) + " % au noir.";
+      HISTO.title = TRAD("Histogramme de la photo ({0} points) : {1} % de pixels saturés, {2} % au noir.", [nbEntier(n), Math.round(100 * bas[1] / n), Math.round(100 * bas[0] / n)]);
     }
     // Pose automatique (capteur) : une fois l'image fine accumulée, d'après le 99e centile de l'éclairement reçu.
     // notePose : ce que la pose automatique n'a pas pu faire (aucune lumière, ou trop peu même à la pose la plus longue).
@@ -4779,8 +4891,8 @@
     // qui ne sature plus à POSES[0]), une densité neutre ensuite.
     function remedeLumiere(tv) {
       var iso = isoDe(st), ok = ISOS.filter(function (v) { return v < iso && tv * iso / v >= POSES[0]; });
-      if (ok.length) return "baisser l'ISO (" + ok[ok.length - 1] + " ou moins)";
-      return iso > ISOS[0] ? "baisser l'ISO à " + ISOS[0] + " et poser une densité neutre devant le capteur" : "poser une densité neutre devant le capteur";
+      if (ok.length) return TRAD("baisser l'ISO ({0} ou moins)", [ok[ok.length - 1]]);
+      return iso > ISOS[0] ? TRAD("baisser l'ISO à {0} et poser une densité neutre devant le capteur", [ISOS[0]]) : TRAD("poser une densité neutre devant le capteur");
     }
     // provisoire : pendant l'aperçu et l'image fine (au plus toutes les 250 ms), la pose suit déjà l'éclairement mesuré
     // sans lever st.poseAuto ; sinon un montage posé reste à la pose de départ, surexposé, jusqu'à la fin de l'image fine
@@ -4800,8 +4912,8 @@
       var E = MOT.eclairement();
       st.poseAuto = false;
       var tv = E > 0 ? CIBLE_POSE / (K_CAPTEUR * isoDe(st) / 100 * E) : 0;
-      notePose = !(E > 0) ? "aucune lumière sur le capteur" : tv > 2 * POSES[POSES.length - 1] ? "trop sombre, même à " + nomPose(POSES.length - 1) + " : monter l'ISO"
-        : tv < POSES[0] / 2 ? "trop de lumière, même à " + nomPose(0) + " : " + remedeLumiere(tv) : "";
+      notePose = !(E > 0) ? TRAD("aucune lumière sur le capteur") : tv > 2 * POSES[POSES.length - 1] ? TRAD("trop sombre, même à {0} : monter l'ISO", [nomPose(POSES.length - 1)])
+        : tv < POSES[0] / 2 ? TRAD("trop de lumière, même à {0} : {1}", [nomPose(0), remedeLumiere(tv)]) : "";
       majPied();
       if (!(E > 0)) return;
       st.pose = poseVoulue(E, isoDe(st)); FEN = fenetre(st, DET); MOT.reafficher(affichage()); majHisto();
@@ -4830,14 +4942,14 @@
     };
     var APERCU_DE = { revisions: "image", young: "youngBlanc", fourier: "trame" };      // Polarisation : apercuPola
     var FAIT = {
-      revisions: "Former des images sur un écran ou au viseur, mesurer des focales (Bessel, Silbermann, autocollimation, Badal), monter loupe, microscope, lunettes et appareil photo, régler diaphragmes et œil ; aux niveaux 2 et 3, les aberrations des vraies lentilles.",
-      young: "Franges d'Young au sodium, au mercure, en lumière blanche ou au laser, trous d'Young, fentes multiples, franges mesurées à la barrette ; diffraction par une fente, un trou (tache d'Airy, de Fresnel à Fraunhofer), un cheveu, un dépoli ; spectres d'un réseau.",
-      fourier: "Montage 4f : le spectre de l'objet se forme au plan focal, on l'y filtre et l'image change (Abbe-Porter, strioscopie, fond noir, trame ou lignes effacées, passe-bas).",
-      polarisation: "Loi de Malus mesurée à la photodiode, polariseurs croisés, lames demi-onde et quart d'onde, teinte d'une lame entre polariseurs en lumière blanche."
+      revisions: TRAD("Former des images sur un écran ou au viseur, mesurer des focales (Bessel, Silbermann, autocollimation, Badal), monter loupe, microscope, lunettes et appareil photo, régler diaphragmes et œil ; aux niveaux 2 et 3, les aberrations des vraies lentilles."),
+      young: TRAD("Franges d'Young au sodium, au mercure, en lumière blanche ou au laser, trous d'Young, fentes multiples, franges mesurées à la barrette ; diffraction par une fente, un trou (tache d'Airy, de Fresnel à Fraunhofer), un cheveu, un dépoli ; spectres d'un réseau."),
+      fourier: TRAD("Montage 4f : le spectre de l'objet se forme au plan focal, on l'y filtre et l'image change (Abbe-Porter, strioscopie, fond noir, trame ou lignes effacées, passe-bas)."),
+      polarisation: TRAD("Loi de Malus mesurée à la photodiode, polariseurs croisés, lames demi-onde et quart d'onde, teinte d'une lame entre polariseurs en lumière blanche.")
     };
     var mWrap = el("span", "bc-menu", RGG), MB = st.bac, MODE = "montages";
-    var bMont = K.bouton(mWrap, "Montages ▴", function (ev) { basculerMenu(bMont, "montages"); ev.stopPropagation(); });
-    bMont.setAttribute("data-a3", "<b>Montages</b> — les montages types, rangés par thème ; un montage posé remplace le banc affiché");
+    var bMont = K.bouton(mWrap, TRAD("Montages ▴"), function (ev) { basculerMenu(bMont, "montages"); ev.stopPropagation(); });
+    bMont.setAttribute("data-a3", TRAD("<b>Montages</b> — les montages types, rangés par thème ; un montage posé remplace le banc affiché"));
     var menu = el("div", "bc-menu-l bc-menu-haut", K.racine); menu.hidden = true;
     function basculerMenu(src, mode) {
       var ouvrir = menu.hidden || MODE !== mode; K.fermerMenus();
@@ -4845,8 +4957,8 @@
       MODE = mode; menu.hidden = false; remplirMenu(); placerMenu(); src.setAttribute("aria-pressed", "true");
     }
     function bacsChoix() { return K.estProf() ? Object.keys(BACS) : []; }
-    var SEULE = { reelle: ["réelle seulement", "il montre un effet des vraies lentilles (aberrations, épaisseur) : il s'ouvre toujours en optique réelle"],
-      parfaite: ["parfaite seulement", "il s'ouvre toujours en optique parfaite"] };
+    var SEULE = { reelle: [TRAD("réelle seulement"), TRAD("il montre un effet des vraies lentilles (aberrations, épaisseur) : il s'ouvre toujours en optique réelle")],
+      parfaite: [TRAD("parfaite seulement"), TRAD("il s'ouvre toujours en optique parfaite")] };
     function remplirMenu() {
       menu.innerHTML = "";
       if (menu.hidden || !BACS[MB]) MB = st.bac;      // fermé : il suit le matériel de l'étagère
@@ -4858,11 +4970,11 @@
         choix.forEach(function (b) {
           var t = el("button", "", og); t.type = "button"; t.textContent = BACS[b].nom; t.setAttribute("role", "tab");
           t.setAttribute("aria-selected", b === MB ? "true" : "false");
-          t.setAttribute("data-a3", "<b>" + K.esc(BACS[b].nom) + "</b> — " + K.esc(BACS[b].quoi) + (b === st.bac ? " (sur l'étagère)" : " Un montage de ce matériel en remplit l'étagère ; chaque matériel garde son banc."));
+          t.setAttribute("data-a3", "<b>" + K.esc(BACS[b].nom) + "</b> — " + K.esc(BACS[b].quoi) + (b === st.bac ? TRAD(" (sur l'étagère)") : TRAD(" Un montage de ce matériel en remplit l'étagère ; chaque matériel garde son banc.")));
           t.addEventListener("click", function (ev) { ev.stopPropagation(); MB = b; remplirMenu(); placerMenu(); });
         });
       }
-      var cols = el("div", "bc-menu-cols", menu), desc = el("p", "bc-menu-d", menu, "Survoler un montage pour le décrire.");
+      var cols = el("div", "bc-menu-cols", menu), desc = el("p", "bc-menu-d", menu, TRAD("Survoler un montage pour le décrire."));
       var Bm = BACS[MB], prof = PROFILS[MB === st.bac ? NIV : niveauDe(MB)];
       groupesDe(Bm).forEach(function (g) {
         var L = g.liste.filter(function (id) { return montagePermis(id, prof); });
@@ -4873,7 +4985,8 @@
           var m = MONTAGES[id], sg = SEULE[m.seule], b = el("button", "", c); b.type = "button"; b.textContent = m.nom;
           if (sg) { var mq = el("span", "bc-seule", b); mq.textContent = sg[0]; }
           var d = K.esc(m.titre) + (sg ? '<span class="bc-menu-ds">Optique ' + sg[0] + " : " + sg[1] + ".</span>" : "");
-          b.setAttribute("data-a3", "<b>" + K.esc(m.nom) + "</b> — clic : le poser sur le banc " + bancCourant() + (sg ? " · <b>optique " + sg[0] + "</b> : " + sg[1] : MB === st.bac && P().interOptique ? " (dans l'optique en cours)" : ""));
+          b.setAttribute("data-a3", TRAD("<b>{0}</b> — clic : le poser sur le banc {1}", [K.esc(m.nom), bancCourant()])
+            + (sg ? TRAD(" · <b>optique {0}</b> : {1}", [sg[0], sg[1]]) : MB === st.bac && P().interOptique ? TRAD(" (dans l'optique en cours)") : ""));
           b.addEventListener("mouseenter", function () { desc.innerHTML = d; });
           b.addEventListener("focus", function () { desc.innerHTML = d; });
           b.addEventListener("click", function () {
@@ -4885,17 +4998,17 @@
       });
     }
     function remplirMateriels(choix) {
-      el("p", "bc-menu-t", menu, "Matériel de l'étagère — chacun garde son banc, repris tel que tu l'as laissé");
+      el("p", "bc-menu-t", menu, TRAD("Matériel de l'étagère — chacun garde son banc, repris tel que tu l'as laissé"));
       var g = el("div", "bc-mats", menu);
       choix.forEach(function (b) {
         var B = BACS[b], ici = b === st.bac, c = el("button", "bc-mat" + (ici ? " ici" : ""), g); c.type = "button";
-        if (b === "polarisation") { var ip = el("span", "bc-mat-im", c); apercuPola(ip); ip.title = "Les états de polarisation que montre l'aide « Polarisation »"; }
-        else if (APERCUS[b]) { var im = el("span", "bc-mat-im", c), i = el("img", "", im); i.src = APERCUS[b]; i.alt = ""; im.title = "Aperçu : " + MONTAGES[APERCU_DE[b]].nom; }
+        if (b === "polarisation") { var ip = el("span", "bc-mat-im", c); apercuPola(ip); ip.title = TRAD("Les états de polarisation que montre l'aide « Polarisation »"); }
+        else if (APERCUS[b]) { var im = el("span", "bc-mat-im", c), i = el("img", "", im); i.src = APERCUS[b]; i.alt = ""; im.title = TRAD("Aperçu : {0}", [MONTAGES[APERCU_DE[b]].nom]); }
         var tx = el("span", "bc-mat-tx", c);
         el("b", "", tx).textContent = B.nom;
-        if (ici) el("i", "", tx).textContent = "sur l'étagère";
+        if (ici) el("i", "", tx).textContent = TRAD("sur l'étagère");
         el("span", "", tx).textContent = FAIT[b] || B.quoi;
-        c.setAttribute("data-a3", "<b>" + K.esc(B.nom) + "</b> — " + (ici ? "le matériel de l'étagère" : "clic : passer à ce matériel (étagère et montages) ; son banc est repris tel que tu l'as laissé"));
+        c.setAttribute("data-a3", "<b>" + K.esc(B.nom) + "</b> — " + (ici ? TRAD("le matériel de l'étagère") : TRAD("clic : passer à ce matériel (étagère et montages) ; son banc est repris tel que tu l'as laissé")));
         c.addEventListener("click", function () { fermerMenu(); if (!ici) { changerBac(b); if (PR.maj) PR.maj(); } });
       });
     }
@@ -4917,16 +5030,16 @@
     }
     K.surFermerMenus(fermerMenu);      // un déroulant ou un clic droit ouvert ferme le panneau des montages
     // « Nouveau banc » : le banc affiché repart du montage de départ, en deux clics (pas d'entrée au menu des montages).
-    var bNouv = K.bouton(RGG, "Nouveau banc", function () {
+    var bNouv = K.bouton(RGG, TRAD("Nouveau banc"), function () {
       if (!bNouv.classList.contains("confirme")) {
-        bNouv.classList.add("confirme"); bNouv.innerHTML = "Confirmer : repartir du départ";
-        setTimeout(function () { bNouv.classList.remove("confirme"); bNouv.innerHTML = "Nouveau banc"; }, 3500);
+        bNouv.classList.add("confirme"); bNouv.innerHTML = TRAD("Confirmer : repartir du départ");
+        setTimeout(function () { bNouv.classList.remove("confirme"); bNouv.innerHTML = TRAD("Nouveau banc"); }, 3500);
         return;
       }
-      bNouv.classList.remove("confirme"); bNouv.innerHTML = "Nouveau banc";
+      bNouv.classList.remove("confirme"); bNouv.innerHTML = TRAD("Nouveau banc");
       appliquer(BAC.depart);
     }, "bc-discret");
-    bNouv.setAttribute("data-a3", "<b>Nouveau banc</b> — le banc affiché (A ou B) repart du montage de départ (deux clics) ; le cahier de mesures est gardé");
+    bNouv.setAttribute("data-a3", TRAD("<b>Nouveau banc</b> — le banc affiché (A ou B) repart du montage de départ (deux clics) ; le cahier de mesures est gardé"));
     // Nom du matériel (le bac, terme interne) devant les tiroirs : ouvre le panneau sur ses onglets quand on peut en
     // changer ; pour un élève, simple étiquette. Changer de matériel garde l'état de chacun (mémoire du navigateur).
     BOUT.bac = (function () {
@@ -4937,8 +5050,8 @@
         var peut = bacsChoix().length > 1;
         b.hidden = !peut; lab.hidden = peut;
         b.textContent = BAC.nom + " ▴"; lab.textContent = BAC.nom;
-        var a3 = "<b>Matériel : " + K.esc(BAC.nom) + "</b> — " + K.esc(BAC.quoi);
-        b.setAttribute("data-a3", a3 + " Clic : changer de matériel ; chacun garde son banc."); lab.setAttribute("data-a3", a3);
+        var a3 = TRAD("<b>Matériel : {0}</b> — {1}", [K.esc(BAC.nom), K.esc(BAC.quoi)]);
+        b.setAttribute("data-a3", a3 + TRAD(" Clic : changer de matériel ; chacun garde son banc.")); lab.setAttribute("data-a3", a3);
       }
       maj();
       RGG.insertBefore(g, RGG.firstChild);      // en tête de la rangée : c'est lui qui décide de l'étagère et des montages
@@ -4946,59 +5059,59 @@
     })();
     root.addEventListener("pointerdown", horsMenu);
     function groupe(lab, opts, get, set, a3) { return K.groupe(L1, lab, opts, get, set, a3); }
-    BOUT.niveau = groupe("Niveau", [[1, "1", "<b>Niveau 1</b> — l'essentiel : optique parfaite, image sans œil simulé par défaut, ni capteur ni mesures"],
-      [2, "2", "<b>Niveau 2</b> — optique réelle au choix, luminosité réelle, capteur photo, densités, barrette, photodiode, spectromètre"],
-      [3, "3", "<b>Niveau 3</b> — tout le niveau 2, et les pièces décentrables (vue de face, vis), les lentilles inclinables"]],
+    BOUT.niveau = groupe(TRAD("Niveau"), [[1, "1", TRAD("<b>Niveau 1</b> — l'essentiel : optique parfaite, image sans œil simulé par défaut, ni capteur ni mesures")],
+      [2, "2", TRAD("<b>Niveau 2</b> — optique réelle au choix, luminosité réelle, capteur photo, densités, barrette, photodiode, spectromètre")],
+      [3, "3", TRAD("<b>Niveau 3</b> — tout le niveau 2, et les pièces décentrables (vue de face, vis), les lentilles inclinables")]],
       function () { return NIV; }, function (v) { changerNiveau(v); });
-    BOUT.optique = groupe("Optique", [["parfaite", "parfaite", "<b>Optique parfaite</b> — lentilles minces idéales : ni aberration, ni dispersion, ni diffraction"],
-      ["reelle", "réelle", "<b>Optique réelle</b> — vraies lentilles en verre : aberrations, dispersion, diffraction par les montures"]],
+    BOUT.optique = groupe(TRAD("Optique"), [["parfaite", TRAD("parfaite"), TRAD("<b>Optique parfaite</b> — lentilles minces idéales : ni aberration, ni dispersion, ni diffraction")],
+      ["reelle", TRAD("réelle"), TRAD("<b>Optique réelle</b> — vraies lentilles en verre : aberrations, dispersion, diffraction par les montures")]],
       function () { return optq(); }, function (v) { if (changerOptique(st, v)) { rafraichir(); majAides(); return; } modifie("seq bandeau"); majAides(); });
-    BOUT.vue = groupe("Vue", [["profil", "profil", "<b>Vue de profil</b> — le banc vu de côté"], ["dessus", "dessus", "<b>Vue de dessus</b> — le banc vu d'en haut : décalages latéraux, fentes"]],
+    BOUT.vue = groupe(TRAD("Vue"), [["profil", TRAD("profil"), TRAD("<b>Vue de profil</b> — le banc vu de côté")], ["dessus", TRAD("dessus"), TRAD("<b>Vue de dessus</b> — le banc vu d'en haut : décalages latéraux, fentes")]],
       function () { return st.vue; }, function (v) { st.vue = v; modifie("dessin"); });
     // Œil simulé [avec|sans] (tous niveaux ; au niveau 1, « sans » par défaut) : luminosité des vues « œil » (avec = réelle, sans = toujours visible ;
     // sans effet sur le capteur, la photodiode et le spectromètre ; gardée d'un montage à l'autre).
-    BOUT.lum = groupe("Œil simulé", [
-      ["reelle", "avec", "<b>Œil simulé : avec</b> — luminosité réelle : réponse à la luminance du champ regardé, pupille, vision de nuit, halo de l'éblouissement, sans fond de salle ajouté : le noir reste noir ; une figure faible paraît faible, ou ne se voit pas"],
-      ["visible", "sans", "<b>Œil simulé : sans</b> — l'image est exposée pour être bien visible, quelle que soit la lumière reçue"]],
+    BOUT.lum = groupe(TRAD("Œil simulé"), [
+      ["reelle", TRAD("avec"), TRAD("<b>Œil simulé : avec</b> — luminosité réelle : réponse à la luminance du champ regardé, pupille, vision de nuit, halo de l'éblouissement, sans fond de salle ajouté : le noir reste noir ; une figure faible paraît faible, ou ne se voit pas")],
+      ["visible", TRAD("sans"), TRAD("<b>Œil simulé : sans</b> — l'image est exposée pour être bien visible, quelle que soit la lumière reçue")]],
       lumq, function (v) { st.lumiere = v; modifie("obs"); });
     // Rendu [Rapide … Maximal] (tous niveaux) : niveau de rendu (hors de l'état, mémoire `qualite` commune aux bacs ;
     // choisir un niveau reprend la main sur un préréglage du panneau prof, Ql.prof : alors aucun n'est enfoncé).
-    BOUT.rendu = groupe("Rendu", RENDUS.map(function (R, i) { return R && [i, R.nom, "<b>Rendu " + R.nom.toLowerCase() + "</b> — " + R.titre]; }).filter(Boolean),
+    BOUT.rendu = groupe(TRAD("Rendu"), RENDUS.map(function (R, i) { return R && [i, R.nom, TRAD("<b>Rendu {0}</b> — {1}", [R.nom.toLowerCase(), R.titre])]; }).filter(Boolean),
       function () { return Ql.prof ? null : Ql.rendu; }, function (i) { Ql.rendu = i; Ql.prof = false; changerQualite(); });
     el("span", "bc-pousse", L1);
-    BOUT.ab = groupe("Banc", [["A", "A", "<b>Banc A</b> — deux bancs pour comparer deux réglages · touche <span class=\"k\">A</span>"],
-      ["B", "B", "<b>Banc B</b> — la première fois, une copie du banc A · touche <span class=\"k\">B</span>"]], bancCourant, basculerBanc);
+    BOUT.ab = groupe(TRAD("Banc"), [["A", "A", TRAD("<b>Banc A</b> — deux bancs pour comparer deux réglages · touche <span class=\"k\">A</span>")],
+      ["B", "B", TRAD("<b>Banc B</b> — la première fois, une copie du banc A · touche <span class=\"k\">B</span>")]], bancCourant, basculerBanc);
     // Banc dans un fichier (.json) : l'état entier sans le cahier, le même texte que « Copier le banc » du panneau
     // Debug (« banc-etat {…} »), relu par les deux chemins. Un banc d'un autre matériel ne s'ouvre que si on peut en
     // changer (mode prof) ; sinon refusé, sans toucher au banc affiché.
-    BOUT.fichier = K.bouton(L1, "Fichier ▾", function () {}, "bc-dm-b");
-    BOUT.fichier.setAttribute("data-a3", "<b>Fichier</b> — enregistrer le banc affiché dans un fichier, ou rouvrir un banc enregistré");
+    BOUT.fichier = K.bouton(L1, TRAD("Fichier ▾"), function () {}, "bc-dm-b");
+    BOUT.fichier.setAttribute("data-a3", TRAD("<b>Fichier</b> — enregistrer le banc affiché dans un fichier, ou rouvrir un banc enregistré"));
     var choixF = el("input", "", K.racine); choixF.type = "file"; choixF.accept = ".json,.txt,application/json,text/plain"; choixF.hidden = true;
     choixF.addEventListener("change", function () {
       var f = choixF.files && choixF.files[0]; choixF.value = "";
       if (!f) return;
       var lec = new FileReader();
-      lec.onload = function () { var err = lireBanc(lec.result); K.annoncer(err ? "<b>Banc non ouvert</b> — " + K.esc(err) : "<b>Banc ouvert</b> — " + K.esc(f.name)); };
+      lec.onload = function () { var err = lireBanc(lec.result); K.annoncer(err ? TRAD("<b>Banc non ouvert</b> — {0}", [K.esc(err)]) : TRAD("<b>Banc ouvert</b> — {0}", [K.esc(f.name)])); };
       lec.readAsText(f);
     });
     deroulant(BOUT.fichier, function () {
-      return [{ lab: "Enregistrer le banc…", a3: "<b>Enregistrer le banc</b> — pièces, réglages, aides et vue, dans un fichier .json (le cahier de mesures a son propre export)", act: enregistrerBanc },
-        { lab: "Ouvrir un banc…", a3: "<b>Ouvrir un banc</b> — remplace le banc affiché (A ou B) par celui du fichier", act: function () { choixF.click(); } }];
+      return [{ lab: TRAD("Enregistrer le banc…"), a3: TRAD("<b>Enregistrer le banc</b> — pièces, réglages, aides et vue, dans un fichier .json (le cahier de mesures a son propre export)"), act: enregistrerBanc },
+        { lab: TRAD("Ouvrir un banc…"), a3: TRAD("<b>Ouvrir un banc</b> — remplace le banc affiché (A ou B) par celui du fichier"), act: function () { choixF.click(); } }];
     });
     var CA = K.cahier({ fichier: "cahier-banc.csv", lire: function () { return st.cahier; }, ecrire: function (L) { st.cahier = L; K.modifie(); } });
     var bProf = K.boutonsFin(L1, { cahier: CA, prof: { lab: "Debug", f: function () { PR.panneau.basculer(); }, visible: K.estDebug() },
-      gestes: function () { return GESTES; } }).prof;
+      gestes: function () { return gestesZones(); } }).prof;
 
     // ----- ligne 2 : les aides, une bascule chacune (picto, nom, lettre du raccourci) -----
     // Seules celles qui ont un sens apparaissent ; une aide allumée qui perd son sens reste allumée, sans effet dessiné
     // (elle revient quand il revient). La vue de face est éteinte par défaut (st.aides.face vrai seulement si demandé).
-    var AIDES = [["faisceau", "Faisceau", "F", "Toute la lumière, de la source au détecteur."],
-      ["construction", "Construction", "C", "Les trois rayons particuliers issus du haut de l'objet, lentille après lentille (optique parfaite).", function () { return optq() === "parfaite"; }],
-      ["pinceau", "Pinceau", "P", "Des rayons exacts issus d'un point de l'objet ; ceux qu'une monture arrête sont grisés. Clic sur l'objet, ou glisser la poignée : le point de départ."],
-      ["spot", "Tache", "T", "Où tombent, sur l'écran, le capteur ou la rétine, tous les rayons du pinceau : une couleur par longueur d'onde (calculée quand le geste s'arrête)."],
-      ["rebours", "Rayons vers un point", "R", "Cliquer un point de l'image : des rayons de la lumière qui y arrive, suivis depuis la source.", function () { return !(MOT && MOT.moteur === "onde"); }],
-      ["pola", "Polarisation", "O", "Entre les pièces, la vibration de la lumière vue depuis la source : naturelle, rectiligne, elliptique ou circulaire.", function () { return posee(/^(polariseur|lame)$/); }],
-      ["face", "De face", "X", "La pièce choisie vue depuis la source, et où tombe la lumière (encart en haut à droite du banc). Si c'est l'objet et que Tache ou Pinceau est coché, un clic dans la vue désigne le point d'où part le pinceau."]];
+    var AIDES = [["faisceau", TRAD("Faisceau"), "F", TRAD("Toute la lumière, de la source au détecteur.")],
+      ["construction", TRAD("Construction"), "C", TRAD("Les trois rayons particuliers issus du haut de l'objet, une couleur par tronçon (B → B₁, B₁ → B′) ; pour un point parti à l'infini, la gerbe violette, sa flèche et l'angle avec l'axe (optique parfaite)."), function () { return optq() === "parfaite"; }],
+      ["pinceau", TRAD("Pinceau"), "P", TRAD("Des rayons exacts issus d'un point de l'objet ; ceux qu'une monture arrête sont grisés. Clic sur l'objet, ou glisser la poignée : le point de départ.")],
+      ["spot", TRAD("Tache"), "T", TRAD("Où tombent, sur l'écran, le capteur ou la rétine, tous les rayons du pinceau : une couleur par longueur d'onde (calculée quand le geste s'arrête).")],
+      ["rebours", TRAD("Rayons vers un point"), "R", TRAD("Cliquer un point de l'image : des rayons de la lumière qui y arrive, suivis depuis la source."), function () { return !(MOT && MOT.moteur === "onde"); }],
+      ["pola", TRAD("Polarisation"), "O", TRAD("Entre les pièces, la vibration de la lumière vue depuis la source : naturelle, rectiligne, elliptique ou circulaire."), function () { return posee(/^(polariseur|lame)$/); }],
+      ["face", TRAD("De face"), "X", TRAD("La pièce choisie vue depuis la source, et où tombe la lumière (encart en haut à droite du banc). Si c'est l'objet et que Tache ou Pinceau est coché, un clic dans la vue désigne le point d'où part le pinceau.")]];
     var LETTRES = {}; AIDES.forEach(function (a) { LETTRES[a[2].toLowerCase()] = a[0]; });
     function posee(re) { return st.elements.some(function (e) { return re.test(e.type) && !escamote(st, e); }); }
     function aideOfferte(a) { return !a[4] || a[4](); }
@@ -5027,73 +5140,88 @@
     function nomP(e) { var t = nomDe(e); return t.charAt(0).toUpperCase() + t.slice(1); }
     function textePiece(e) {
       var n = estSel(e.id) ? sels().length : 1;
-      var s = "<b>" + K.esc(nomP(e)) + "</b>" + (positionsVues() ? " à " + cm(e.z) : "") + " — glisser : déplacer" + (n > 1 ? " les " + n + " pièces" : "") + " (Maj : fin · Ctrl+Maj : ultrafin ; sous le banc : ranger) · molette, " + k_("← →") + " : 1 mm (Maj 0,1 · Ctrl+Maj 0,01 · Ctrl 1 cm)" +
-        (REGLAGE[e.type] && n === 1 ? " · " + k_("↑ ↓") + " : " + REGLAGE[e.type] : "") + " · clic droit : menu · double-clic : de près · " + k_("Ctrl") + "+clic : plusieurs · " + k_("Maj") + "+clic : jusqu'à elle · " + k_("Tab") + " : la voisine";
+      var s = "<b>" + K.esc(nomP(e)) + "</b>" + (positionsVues() ? TRAD(" à {0}", [cm(e.z)]) : "") + TRAD(" — glisser : déplacer") + (n > 1 ? TRAD(" les {0} pièces", [n]) : "")
+        + TRAD(" (Maj : fin · Ctrl+Maj : ultrafin ; sous le banc : ranger) · molette, {0} : 1 mm (Maj 0,1 · Ctrl+Maj 0,01 · Ctrl 1 cm)", [k_("← →")]) +
+        (REGLAGE[e.type] && n === 1 ? TRAD(" · {0} : {1}", [k_("↑ ↓"), REGLAGE[e.type]]) : "")
+        + TRAD(" · clic droit : menu · double-clic : de près · {0}+clic : plusieurs · {1}+clic : jusqu'à elle · {2} : la voisine", [k_("Ctrl"), k_(TRAD("Maj")), k_("Tab")]);
       var es = escamote(st, e);
-      if (e.verrou) s = "<b>" + K.esc(nomP(e)) + "</b> verrouillée — ni glisser, ni molette, ni flèches, ni ranger, ni décentrer ; ses réglages restent libres · " + k_("L") + " : la déverrouiller · clic droit : menu" + (REGLAGE[e.type] && n === 1 ? " · " + k_("↑ ↓") + " : " + REGLAGE[e.type] : "");
-      else s += " · " + k_("E") + " : escamoter · " + k_("L") + " : verrouiller";
-      if (es === "auto") s = "<b>" + K.esc(nomP(e)) + "</b> relevé d'office : un récepteur plus loin observe (pastilles au-dessus de l'image) · " + s.split(" — ")[1];
-      else if (es) s = "<b>" + K.esc(nomP(e)) + "</b> escamotée, relevée hors du faisceau — " + k_("E") + " : la rabaisser · " + s.split(" — ")[1];
+      if (e.verrou) s = TRAD("<b>{0}</b> verrouillée — ni glisser, ni molette, ni flèches, ni ranger, ni décentrer ; ses réglages restent libres · {1} : la déverrouiller · clic droit : menu", [K.esc(nomP(e)), k_("L")])
+        + (REGLAGE[e.type] && n === 1 ? TRAD(" · {0} : {1}", [k_("↑ ↓"), REGLAGE[e.type]]) : "");
+      else s += TRAD(" · {0} : escamoter · {1} : verrouiller", [k_("E"), k_("L")]);
+      if (es === "auto") s = TRAD("<b>{0}</b> relevé d'office : un récepteur plus loin observe (pastilles au-dessus de l'image) · {1}", [K.esc(nomP(e)), s.split(" — ")[1]]);
+      else if (es) s = TRAD("<b>{0}</b> escamotée, relevée hors du faisceau — {1} : la rabaisser · {2}", [K.esc(nomP(e)), k_("E"), s.split(" — ")[1]]);
       return s;
     }
     function survolBanc(t) {
       var v = t.closest(".bc-vis"), m = t.closest(".bc-mini"), p = t.closest(".bc-el"), e;
-      if (CADRE === "banc") return "<b>Cadrer</b> — glisser un rectangle sur le banc : il cadre cette zone · " + k_("Échap") + " : annuler";
-      if (v && (e = elDe(v))) return "<b>Vis " + (v.getAttribute("data-axe") === "y" ? "de hauteur" : "de translation") + "</b> de la " + K.esc(PIECES[e.cle].court) + " — molette : " + (v.getAttribute("data-axe") === "y" ? "décentrement vertical" : "décalage latéral") + ", 0,1 mm (Maj 0,01 · Ctrl+Maj 0,001 · Ctrl 1 mm)" + (e.verrou ? " · pièce verrouillée" : "");
-      if (m && (e = elDe(m)) && REGLAGE[e.type]) return "Miniature de la <b>" + K.esc(PIECES[e.cle].court) + "</b> — molette ou glisser : " + REGLAGE[e.type] + " (Maj : fin · Ctrl+Maj : ultrafin · Ctrl : gros) · clic : la choisir · " + k_("↑ ↓") + " : pareil quand elle est choisie";
-      if (t.closest(".bc-poignee")) return "<b>Poignée du pinceau</b> — glisser : le point de l'objet d'où part le pinceau";
-      if (t.closest(".bc-poigneeB")) return "<b>Point B</b> des rayons de construction — glisser le long de l'objet (au 0,1 mm) ; pinceau éteint, un clic sur l'objet le pose aussi";
+      if (CADRE === "banc") return TRAD("<b>Cadrer</b> — glisser un rectangle sur le banc : il cadre cette zone · {0} : annuler", [k_(TRAD("Échap"))]);
+      if (v && (e = elDe(v))) return TRAD("<b>Vis {0}</b> de la {1} — molette : {2}, 0,1 mm (Maj 0,01 · Ctrl+Maj 0,001 · Ctrl 1 mm)",
+        [v.getAttribute("data-axe") === "y" ? TRAD("de hauteur") : TRAD("de translation"), K.esc(PIECES[e.cle].court), v.getAttribute("data-axe") === "y" ? TRAD("décentrement vertical") : TRAD("décalage latéral")])
+        + (e.verrou ? TRAD(" · pièce verrouillée") : "");
+      if (m && (e = elDe(m)) && REGLAGE[e.type]) return TRAD("Miniature de la <b>{0}</b> — molette ou glisser : {1} (Maj : fin · Ctrl+Maj : ultrafin · Ctrl : gros) · clic : la choisir · {2} : pareil quand elle est choisie", [K.esc(PIECES[e.cle].court), REGLAGE[e.type], k_("↑ ↓")]);
+      if (t.closest(".bc-poignee")) return TRAD("<b>Poignée du pinceau</b> — glisser : le point de l'objet d'où part le pinceau");
+      if (t.closest(".bc-poigneeB")) return TRAD("<b>Point B</b> des rayons de construction — glisser le long de l'objet (au 0,1 mm) ; pinceau éteint, un clic sur l'objet le pose aussi");
       if (p && (e = elDe(p))) return textePiece(e);
-      return "<b>Banc</b> — clic : plus rien de choisi · " + (cam.k > 1 ? "glisser : se déplacer le long du banc · " : "") + "double-clic : tout le banc · clic droit : poser ici · molette : la sélection, 1 mm · zoom : boutons, " + k_("Cadrer") + ", double-clic sur une pièce — jamais la molette";
+      return TRAD("<b>Banc</b> — clic : plus rien de choisi · ") + (cam.k > 1 ? TRAD("glisser : se déplacer le long du banc · ") : "")
+        + TRAD("double-clic : tout le banc · clic droit : poser ici · molette : la sélection, 1 mm · zoom : boutons, {0}, double-clic sur une pièce — jamais la molette", [k_(TRAD("Cadrer"))]);
     }
     function survolImage(t) {
-      if (CADRE === "image") return "<b>Cadrer</b> — glisser un rectangle sur l'image : zoom sur la zone · " + k_("Échap") + " : annuler";
-      if (t.closest(".bc-barr")) return "<b>Barrette CCD</b> — glisser : la déplacer sur l'écran · poignée ronde au bout : la tourner (Maj : au degré) · molette : la tourner (5° par cran ; Maj : 1° ; Ctrl+Maj : 0,1° ; Ctrl : 15°)";
-      var oe = oeilMobile(), clic = st.aides.rebours ? "le point des aides" : st.fibre.on && fibreOfferte() ? "poser la fibre" : st.photo.on ? "poser la photodiode" : st.barr.on ? "centrer la barrette" : "";
-      return "<b>Image</b> — glisser : se déplacer · " + (oe ? "Maj+glisser : l'œil, fin · Ctrl+glisser : l'œil, vite · " : "") + "molette : zoom autour du pointeur · double-clic : tout voir" + (clic ? " · clic : " + clic : "") + " · clic droit : menu";
+      if (CADRE === "image") return TRAD("<b>Cadrer</b> — glisser un rectangle sur l'image : zoom sur la zone · {0} : annuler", [k_(TRAD("Échap"))]);
+      if (t.closest(".bc-barr")) return TRAD("<b>Barrette CCD</b> — glisser : la déplacer sur l'écran · poignée ronde au bout : la tourner (Maj : au degré) · molette : la tourner (5° par cran ; Maj : 1° ; Ctrl+Maj : 0,1° ; Ctrl : 15°)");
+      var oe = oeilMobile(), clic = st.aides.rebours ? TRAD("le point des aides") : st.fibre.on && fibreOfferte() ? TRAD("poser la fibre") : st.photo.on ? TRAD("poser la photodiode") : st.barr.on ? TRAD("centrer la barrette") : "";
+      return TRAD("<b>Image</b> — glisser : se déplacer · ") + (oe ? TRAD("Maj+glisser : l'œil, fin · Ctrl+glisser : l'œil, vite · ") : "")
+        + TRAD("molette : zoom autour du pointeur · double-clic : tout voir") + (clic ? TRAD(" · clic : {0}", [clic]) : "") + TRAD(" · clic droit : menu");
     }
     function survol(t) {
       if (D.contains(t)) return survolBanc(t);
       if (cvWrap.contains(t)) return survolImage(t);
-      var c = t.closest(".bc-carte"); if (c && c.getAttribute("data-piece")) { var Pc = PIECES[c.getAttribute("data-piece")]; return "<b>" + K.esc(Pc.nom) + "</b> — clic : la poser sur le banc · glisser : la poser où on la lâche ; lâchée SUR une pièce : la remplacer (même position)" + (c.disabled ? " · déjà sur le banc" : ""); }
-      if (t.closest("input[type=range]") && BD.contains(t)) return "<b>Curseur</b> — glisser, ou molette dessus (Maj : fin · Ctrl+Maj : ultrafin · Ctrl : gros)";
+      var c = t.closest(".bc-carte"); if (c && c.getAttribute("data-piece")) { var Pc = PIECES[c.getAttribute("data-piece")]; return TRAD("<b>{0}</b> — clic : la poser sur le banc · glisser : la poser où on la lâche ; lâchée SUR une pièce : la remplacer (même position)", [K.esc(Pc.nom)]) + (c.disabled ? TRAD(" · déjà sur le banc") : ""); }
+      if (t.closest("input[type=range]") && BD.contains(t)) return TRAD("<b>Curseur</b> — glisser, ou molette dessus (Maj : fin · Ctrl+Maj : ultrafin · Ctrl : gros)");
       return null;
     }
     function texteDefaut() {
       var e = selEl();
-      return e ? textePiece(e) : "Rien de choisi — cliquer une pièce (" + k_("Ctrl") + "+clic : plusieurs ; " + k_("Tab") + " : l'une après l'autre), ou en poser une depuis l'étagère · " + k_("?") + " : tous les gestes et raccourcis";
+      return e ? textePiece(e) : TRAD("Rien de choisi — cliquer une pièce ({0}+clic : plusieurs ; {1} : l'une après l'autre), ou en poser une depuis l'étagère · {2} : tous les gestes et raccourcis", [k_("Ctrl"), k_("Tab"), k_("?")]);
     }
     K.gestes({ survol: survol, defaut: texteDefaut, suivre: function (t) { return D.contains(t) && !geste; } });
     function majL3() { K.majGestes(); }
 
     // ----- panneau « ? » : tous les gestes et raccourcis, par zone (mêmes textes que la ligne 3) -----
     var GESTES = {
-      "Banc": [["clic", "choisir la pièce ; sur le fond : plus rien de choisi"], ["Ctrl+clic", "ajouter la pièce à la sélection, ou l'en retirer"], ["Maj+clic", "choisir toutes les pièces entre la dernière choisie et elle"],
-        ["glisser une pièce", "déplacer toute la sélection, écarts gardés (Maj : dix fois plus lent, au 0,1 mm · Ctrl+Maj : cent fois, au 0,01 mm) ; sous le banc : la ranger"],
-        ["glisser une carte", "poser la pièce où on la lâche ; lâchée SUR une pièce : la remplacer (même position, même décalage) ; un clic : la poser à une place libre ; une source remplace l'ancienne"],
-        ["molette", "la sélection, 1 mm (Maj 0,1 · Ctrl+Maj 0,01 · Ctrl 1 cm), où que soit le pointeur ; sur une miniature : son réglage ; sur une vis : le décalage (vis du cavalier, vue de dessus : sur le côté ; niveau 3, vis de la tige, vue de profil : en hauteur) ; sur un curseur : ce curseur. Gardée sur ce qu'elle a pris tant qu'on tourne. Jamais de zoom"],
-        ["miniature d'une pièce", "molette ou glisser (vers le haut = molette vers le haut) : son réglage principal (Maj : fin · Ctrl+Maj : ultrafin · Ctrl : gros) ; clic : choisir la pièce ; une miniature sans réglage se glisse avec sa pièce"],
-        ["clic droit sur une pièce", "pièces sous le pointeur (pièces collées) · Remplacer par · Position… · Escamoter · Verrouiller · De près · Recentrer (niveau 3) · Ranger"], ["clic droit sur le fond", "Poser ici · Tout le banc · Montage · Cadrer"],
-        ["clic sur la position", "au bandeau : la taper, en cm (Entrée valide, Échap annule)"],
-        ["double-clic", "sur une pièce : de près (la pièce seule, à l'échelle vraie, et sa vue de face) ; sur le fond : tout le banc"],
-        ["Cadrer + glisser", "rectangle : le banc cadre cette zone"],
-        ["zoom", "boutons en haut à gauche du banc : tout le banc, le montage, −, +, Cadrer, de près ; zoomé, glisser le fond : se déplacer"],
-        ["clic sur l'objet", "pinceau affiché : le point d'où part le pinceau (ou glisser sa poignée)"],
-        ["vue de face (niveau 3)", "glisser la pièce dans son plan : la décentrer (Maj : fin · Ctrl+Maj : ultrafin) ; au bandeau, ses deux valeurs (clic : les taper) et Recentrer"]],
-      "Image observée": [["glisser", "se déplacer dans l'image"], ["Maj+glisser, Ctrl+glisser", "déplacer l'œil posé, fin ou vite (l'œil d'un viseur ou d'une lunette reste sur l'axe)"],
-        ["molette", "zoom autour du pointeur, proportionnel au défilement ; sur la barrette : la tourne (5° par cran, Maj 1°, Ctrl+Maj 0,1°, Ctrl 15°)"], ["double-clic", "tout voir"], ["Cadrer + glisser", "zoom sur la zone"],
-        ["clic", "le point de l'aide « Rayons vers un point » ; poser la photodiode ou la fibre ; centrer la barrette"],
-        ["barrette", "glisser : la déplacer ; poignée ronde au bout : la tourner (Maj : au degré)"], ["pastilles", "le récepteur qui observe ; ceux qui sont devant lui sont relevés d'office"],
-        ["Mesurer ▾", "barrette, photodiode, spectromètre (niveaux 2 et 3, sur l'écran)"], ["clic droit", "Tout voir · Recentrer l'œil · Récepteur · Poser ici la barrette, la photodiode, la fibre"]],
-      "Clavier": [["← →", "la sélection, 1 mm (Maj 0,1 mm · Ctrl+Maj 0,01 mm · Ctrl 1 cm)"], ["↑ ↓", "réglage principal de la pièce choisie (Maj : fin · Ctrl+Maj : ultrafin · Ctrl : gros)"],
-        ["Tab, Maj+Tab", "la pièce voisine le long du banc (pièces collées)"], ["Suppr", "ranger la sélection"],
-        ["E", "escamoter la sélection (relevée hors du faisceau, à sa place), ou la rabaisser"], ["L", "verrouiller la sélection, ou la déverrouiller"],
-        ["A, B", "banc A, banc B : deux bancs pour comparer deux réglages (B part d'une copie de A)"],
-        ["Échap", "fermer ce panneau ou un menu, annuler Cadrer ou la position tapée, puis plus rien de choisi"],
-        ["Ctrl+Z, Ctrl+Maj+Z", "annuler, rétablir (un glisser ou un tour de molette d'un coup ; le cahier n'est jamais annulé)"]]
-        .concat(AIDES.map(function (a) { return [a[2], "aide « " + a[1] + " »"]; })).concat([["V", "vue de profil, de dessus"], ["+ − 0", "zoom du banc, tout le banc"], ["?", "ce panneau"]])
+      "Banc": [[TRAD("clic"), TRAD("choisir la pièce ; sur le fond : plus rien de choisi")], [TRAD("Ctrl+clic"), TRAD("ajouter la pièce à la sélection, ou l'en retirer")], [TRAD("Maj+clic"), TRAD("choisir toutes les pièces entre la dernière choisie et elle")],
+        [TRAD("glisser une pièce"), TRAD("déplacer toute la sélection, écarts gardés (Maj : dix fois plus lent, au 0,1 mm · Ctrl+Maj : cent fois, au 0,01 mm) ; sous le banc : la ranger")],
+        [TRAD("glisser une carte"), TRAD("poser la pièce où on la lâche ; lâchée SUR une pièce : la remplacer (même position, même décalage) ; un clic : la poser à une place libre ; une source remplace l'ancienne")],
+        [TRAD("molette"), TRAD("la sélection, 1 mm (Maj 0,1 · Ctrl+Maj 0,01 · Ctrl 1 cm), où que soit le pointeur ; sur une miniature : son réglage ; sur une vis : le décalage (vis du cavalier, vue de dessus : sur le côté ; niveau 3, vis de la tige, vue de profil : en hauteur) ; sur un curseur : ce curseur. Gardée sur ce qu'elle a pris tant qu'on tourne. Jamais de zoom")],
+        [TRAD("miniature d'une pièce"), TRAD("molette ou glisser (vers le haut = molette vers le haut) : son réglage principal (Maj : fin · Ctrl+Maj : ultrafin · Ctrl : gros) ; clic : choisir la pièce ; une miniature sans réglage se glisse avec sa pièce")],
+        [TRAD("clic droit sur une pièce"), TRAD("pièces sous le pointeur (pièces collées) · Remplacer par · Position… · Escamoter · Verrouiller · De près · Recentrer (niveau 3) · Ranger")], [TRAD("clic droit sur le fond"), TRAD("Poser ici · Tout le banc · Montage · Cadrer")],
+        [TRAD("clic sur la position"), TRAD("au bandeau : la taper, en cm (Entrée valide, Échap annule)")],
+        [TRAD("double-clic"), TRAD("sur une pièce : de près (la pièce seule, à l'échelle vraie, et sa vue de face) ; sur le fond : tout le banc")],
+        [TRAD("Cadrer + glisser"), TRAD("rectangle : le banc cadre cette zone")],
+        ["zoom", TRAD("boutons en haut à gauche du banc : tout le banc, le montage, −, +, Cadrer, de près ; zoomé, glisser le fond : se déplacer")],
+        [TRAD("clic sur l'objet"), TRAD("pinceau affiché : le point d'où part le pinceau (ou glisser sa poignée)")],
+        [TRAD("vue de face (niveau 3)"), TRAD("glisser la pièce dans son plan : la décentrer (Maj : fin · Ctrl+Maj : ultrafin) ; au bandeau, ses deux valeurs (clic : les taper) et Recentrer")]],
+      "Image observée": [[TRAD("glisser"), TRAD("se déplacer dans l'image")], [TRAD("Maj+glisser, Ctrl+glisser"), TRAD("déplacer l'œil posé, fin ou vite (l'œil d'un viseur ou d'une lunette reste sur l'axe)")],
+        [TRAD("molette"), TRAD("zoom autour du pointeur, proportionnel au défilement ; sur la barrette : la tourne (5° par cran, Maj 1°, Ctrl+Maj 0,1°, Ctrl 15°)")], [TRAD("double-clic"), TRAD("tout voir")], [TRAD("Cadrer + glisser"), TRAD("zoom sur la zone")],
+        [TRAD("clic"), TRAD("le point de l'aide « Rayons vers un point » ; poser la photodiode ou la fibre ; centrer la barrette")],
+        [TRAD("barrette"), TRAD("glisser : la déplacer ; poignée ronde au bout : la tourner (Maj : au degré)")], [TRAD("pastilles"), TRAD("le récepteur qui observe ; ceux qui sont devant lui sont relevés d'office")],
+        [TRAD("Mesurer ▾"), TRAD("barrette, photodiode, spectromètre (niveaux 2 et 3, sur l'écran)")], [TRAD("clic droit"), TRAD("Tout voir · Recentrer l'œil · Récepteur · Poser ici la barrette, la photodiode, la fibre")]],
+      "Clavier": [["← →", TRAD("la sélection, 1 mm (Maj 0,1 mm · Ctrl+Maj 0,01 mm · Ctrl 1 cm)")], ["↑ ↓", TRAD("réglage principal de la pièce choisie (Maj : fin · Ctrl+Maj : ultrafin · Ctrl : gros)")],
+        [TRAD("Tab, Maj+Tab"), TRAD("la pièce voisine le long du banc (pièces collées)")], [TRAD("Suppr"), TRAD("ranger la sélection")],
+        ["E", TRAD("escamoter la sélection (relevée hors du faisceau, à sa place), ou la rabaisser")], ["L", TRAD("verrouiller la sélection, ou la déverrouiller")],
+        ["A, B", TRAD("banc A, banc B : deux bancs pour comparer deux réglages (B part d'une copie de A)")],
+        [TRAD("Échap"), TRAD("fermer ce panneau ou un menu, annuler Cadrer ou la position tapée, puis plus rien de choisi")],
+        [TRAD("Ctrl+Z, Ctrl+Maj+Z"), TRAD("annuler, rétablir (un glisser ou un tour de molette d'un coup ; le cahier n'est jamais annulé)")]]
+        .concat(AIDES.map(function (a) { return [a[2], TRAD("aide « {0} »", [a[1]])]; })).concat([["V", TRAD("vue de profil, de dessus")], ["+ − 0", TRAD("zoom du banc, tout le banc")], ["?", TRAD("ce panneau")]])
     };
-    function panneauRaccourcis() { K.panneauGestes(GESTES); }
+    // Zones du panneau « ? » : leurs clés restent françaises (ordre du panneau), le titre s'affiche traduit.
+    var ZONES_GESTES = { "Banc": TRAD("Banc"), "Image observée": TRAD("Image observée"), "Clavier": TRAD("Clavier") };
+    // Les mêmes zones pour le panneau de la coque (ligne 1) et pour le panneau « ? » : les clés restent françaises.
+    function gestesZones() {
+      var G = {}, z;
+      for (z in GESTES) G[ZONES_GESTES[z] || z] = GESTES[z];
+      return G;
+    }
+    function panneauRaccourcis() { K.panneauGestes(gestesZones()); }
     // Échap (coque : clic droit, panneau « ? », déroulant) : d'abord la position tapée ; après eux, le panneau des
     // montages, puis Cadrer.
     K.surEchap({ avant: function () { if (!TAPE) return false; annulerPosition(); return true; },
@@ -5138,7 +5266,8 @@
       if (neuf) ab[b] = JSON.parse(JSON.stringify(st));
       ab.cour = b; st = ab[b]; st.cahier = cah; tous[st.bac] = st;
       rafraichir(); K.sauverMaintenant(); if (K.oublierAnnulations) K.oublierAnnulations();
-      K.annoncer("<b>Banc " + b + "</b>" + (neuf ? " — copie du banc " + (b === "A" ? "B" : "A") + ", pour comparer deux réglages" : "") + " · " + k_("A") + " / " + k_("B") + " : passer de l'un à l'autre");
+      K.annoncer(TRAD("<b>Banc {0}</b>", [b]) + (neuf ? TRAD(" — copie du banc {0}, pour comparer deux réglages", [b === "A" ? "B" : "A"]) : "")
+        + TRAD(" · {0} / {1} : passer de l'un à l'autre", [k_("A"), k_("B")]));
     }
     // Autre bac (mode prof) : son état gardé dans la mémoire du navigateur, sinon son montage de départ.
     function texteBanc() { var o = {}; Object.keys(st).forEach(function (k) { if (k !== "cahier") o[k] = st[k]; }); return "banc-etat " + JSON.stringify(o); }
@@ -5146,9 +5275,9 @@
     function lireBanc(t) {
       var o = null;
       try { o = JSON.parse(String(t || "").trim().replace(/^banc-etat\s*/, "")); } catch (e3) {}
-      if (!valide(o)) return "fichier illisible, ou pas un banc d'optique";
+      if (!valide(o)) return TRAD("fichier illisible, ou pas un banc d'optique");
       if (o.bac !== st.bac) {
-        if (bacsChoix().indexOf(o.bac) < 0) return "ce banc est fait pour un autre matériel (" + (BACS[o.bac] ? BACS[o.bac].nom : o.bac) + ")";
+        if (bacsChoix().indexOf(o.bac) < 0) return TRAD("ce banc est fait pour un autre matériel ({0})", [BACS[o.bac] ? BACS[o.bac].nom : o.bac]);
         changerBac(o.bac);
       }
       o.cahier = st.cahier; st = o; rafraichir(); K.sauverMaintenant();
@@ -5184,7 +5313,7 @@
       var ef = el("div", "pl-prof-cf", Cp);
       var rg = el("div", "pl-prof-cf", Cp), zone = null, msgP = null;
       function montrerZone(t) {
-        if (!zone) { zone = el("textarea", "pl-prof-etat", Cp); zone.spellcheck = false; zone.placeholder = "Coller ici un banc copié, puis « Charger »."; }
+        if (!zone) { zone = el("textarea", "pl-prof-etat", Cp); zone.spellcheck = false; zone.placeholder = TRAD("Coller ici un banc copié, puis « Charger »."); }
         zone.hidden = false; zone.value = t == null ? "" : t; zone.focus(); if (t != null) zone.select();
       }
       var tMsg = null;
@@ -5194,74 +5323,76 @@
       }
       PR.texteEtat = texteBanc;
       PR.charger = function (t) { return !lireBanc(t); };
-      K.bouton(rg, "Copier le banc actuel", function () {
-        var t = PR.texteEtat(), ok = function () { dire("copié dans le presse-papier"); }, ko = function () { montrerZone(t); dire("Ctrl+C pour copier"); };
+      K.bouton(rg, TRAD("Copier le banc actuel"), function () {
+        var t = PR.texteEtat(), ok = function () { dire(TRAD("copié dans le presse-papier")); }, ko = function () { montrerZone(t); dire(TRAD("Ctrl+C pour copier")); };
         try { if (root.navigator && root.navigator.clipboard && root.isSecureContext) root.navigator.clipboard.writeText(t).then(ok, ko); else ko(); } catch (e4) { ko(); }
       }, "pl-btn-p");
-      K.bouton(rg, "Coller un banc…", function () { montrerZone(null); dire(""); }, "pl-btn-p");
-      K.bouton(rg, "Charger", function () {
-        if (!PR.charger(zone ? zone.value : "")) { dire("banc illisible"); return; }
-        zone.hidden = true; dire("banc chargé"); PR.maj();
+      K.bouton(rg, TRAD("Coller un banc…"), function () { montrerZone(null); dire(""); }, "pl-btn-p");
+      K.bouton(rg, TRAD("Charger"), function () {
+        if (!PR.charger(zone ? zone.value : "")) { dire(TRAD("banc illisible")); return; }
+        zone.hidden = true; dire(TRAD("banc chargé")); PR.maj();
       }, "pl-btn-p");
       // « Mesurer les temps » : chaque montage du matériel affiché, puis le banc tel qu'il était. Pour chacun : moteur,
       // première image (aperçu), image fine (de la fin de l'aperçu au repos, rendu compris), temps total du clic au repos,
       // grille ondulatoire. Tableau en texte, à copier (zone du panneau). Le banc en cours est remis à la fin.
       var mesure = null, bMes = null;
-      bMes = K.bouton(ef, "Mesurer les temps", function () {
+      bMes = K.bouton(ef, TRAD("Mesurer les temps"), function () {
         if (mesure) return;
-        if (!MOT) { montrerZone(""); dire("pas de carte graphique"); return; }
+        if (!MOT) { montrerZone(""); dire(TRAD("pas de carte graphique")); return; }
         var avant = JSON.parse(JSON.stringify(st)), ids = PR.liste.slice(), L = [], i = 0;
         mesure = { b: bMes }; mesure.b.disabled = true;
-        var tete = "Banc d'optique, matériel « " + BAC.nom + " » ; " + (MOT.traceur && MOT.traceur.info ? MOT.traceur.info() : "?") + " ; " + (root.navigator ? root.navigator.userAgent : "");
+        var tete = TRAD("Banc d'optique, matériel « {0} » ; {1} ; {2}", [BAC.nom, MOT.traceur && MOT.traceur.info ? MOT.traceur.info() : "?", root.navigator ? root.navigator.userAgent : ""]);
         function ligne(nom, t0) {
           var S = MOT.stats, o = S.onde && S.onde.N ? " grille " + S.onde.N[0] + " × " + S.onde.N[1] + (S.onde.paires ? ", " + S.onde.paires + " couples" : "") : "";
-          return nom + " | " + (MOT.moteur === "onde" ? "ondes" : "rayons") + " | aperçu " + Math.round(S.apercuMs || 0) + " ms" + (S.adaptMs ? " (adaptation de l'œil " + Math.round(S.adaptMs) + ")" : "") + " | image fine " +
-            Math.round(S.finMs || 0) + " ms (" + (S.passes || 0) + " passes) | total " + Math.round(maintenant() - t0) + " ms |" + o;
+          return nom + TRAD(" | {0} | aperçu {1} ms{2} | image fine {3} ms ({4} passes) | total {5} ms |{6}",
+            [MOT.moteur === "onde" ? TRAD("ondes") : TRAD("rayons"), Math.round(S.apercuMs || 0),
+              S.adaptMs ? TRAD(" (adaptation de l'œil {0})", [Math.round(S.adaptMs)]) : "",
+              Math.round(S.finMs || 0), S.passes || 0, Math.round(maintenant() - t0), o]);
         }
         function suivant() {
           if (i >= ids.length) {
             avant.cahier = st.cahier; st = avant; rafraichir(); K.sauverMaintenant();
             mesure.b.disabled = false; mesure = null;
             var t = tete + "\n" + L.join("\n");
-            montrerZone(t); dire("mesures prêtes : Ctrl+C pour copier");
-            try { if (root.navigator && root.navigator.clipboard && root.isSecureContext) root.navigator.clipboard.writeText(t).then(function () { dire("mesures copiées dans le presse-papier"); }, function () {}); } catch (e5) {}
+            montrerZone(t); dire(TRAD("mesures prêtes : Ctrl+C pour copier"));
+            try { if (root.navigator && root.navigator.clipboard && root.isSecureContext) root.navigator.clipboard.writeText(t).then(function () { dire(TRAD("mesures copiées dans le presse-papier")); }, function () {}); } catch (e5) {}
             return;
           }
           var id = ids[i++], t0 = maintenant(), vu = false;
-          mesure.b.textContent = "Mesure " + i + " / " + ids.length + "…";
+          mesure.b.textContent = TRAD("Mesure {0} / {1}…", [i, ids.length]);
           monter(st, id); rafraichir();
           (function attendre() {
             if (MOT.etat !== "repos") vu = true;
             var dt = maintenant() - t0;
             if ((vu && MOT.etat === "repos") || (!vu && dt > 1500) || dt > 60000) {
-              L.push(ligne(MONTAGES[id].nom, t0) + (dt > 60000 ? " | arrêté à 60 s" : ""));
-              mesure.b.textContent = "Mesurer les temps"; setTimeout(suivant, 200);
+              L.push(ligne(MONTAGES[id].nom, t0) + (dt > 60000 ? TRAD(" | arrêté à 60 s") : ""));
+              mesure.b.textContent = TRAD("Mesurer les temps"); setTimeout(suivant, 200);
             } else setTimeout(attendre, 30);
           })();
         }
         // les images des diapos d'abord (sinon la première diapo serait mesurée vierge, puis recalculée)
         chargerDiapos(function () { vignettesDiapos = true; suivant(); });
       }, "pl-btn-p");
-      bMes.title = "Monte un à un les montages du matériel affiché, chronomètre l'aperçu et l'image fine, puis remet le banc en cours. Tableau à copier.";
+      bMes.title = TRAD("Monte un à un les montages du matériel affiché, chronomètre l'aperçu et l'image fine, puis remet le banc en cours. Tableau à copier.");
       PR.lignes = function () {
-        var L = [["Matériel", BAC.nom + ", optique " + (optq() === "reelle" ? "réelle" : "parfaite")]];
+        var L = [[TRAD("Matériel"), TRAD("{0}, optique {1}", [BAC.nom, optq() === "reelle" ? TRAD("réelle") : TRAD("parfaite")])]];
         st.elements.slice().sort(function (a, b) { return a.z - b.z; }).forEach(function (e) {
-          L.push([nomDe(e), cm(e.z) + (e.x || e.y ? " ; décalé de " + fmt(e.y || 0, 1) + " mm (hauteur), " + fmt(e.x || 0, 1) + " mm (latéral)" : "")]);
+          L.push([nomDe(e), cm(e.z) + (e.x || e.y ? TRAD(" ; décalé de {0} mm (hauteur), {1} mm (latéral)", [fmt(e.y || 0, 1), fmt(e.x || 0, 1)]) : "")]);
         });
         if (!SEQ || !SEQ.source) return L;
         var im = SEQ.iDet >= 0 ? C.images(SEQ, 587.6, SEQ.objet) : null, d = SEQ.detEl;
         if (im) {
           var f = im.finale;
-          L.push(["Image paraxiale", f.infini ? "à l'infini" : (f.reelle ? "réelle" : "virtuelle") + " à " + cm(f.z) + ", grandissement " + fmt(f.gamma, 3)]);
-          if (!f.infini && d && !SEQ.implicite) L.push(["Détecteur − image", fmt(d.z - f.z, 1) + " mm"]);
+          L.push([TRAD("Image paraxiale"), f.infini ? TRAD("à l'infini") : TRAD("{0} à {1}, grandissement {2}", [f.reelle ? TRAD("réelle") : TRAD("virtuelle"), cm(f.z), fmt(f.gamma, 3)])]);
+          if (!f.infini && d && !SEQ.implicite) L.push([TRAD("Détecteur − image"), fmt(d.z - f.z, 1) + " mm"]);
           var inter = im.reelles.filter(function (x) { return f.infini || Math.abs(x.z - f.z) > 1e-6; });
-          if (inter.length) L.push(["Images intermédiaires", inter.map(function (x) { return cm(x.z); }).join(", ")]);
+          if (inter.length) L.push([TRAD("Images intermédiaires"), inter.map(function (x) { return cm(x.z); }).join(", ")]);
         }
         if (SEQ.stop) {
           var es = trouver(st, SEQ.stop.el);
-          L.push(["Diaphragme d'ouverture", (es ? nomDe(es) : SEQ.stop.el) + " (Ø " + fmt(SEQ.stop.D, 1) + " mm)"]);
+          L.push([TRAD("Diaphragme d'ouverture"), (es ? nomDe(es) : SEQ.stop.el) + " (Ø " + fmt(SEQ.stop.D, 1) + " mm)"]);
         }
-        if (DET === "capteur") L.push(["Temps de pose", nomPose(st.pose)]);
+        if (DET === "capteur") L.push([TRAD("Temps de pose"), nomPose(st.pose)]);
         return L;
       };
       PR.maj = function () {
@@ -5285,38 +5416,42 @@
       function majQ() {
         QP.forEach(function (q) { QS[q.k].value = String(Ql[q.k]); });
         QS.niveau.value = !Ql.prof ? "r" : Ql.perso ? "0" : String(Ql.niveau); QS.moteur.value = Ql.moteur; QS.delai.value = String(Ql.delai); QS.adapt.value = Ql.adapt ? "1" : "0"; QS.guide.value = Ql.guide ? "1" : "0";
-        QS.niveau.options[0].textContent = "Niveau de rendu de la barre (" + RENDUS[Ql.rendu].nom + ")";
+        QS.niveau.options[0].textContent = TRAD("Niveau de rendu de la barre ({0})", [RENDUS[Ql.rendu].nom]);
       }
       PR.majQ = majQ;
       PR.qualStat = function () {
         if (!qStat) return;
-        if (!MOT) { qStat.textContent = "pas de carte graphique"; return; }
+        if (!MOT) { qStat.textContent = TRAD("pas de carte graphique"); return; }
         var S = MOT.stats, o = S.onde;
-        qStat.textContent = "Dernier rendu : " + (MOT.moteur === "onde" ? "ondes" : "rayons") + (Ql.moteur === "ondes" && MOT.moteur !== "onde" ? " (ondes refusées : " + (o && o.raison || "?") + ")" : "") +
-          " ; aperçu " + Math.round(S.apercuMs || 0) + " ms (2^" + nivApercu + " rayons" + (S.adaptMs ? ", dont adaptation de l'œil " + Math.round(S.adaptMs) + " ms" : "") + ") ; image fine " + Math.round(S.finMs || 0) + " ms, " + (S.passes || 0) + (S.bruit ? " passes" : " / " + (S.objectif || 0) + " passes") +
-          (S.bruit ? ", bruit " + (S.bruit.clair === null ? "?" : fmt(100 * S.bruit.clair, 1) + " %") + (S.bruit.faible === null ? "" : " (faibles " + fmt(100 * S.bruit.faible, 1) + " %)") + " pour " + fmt(100 * S.bruit.objectif, 1) + " % visés" +
-            ({ bruit: ", atteint", plafond: ", arrêt au plafond de temps", noir: ", rien d'éclairé", passes: ", plafond de passes", visible: ", image stable à l'écran" }[S.bruit.raison] || "") : "") +
-          (S.visible ? " ; écart à l'écran " + fmt(S.visible.ecart, 2) + "/255 à " + S.visible.passes + " passes (" + fmt(S.visible.objectif, 1) + " visé)" : "") +
-          (o && o.N ? " ; grille " + o.N[0] + " × " + o.N[1] + (o.paires ? ", " + o.paires + " couples" : "") : "") + qGuide(S.guide);
+        qStat.textContent = TRAD("Dernier rendu : {0}", [MOT.moteur === "onde" ? TRAD("ondes") : TRAD("rayons")]) + (Ql.moteur === "ondes" && MOT.moteur !== "onde" ? TRAD(" (ondes refusées : {0})", [o && o.raison || "?"]) : "") +
+          TRAD(" ; aperçu {0} ms (2^{1} rayons{2}) ; image fine {3} ms, {4}", [Math.round(S.apercuMs || 0), nivApercu,
+            S.adaptMs ? TRAD(", dont adaptation de l'œil {0} ms", [Math.round(S.adaptMs)]) : "", Math.round(S.finMs || 0),
+            (S.passes || 0) + (S.bruit ? " passes" : " / " + (S.objectif || 0) + " passes")]) +
+          (S.bruit ? TRAD(", bruit {0}{1} pour {2} % visés", [S.bruit.clair === null ? "?" : fmt(100 * S.bruit.clair, 1) + " %",
+            S.bruit.faible === null ? "" : TRAD(" (faibles {0} %)", [fmt(100 * S.bruit.faible, 1)]), fmt(100 * S.bruit.objectif, 1)])
+            + ({ bruit: TRAD(", atteint"), plafond: TRAD(", arrêt au plafond de temps"), noir: TRAD(", rien d'éclairé"), passes: TRAD(", plafond de passes"), visible: TRAD(", image stable à l'écran") }[S.bruit.raison] || "") : "") +
+          (S.visible ? TRAD(" ; écart à l'écran {0}/255 à {1} passes ({2} visé)", [fmt(S.visible.ecart, 2), S.visible.passes, fmt(S.visible.objectif, 1)]) : "") +
+          (o && o.N ? TRAD(" ; grille {0} × {1}{2}", [o.N[0], o.N[1], o.paires ? TRAD(", {0} couples", [o.paires]) : ""]) : "") + qGuide(S.guide);
       };
       function qGuide(g) {
         if (!g) return "";
-        if (g.rien) return " ; visée guidée : rien à guider (pilote sauté)";
-        var t = g.sites.map(function (n, s) { return n ? ["point de la source", "direction", "dépoli 1", "dépoli 2"][s] + " " + n + "²" : ""; }).filter(String);
-        return " ; visée guidée : " + (t.length ? t.join(", ") : "rien à guider") + " (pilote : " + g.tours + " tour" + (g.tours > 1 ? "s" : "") + ", " + Math.round(g.ms) + " ms, rayons utiles " +
-          g.utiles.map(function (u) { return fmt(100 * u, 2) + " %"; }).join(" puis ") + ")";
+        if (g.rien) return TRAD(" ; visée guidée : rien à guider (pilote sauté)");
+        var t = g.sites.map(function (n, s) { return n ? [TRAD("point de la source"), "direction", TRAD("dépoli 1"), TRAD("dépoli 2")][s] + " " + n + "²" : ""; }).filter(String);
+        return TRAD(" ; visée guidée : {0} (pilote : {1} tour{2}, {3} ms, rayons utiles {4})", [t.length ? t.join(", ") : TRAD("rien à guider"),
+          g.tours, g.tours > 1 ? "s" : "", Math.round(g.ms), g.utiles.map(function (u) { return fmt(100 * u, 2) + " %"; }).join(TRAD(" puis "))]);
       }
       (function () {
-        var D = el("details", "pl-prof-qual", Cp); el("summary", "", D, "Qualité du moteur (aperçu et image fine)");
+        var D = el("details", "pl-prof-qual", Cp); el("summary", "", D, TRAD("Qualité du moteur (aperçu et image fine)"));
         var T1 = el("div", "pl-prof-qg", D);
-        QS.niveau = menu(T1, "Préréglage global", ["r", 0, 1, 2, 3, 4, 5, 6, 7], !Ql.prof ? "r" : Ql.perso ? 0 : Ql.niveau, function (v) { return v === "r" ? "Niveau de rendu de la barre (" + RENDUS[Ql.rendu].nom + ")" : v === 0 ? "Personnalisé (réglages à la main)" : v + " / 7 : " + ["très basse", "basse", "normale (origine, d'avant les niveaux de rendu)", "moyenne", "haute", "très haute", "extrême (peut ramer)"][v - 1] + ", passes fixes"; },
+        QS.niveau = menu(T1, TRAD("Préréglage global"), ["r", 0, 1, 2, 3, 4, 5, 6, 7], !Ql.prof ? "r" : Ql.perso ? 0 : Ql.niveau, function (v) { return v === "r" ? TRAD("Niveau de rendu de la barre ({0})", [RENDUS[Ql.rendu].nom]) : v === 0 ? TRAD("Personnalisé (réglages à la main)")
+          : TRAD("{0} / 7 : {1}, passes fixes", [v, [TRAD("très basse"), TRAD("basse"), TRAD("normale (origine, d'avant les niveaux de rendu)"), TRAD("moyenne"), TRAD("haute"), TRAD("très haute"), TRAD("extrême (peut ramer)")][v - 1]]); },
           function (v) { if (v === "r") { Ql.prof = false; changerQualite(); return; } v = parseInt(v, 10); Ql.prof = true; if (v) { niveauQ(v); appliquerQ(false); } else appliquerQ(true); });
-        QS.moteur = menu(T1, "Modèle", ["auto", "rayons", "ondes"], Ql.moteur, function (v) { return { auto: "Automatique (ondes si le montage l'exige)", rayons: "Optique géométrique (rayons) seulement", ondes: "Ondes dès que possible (même en optique parfaite)" }[v]; },
+        QS.moteur = menu(T1, TRAD("Modèle"), ["auto", "rayons", "ondes"], Ql.moteur, function (v) { return { auto: TRAD("Automatique (ondes si le montage l'exige)"), rayons: TRAD("Optique géométrique (rayons) seulement"), ondes: TRAD("Ondes dès que possible (même en optique parfaite)") }[v]; },
           function (v) { Ql.moteur = v; appliquerQ(false); });
-        QS.delai = menu(T1, "Délai avant l'image fine", [0, 50, 150, 300, 600, 1200], Ql.delai, function (v) { return v + " ms après le dernier geste"; }, function (v) { Ql.delai = parseInt(v, 10); appliquerQ(false); });
-        QS.adapt = menu(T1, "Rayons de l'aperçu", [1, 0], Ql.adapt ? 1 : 0, function (v) { return v ? "adaptatifs (suivent le temps de passe, 3 crans sous le plafond)" : "fixes, au plafond"; }, function (v) { Ql.adapt = v === "1"; appliquerQ(false); });
+        QS.delai = menu(T1, TRAD("Délai avant l'image fine"), [0, 50, 150, 300, 600, 1200], Ql.delai, function (v) { return TRAD("{0} ms après le dernier geste", [v]); }, function (v) { Ql.delai = parseInt(v, 10); appliquerQ(false); });
+        QS.adapt = menu(T1, TRAD("Rayons de l'aperçu"), [1, 0], Ql.adapt ? 1 : 0, function (v) { return v ? TRAD("adaptatifs (suivent le temps de passe, 3 crans sous le plafond)") : TRAD("fixes, au plafond"); }, function (v) { Ql.adapt = v === "1"; appliquerQ(false); });
         // visée guidée : vaut aussi hors préréglage prof (comparaison à l'œil)
-        QS.guide = menu(T1, "Visée guidée des rayons", [1, 0], Ql.guide ? 1 : 0, function (v) { return v ? "oui (passe pilote au début de l'image fine)" : "non (tirage uniforme, pour comparer)"; }, function (v) { Ql.guide = v === "1"; changerQualite(); });
+        QS.guide = menu(T1, TRAD("Visée guidée des rayons"), [1, 0], Ql.guide ? 1 : 0, function (v) { return v ? TRAD("oui (passe pilote au début de l'image fine)") : TRAD("non (tirage uniforme, pour comparer)"); }, function (v) { Ql.guide = v === "1"; changerQualite(); });
         var g0 = null, G = null;
         QP.forEach(function (q) {
           if (q.g !== g0) { g0 = q.g; G = el("details", "pl-prof-qd", D); el("summary", "", G, q.g); }

@@ -985,8 +985,9 @@
   // Adaptation d'un champ et réglages d'affichage, en une fois (Michelson, goniomètre ; le banc fait de même dans son
   // moteur) : L, aire, o comme `adaptation` (+ o.scot : rapport scotopique, −1 ou absent : approximation XYZ ;
   // o.haut : luminances où chercher le plus clair, défaut L). Renvoie {La, F, D (pupille, mm), haut (99e centile des
-  // éléments éclairés), p (parametresVision), seuil, visible (le plus clair dépasse la moitié du seuil : visibilité
-  // 0,2 dans `vision`)}.
+  // éléments éclairés), hautDrapeau (plus clair pour le drapeau de visibilité : `plusClairDrapeau`),
+  // p (parametresVision), seuil, visible (le plus clair du drapeau dépasse la moitié du seuil : visibilité 0,2 dans
+  // `vision`)}.
   // Centile q des éléments ÉCLAIRÉS de Y : au-dessus d'un milliardième du plus clair, pas seulement > 0. Une feuille
   // sur un miroir laisse à son bras une pupille de rayon presque nul (R_CACHE de l'instrument), dont la diffraction
   // pose une poussière (~1e-21 du flux) sur TOUT le champ : avec « > 0 », tous les pixels comptaient, le 99e centile
@@ -999,11 +1000,36 @@
     ys.sort(function (x, y) { return x - y; });
     return ys.length ? ys[Math.floor(q * (ys.length - 1))] : 0;
   }
+  // Plus clair du champ pour le DRAPEAU « trop peu de lumière » (le plancher de `parametresVision` garde, lui, le 99e
+  // centile de `centileEclaires`) : un cœur brillant qui ne fait qu'un pour cent du champ (laser focalisé par une
+  // courte focale, tache douce) laisse ce centile des milliers de fois sous le maximum. L'image est pourtant juste
+  // (cœur saturé, fond au plancher) et l'instrument annonçait « trop peu de lumière » : au banc, une lentille de 10 mm
+  // sur un laser et une densité derrière l'écran, haut = 9e-4 cd/m² quand le maximum du champ en fait 1,6e3 et que
+  // l'œil est adapté à 1,6e3 (seuil 87). On prend donc le MAXIMUM de blocs `cote` × `cote` (défaut 4 : un cœur plus
+  // petit qu'un texel de la passe de mesure y garde sa luminance) avant le centile, qui écarte un bloc isolé. Mêmes
+  // éléments « éclairés » que `centileEclaires` (au-dessus d'un milliardième du plus clair) : la poussière de
+  // diffraction sur tout le champ ne compte pas. Y : luminances d'une grille carrée.
+  function plusClairDrapeau(Y, cote) {
+    var n = Y.length, mx = 0, r = Math.round(Math.sqrt(n)), c = cote || 4, i, x, y, x0, y0, m, v, bs = [];
+    for (i = 0; i < n; i++) if (Y[i] > mx) mx = Y[i];
+    if (!(mx > 0)) return 0;
+    if (c <= 1 || r * r !== n) return centileEclaires(Y, 0.99);
+    for (y0 = 0; y0 < r; y0 += c) for (x0 = 0; x0 < r; x0 += c) {
+      for (m = 0, y = y0; y < Math.min(r, y0 + c); y++) for (x = x0; x < Math.min(r, x0 + c); x++) {
+        v = Y[y * r + x]; if (v > m) m = v;
+      }
+      if (m > 1e-9 * mx) bs.push(m);
+    }
+    bs.sort(function (a, b) { return a - b; });
+    return bs.length ? bs[Math.floor(0.99 * (bs.length - 1))] : 0;
+  }
   function adapterVision(L, aire, o) {
     o = o || {};
     var a = adaptation(L, aire, o), H = o.haut || L;
     a.haut = centileEclaires(H, 0.99);
-    a.p = parametresVision(a.La, o.scot, a.haut); a.seuil = a.p[1]; a.visible = a.haut > 0.5 * a.seuil;
+    a.p = parametresVision(a.La, o.scot, a.haut); a.seuil = a.p[1];
+    // le drapeau ne se lit pas sur le 99e centile (un cœur brillant de 1 % du champ l'écrase) : `plusClairDrapeau`
+    a.hautDrapeau = plusClairDrapeau(H); a.visible = a.hautDrapeau > 0.5 * a.seuil;
     if (o.pied > 0) a.p[4] = o.pied;     // pied de luminance (fraction du blanc) en luminosité réelle : sources ponctuelles (cf. `vision`)
     return a;
   }
@@ -1207,7 +1233,7 @@
     polyDelta: polyDelta, vignettage: vignettage, lentille: lentille, rendreCPU: rendreCPU, versRGB: versRGB,
     VISION: VISION, vScot: vScot, rapportScotopique: rapportScotopique, scotXYZ: scotXYZ, pupille: pupille, seuilBatonnets: seuilBatonnets,
     seuilCones: seuilCones, seuilVision: seuilVision, sigmaBatonnets: sigmaBatonnets, facteurWard: facteurWard, facteurHunt: facteurHunt,
-    parametresVision: parametresVision, adaptation: adaptation, adapterVision: adapterVision, rapportPlanck: rapportPlanck, vision: vision, parametresVisible: parametresVisible, VISIBLE: VISIBLE, GLSL_VISION: GLSL_VISION,
+    parametresVision: parametresVision, adaptation: adaptation, adapterVision: adapterVision, plusClairDrapeau: plusClairDrapeau, rapportPlanck: rapportPlanck, vision: vision, parametresVisible: parametresVisible, VISIBLE: VISIBLE, GLSL_VISION: GLSL_VISION,
     suiviAdaptation: suiviAdaptation, parametresLisses: parametresLisses, TAU_ADAPT: TAU_ADAPT,
     HALO: HALO, psiHalo: psiHalo, voileHalo: voileHalo,
     VERRES: VERRES, indice: indice, cheminLame: cheminLame, lame: lame, dispersion: dispersion, SEG: SEG,

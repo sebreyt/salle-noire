@@ -3537,12 +3537,15 @@
       var img = bloc ? T.reduire(bloc, cpt) : T.lire(0, T.res, cpt), n = img.length / 3, h = 2 * W / N, k = V.s / Math.max(1, nRay) / (mode === "onde" && !rayons ? 1 : h * h);
       var L = new Float64Array(n), i;
       for (i = 0; i < n; i++) L[i] = img[3 * i + 1] * k;
-      // plus clair du champ (99e centile des texels éclairés) : plancher de `parametresVision`, et « visible » s'il
-      // dépasse la moitié du seuil (visibilité 0,2 dans `vision`) ; débiaisé si la passe a deux moitiés (`centileCroise`)
+      // plus clair du champ (99e centile des texels éclairés) : plancher de `parametresVision` ; débiaisé si la passe a
+      // deux moitiés (`centileCroise`). Le DRAPEAU « trop peu de lumière » se lit sur un autre estimateur
+      // (`M.plusClairDrapeau`) : un cœur brillant de 1 % du champ (laser focalisé) écrase ce centile sans que l'image
+      // soit fausse.
       var imgB = !bloc && (rayons || mode !== "onde") && T.blend32 ? T.lireB() : null;
       var a = imgB ? adaptationCroisee(L, imgB, k, h, V) : M.adaptation(L, (V.omega || 0) * h * h, { M: V.M, Fsalle: V.Fsalle, salle: V.salle });
       a.haut = imgB ? centileCroise(img, imgB, k) : centileTri(L);
-      a.p = M.parametresVision(a.La, V.scot, a.haut); a.seuil = a.p[1]; a.visible = a.haut > 0.5 * a.p[1];
+      a.p = M.parametresVision(a.La, V.scot, a.haut); a.seuil = a.p[1];
+      a.hautDrapeau = M.plusClairDrapeau(L); a.visible = a.hautDrapeau > 0.5 * a.seuil;
       a.pupTracee = V.pup || 0; a.seq = seq; a.scene = aff.scene == null ? null : aff.scene;
       // halo : voile au plus Ψ(un élément) × angle solide × ΣL ; sauté s'il reste sous le dixième du seuil
       var c = new Float64Array(3 * n), t0 = performance.now();
