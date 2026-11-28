@@ -3791,7 +3791,7 @@
     }
     // réglage du panneau prof (Ql.prof) ou préréglage prof du niveau de rendu choisi (ondes)
     function vq(k) { if (Ql.prof) return Ql[k]; var n = RENDUS[Ql.rendu].onde; return QP.filter(function (q) { return q.k === k; })[0].pre[n - 1]; }
-    var MOT = null, logiciel = false, nivApercu = Ql.prof ? Ql.rApExp : 20, MAX_POINTS_FIN = 60;   // 60 (et pas 100) : filtrages 4f sous 3 s sur l'UHD 620 (mesuré : 77 couples au lieu de 109)
+    var MOT = null, logiciel = false, nivApercu = Ql.prof ? Ql.rApExp : 20;
     try {
       // moteur ondulatoire quand le cœur l'accepte ; en optique parfaite, une ouverture ordinaire (iris,
       // trou ou fente source) n'y fait pas basculer (`ouvertures` d'`ondePlan`)
@@ -3809,12 +3809,13 @@
           return { apercu: { res: vq("oApRes"), ns: vq("oApNs"), np: vq("oApNp"), opt: { nl: vq("oApNl"), maxCellules: 1 << vq("oApCell"), fin: vq("oApMail"), ouvertures: ouvQ } },
             fin: { res: libreO && !Ql.prof ? Math.min(rf, Wc) : rf, ns: vq("oFinNs"), np: vq("oFinNp"), passes: vq("oFinPasses"), opt: { nl: vq("oFinNl"), maxCellules: 1 << vq("oFinCell"), fin: vq("oFinMail"), ouvertures: ouvQ, maxPoints: vq("oFinPts") } } };
         }
-        // image fine en somme brute (filtrage, < 3 s) : au plus ~100 points du trou source au lieu de 400
-        // (strioscopie : 109 couples au lieu de 313 à 1024², ~30 ms chacun sur l'UHD 620 d'après les 7 ms à 512²)
+        // image fine en somme brute : points de la source au plus selon la table du niveau (oFinPts), comme les autres
+        // niveaux ; elle peut prendre plus de quelques secondes (l'aperçu, lui, reste à np couples par image), et un
+        // montage lourd le dit (coutOnde, légende de l'observation)
         var Q = C.QUALITE_ONDE, ouv = !s || s.optique !== "parfaite";
         if (logiciel) return { apercu: { res: 128, ns: 2, np: 4, opt: { nl: 4, maxCellules: 1 << 15, ouvertures: ouv } }, fin: { res: 256, ns: 4, np: 8, passes: 2, opt: { nl: 8, maxCellules: 1 << 17, ouvertures: ouv } } };
         return { apercu: { res: Q.apercu.res, ns: Q.apercu.ns, np: Q.apercu.np, opt: { nl: Q.apercu.opt.nl, maxCellules: Q.apercu.opt.maxCellules, ouvertures: ouv } },
-          fin: { res: Q.fin.res, ns: Q.fin.ns, np: Q.fin.np, passes: Q.fin.passes, opt: { ouvertures: ouv, maxPoints: MAX_POINTS_FIN } } };
+          fin: { res: Q.fin.res, ns: Q.fin.ns, np: Q.fin.np, passes: Q.fin.passes, opt: { ouvertures: ouv, maxPoints: vq("oFinPts") } } };
       } }) : null;
       if (MOT) logiciel = /swiftshader|llvmpipe|software/i.test(String(MOT.traceur.info()));
     } catch (e1) { MOT = null; }
@@ -4527,7 +4528,7 @@
         T.dimensionner(256); T.raz();
         return s;
       }
-      var pl = C.ondePlan(seq, { maxCellules: 1 << 18, maxPoints: MAX_POINTS_FIN, ouvertures: seq.optique !== "parfaite" });
+      var pl = C.ondePlan(seq, { maxCellules: 1 << 18, maxPoints: vq("oFinPts"), ouvertures: seq.optique !== "parfaite" });
       if (!pl.ok) pl = MOT.plan;
       if (!pl || !pl.ok) return null;
       var brute = !pl.laser && pl.planes.length > 1, ls = [], i;
@@ -4825,6 +4826,23 @@
         return fmt(m, 1) + " × 10" + String(e).replace("-", "⁻").replace(/\d/g, function (c) { return "⁰¹²³⁴⁵⁶⁷⁸⁹"[c]; }) + " cd/m²"; }
       return (L >= 100 ? nbEntier(L) : fmt(L, L >= 1 ? 1 : 3)) + " cd/m²";
     }
+    // Deux avis distincts. « Calcul lourd » : coût PRÉDIT par le plan de l'image fine (C.coutOnde, le même sur toute
+    // machine), expliqué par ce qui le fait : plusieurs plans qui diffractent en lumière non laser, d'où une propagation
+    // par point de la source et par couleur. « Aperçu lent » : temps MESURÉ de l'aperçu (stats.apercuMs) pendant un
+    // geste, qui dépend de la machine ; il ne dit jamais que le montage est lourd.
+    var APERCU_LENT = 120;
+    function avisCalcul() {
+      if (!MOT || MOT.moteur !== "onde") return "";
+      var c = MOT.stats.cout, t = "";
+      if (c && c.lourd) {
+        var noms = [];
+        c.plans.forEach(function (i) { var pr = SEQ && SEQ.prims[i], e = pr && trouver(st, pr.el), n = e && PIECES[e.type] ? PIECES[e.type].nom : ""; if (n && noms.indexOf(n) < 0) noms.push(n); });
+        t += TRAD(" · calcul lourd : la lumière traverse {0} plans qui la diffractent{1} ; chaque point de la source, à chaque couleur, y demande alors sa propre propagation, {2} pour l'image fine, qui sera longue à venir",
+          [c.plans.length, noms.length ? " (" + noms.join(", ").toLowerCase() + ")" : "", nbEntier(c.propagations)]);
+      }
+      if (MOT.etat !== "repos" && MOT.stats.apercuMs > APERCU_LENT) t += TRAD(" · aperçu lent sur cette machine : le menu Rendu (Rapide) l'allège");
+      return t;
+    }
     function majPied() {
       if (!pied) return;
       if (!DET || !FEN) { pied.textContent = ""; return; }
@@ -4844,6 +4862,7 @@
       // le calcul ondulatoire suit les lentilles au paraxial, sur l'axe : décentrement et inclinaison n'y entrent pas
       if (MOT && MOT.moteur === "onde" && st.elements.some(function (q) { var n = neutre(q, P()); return q.type === "lentille" && !escamote(st, q) && (n.x || n.y || (n.incl && n.incl[0])); }))
         t += TRAD(" · (lentille décentrée ou inclinée : le calcul ondulatoire la prend sur l'axe)");
+      t += avisCalcul();
       if (MOT && MOT.etat !== "repos") t += TRAD(" · image en cours d'affinage");
       else if (MOT && MOT.stats.vision && DET !== "capteur") {
         var VS = MOT.stats.vision, laAff = lumq() !== "visible" && MOT.stats.adaptLa, relaxe = lumq() !== "visible" && MOT.relax;
@@ -5533,7 +5552,9 @@
           suivrePupille();
           if (MOT.etat === "apercu") {
             // préréglage prof : 3 crans sous son plafond, entre 9 et 24 ms ; niveau de rendu : autour de son temps visé
-            var ta = MOT.stats.apercuMs, vise = Ql.prof ? 0 : RENDUS[Ql.rendu].ms, hautA = Ql.prof ? Ql.rApExp : 24, basA = Ql.prof ? Math.max(14, hautA - 3) : 14;
+            // temps de la passe de rayons seule (`apercuPasseMs`) : l'adaptation et le halo du geste n'y sont pas, ils ne
+            // baissent pas avec le nombre de rayons
+            var ta = MOT.stats.apercuPasseMs != null ? MOT.stats.apercuPasseMs : MOT.stats.apercuMs, vise = Ql.prof ? 0 : RENDUS[Ql.rendu].ms, hautA = Ql.prof ? Ql.rApExp : 24, basA = Ql.prof ? Math.max(14, hautA - 3) : 14;
             var tHaut = vise ? 1.45 * vise : 24, tBas = vise ? 0.6 * vise : 9;
             if ((Ql.prof && !Ql.adapt) || nivApercu > hautA) nivApercu = hautA;
             else if (ta > tHaut && nivApercu > basA) nivApercu--; else if (ta < tBas && nivApercu < hautA) nivApercu++;

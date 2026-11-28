@@ -85,7 +85,10 @@
  *    diffractée pour les suivantes ; laser : ouverture < 2,5 w. Une ouverture ordinaire derrière le premier plan qui
  *    ne coupe que l'étalement dû à la taille de la source (pas la lumière diffractée) est une coupure géométrique
  *    (`plan.coupes`, `coupeOnde` : facteur par pixel du détecteur), pas un plan : un plan de plus ferait passer en somme
- *    brute ; s'il reste plusieurs vrais plans, elle en redevient un. Un objet ordinaire placé avant le premier plan
+ *    brute ; de même quand elle coupe la lumière diffractée mais que sa propre diffraction reste sous un quart de la
+ *    frange la plus fine (`coupeNette`) ; s'il reste plusieurs vrais plans, elle en redevient un. Montures d'un
+ *    instrument (viseur, lunette) et pupille de l'œil : JAMAIS un plan, toujours une coupure, depuis le dernier plan
+ *    qui les précède (`couper`, `cp.c`). Un objet ordinaire placé avant le premier plan
  *    (fente source, trou source) DEVIENT la source (`plan.src`), limitée à ce que la lampe éclaire (`eclaire`).
  *    Refusés, rendus au moteur géométrique (`raison`) : miroir, dépoli hors laser, source conjuguée du premier plan,
  *    deux réseaux ou un plan derrière le réseau, rien de diffractant. Ignorés : réticules, décentrement des lentilles.
@@ -101,10 +104,16 @@
  *    somme incohérente sur les longueurs d'onde (`lambdasOnde` : `nl` strates d'un continu, ou les raies ; filtres et
  *    polariseurs repliés dans le poids : éléments uniformes, facteur ½ Tr(J†J), pas de champ à deux composantes) et
  *    sur la source. Un seul plan : un point source ne fait que décaler la figure (κ = −B₂/B₁) : une propagation par
- *    λ, relue (`lireNatif`, bilinéaire) pour `ns` × `ns` strates de la source, tirées dans leur case dès la passe 1 ;
- *    le long d'un axe où l'image de la source est bien plus large que la figure, la figure est intégrée et étalée.
+ *    λ, relue (`lireNatif`, bilinéaire) pour au plus `ns` × `ns` strates de la source (NS_FORME par axe), prises dans
+ *    la zone que la lampe éclaire (`boiteEclairee`) ; la grille est d'abord FILTRÉE (`natif`, `lot.bw`) sur l'image
+ *    d'une strate et le pixel : chaque strate vaut sa maille entière
+ *    et rien ne tombe entre deux pixels (source uniforme : une strate le long d'un axe où la grille est plus fine que le
+ *    pixel) ; le long d'un axe où l'image de la source est bien plus large que la figure, la figure est intégrée et
+ *    étalée. Pupille de la source (`vignetteOnde`) : seuls les points dont le rayon vers le premier plan passe les
+ *    ouvertures d'avant comptent (somme brute comprise). Filament : rectangle à la luminance moyenne (× plein).
  *    Plusieurs plans : somme brute, une propagation par point source (`pointsOnde` : réseau de points à inclinaison
- *    entière sur la grille, au plus `maxPoints`) et par λ, `np` couples par passe dans un ordre battu à la graine.
+ *    entière sur la grille, au plus `maxPoints`) et par λ, `np` couples par passe dans un ordre battu à la graine,
+ *    stratifié par λ (chaque passe a chaque λ en proportion) ; une λ éteinte par les filtres est retirée (`lambdasOnde`).
  *    Laser : faisceau gaussien analytique au premier plan (sans plan : gaussienne ABCD au détecteur) ; dépoli :
  *    phase tirée par maille (`opt.graine`). Réseau : une copie décalée par ordre (sin θ = mλ/a, ETA_RESEAU).
  *  - À savoir : zéros d'une figure décalés de 1 à 2 % à la lecture bilinéaire (justes sur la grille native) ; fente
@@ -414,6 +423,10 @@
   // Catalogue (focales nominales et diamètres) ; 10 et 20 mm (microscope), −500 mm (œil myope de 2 δ).
   var LENTILLES = [[10, 8], [20, 16], [50, 25], [100, 40], [125, 40], [200, 40], [300, 40], [500, 50], [1000, 50], [-100, 40], [-200, 40], [-500, 40]];
 
+  // Demi-côté (mm) de la plaque des écrans diffractants du tiroir Young (fente, trou, bifentes, trous, fentes multiples) :
+  // 60 et non 25, pour que la lanterne ne passe pas autour (son faisceau fait ~56 × 28 mm près de son image) ; cette
+  // lumière, que le calcul ondulatoire ignore, éclairait l'écran d'un cadre et réglait l'œil sur elle.
+  var SM_YOUNG = 60;
   // ================= primitives =================
   function prim(k, dz, R, Sm, p, ap) {
     var q = []; for (var i = 0; i < NP; i++) q.push(p && p[i] != null ? p[i] : 0);
@@ -542,15 +555,15 @@
     miroir: { tiroir: "lentilles", miroir: true, defaut: {},
       prims: function () { return [prim(K.MIROIR, 0, 25, 32, [])]; } },
     fente: { tiroir: "young", orientable: true, defaut: { e: 0.1 },
-      prims: function (p, o, el) { return [masque(F.FENTES, [1, p.e, 0, 10], 25, 0, el.rot)]; } },
+      prims: function (p, o, el) { return [masque(F.FENTES, [1, p.e, 0, 10], SM_YOUNG, 0, el.rot)]; } },
     trou: { tiroir: "young", defaut: { d: 0.2 },
-      prims: function (p) { return [masque(F.DISQUE, [p.d / 2], 25)]; } },
+      prims: function (p) { return [masque(F.DISQUE, [p.d / 2], SM_YOUNG)]; } },
     bifentes: { tiroir: "young", orientable: true, defaut: { a: [0.2, 0.25, 0.3], e: 0.06, h: 5, pas: 7, caches: [false, false, false] },
-      prims: function (p) { return [masque(F.BIFENTES, [p.a[0], p.a[1], p.a[2], p.e, p.h, p.pas, bits(p.caches), axeBifentes(p.caches)], 25)]; } },
+      prims: function (p) { return [masque(F.BIFENTES, [p.a[0], p.a[1], p.a[2], p.e, p.h, p.pas, bits(p.caches), axeBifentes(p.caches)], SM_YOUNG)]; } },
     trousYoung: { tiroir: "young", defaut: { a: 0.5, d: 0.1 },
-      prims: function (p) { return [masque(F.TROUS, [2, p.d, p.a], 25)]; } },
+      prims: function (p) { return [masque(F.TROUS, [2, p.d, p.a], SM_YOUNG)]; } },
     fentesMultiples: { tiroir: "young", orientable: true, defaut: { n: 2, e: 0.04, pas: 0.2 },
-      prims: function (p) { return [masque(F.FENTES, [p.n, p.e, p.pas, 5], 25)]; } },
+      prims: function (p) { return [masque(F.FENTES, [p.n, p.e, p.pas, 5], SM_YOUNG)]; } },
     reseau: { tiroir: "young", orientable: true, defaut: { n: 300 },
       prims: function (p) { return [prim(K.RESEAU, 0, 12.5, 25, [1 / p.n])]; } },
     fil: { tiroir: "young", orientable: true, defaut: { w: 0.07 },
@@ -623,7 +636,9 @@
   // rayonUtile), plan avancé de Rk sin(inclinaison) ; marge 2 %. Cible traversée à rebours (après un miroir) : rien.
   // pc : la primitive dont C est le plan (null : pupille d'entrée) ; masque plan droit : sa plaque, opaque de R à Sm,
   // arrête tout l'anneau si Rl ≤ Sm (trou source devant la lampe : rien à élargir).
-  function elargir(P, iDet, j0, S0, as, C, pc) {
+  // brut (`banc.anneauBrut`, tests seulement) : sans `anneauPerdu`.
+  function elargir(P, iDet, j0, S0, as, C, pc, brut) {
+    if (!brut && anneauPerdu(P, iDet, j0, S0, as)) return 0;
     var Rl = 0;
     for (var m = j0; m < P.length; m++) {
       var pk = P[m];
@@ -640,6 +655,35 @@
     }
     if (pc && pc.k === K.MASQUE && !pc.ez[0] && !pc.ez[1] && 1.02 * Rl <= pc.Sm) return 0;
     return Rl > 1.001 * Math.abs(C[3]) ? 1.02 * Rl : 0;
+  }
+
+  // L'anneau ne sert à rien à l'œil et au capteur quand aucun rayon passé HORS d'une monture (carré de demi-côté Sm, dans
+  // son plan, cf. `monture`) ne peut atteindre le détecteur. Un tel rayon va en ligne droite depuis l'émetteur (disque S0,
+  // as) tant qu'il n'entre dans aucune ouverture ; pour entrer dans celle de la pièce k (`rayonUtile` ; détecteur : son
+  // rectangle Sm × p[9]), il est passé à côté de la pièce m juste avant (dans sa plaque, il serait arrêté ; dans son
+  // ouverture, c'est la paire précédente) : |x − xm| > Sm (ou en y) au plan de m, donc au plan de k
+  // (t = (zk − ze) / (zm − ze) ≥ 1) |x − xk| ≥ t·Sm − (t − 1)·as − |t·xm + (1 − t)·xe − xk| (décalage latéral des axes
+  // compté : œil déplacé de côté). Si cela dépasse l'ouverture de k, sur les deux axes, pour toute paire consécutive de
+  // j0 au détecteur : Rl = 0. Airy sauté : il ne dévie pas un rayon passé à côté de son diaphragme (`r.hors`). Les rayons
+  // de l'anneau qui traversent un verre hors de la cible (pupille d'entrée marginée) sont supposés perdus, comme sans
+  // anneau (vérifié rayon par rayon). L'écran garde l'anneau (éclairé autour d'un
+  // porte-lentille) ; au moindre doute (miroir, retour, pièce inclinée) : l'anneau aussi.
+  function anneauPerdu(P, iDet, j0, S0, as) {
+    var d = iDet >= 0 ? P[iDet] : null, m = -1, k;
+    if (!d || d.k !== K.DET || (d.type !== "oeil" && d.type !== "capteur") || j0 > iDet) return false;
+    for (k = j0; k <= iDet; k++) {
+      var pk = P[k];
+      if (pk.sens < 0 || pk.k === K.MIROIR || pk.ez[0] || pk.ez[1]) return false;
+      if (pk.k === K.AIRY) continue;
+      if (m >= 0) {
+        var pm = P[m], Pm = centrePlan(pm), Pk = centrePlan(pk), Lm = Pm[2] - S0[2], t = (Pk[2] - S0[2]) / Lm, h = t * pm.Sm - (t - 1) * as;
+        if (!(Lm > 1e-6) || !(t >= 1)) return false;
+        var hx = h - Math.abs(t * Pm[0] + (1 - t) * S0[0] - Pk[0]), hy = h - Math.abs(t * Pm[1] + (1 - t) * S0[1] - Pk[1]);
+        if (pk.k === K.DET ? !(hx > pk.Sm && hy > pk.p[9]) : !(Math.min(hx, hy) > rayonUtile(pk))) return false;
+      }
+      m = k;
+    }
+    return true;
   }
 
   function sequence(banc) {
@@ -791,13 +835,13 @@
       var cf = champVu(j);
       if (cf && cf[3] / Math.max(Math.abs(cf[2] - pr.zp), 1e-9) < Math.abs(c[3]) / Math.max(Math.abs(c[2] - pr.zp), 1e-9)) c = cf;
       pr.p[0] = c[0]; pr.p[1] = c[1]; pr.p[2] = c[2]; pr.p[3] = c[3];
-      pr.p[5] = nx ? elargir(prims, seq.iDet, j + 1, centrePlan(pr), pr.R, c, c[3] === rayonUtile(nx) ? nx : null) : 0;     // cible élargie
+      pr.p[5] = nx ? elargir(prims, seq.iDet, j + 1, centrePlan(pr), pr.R, c, c[3] === rayonUtile(nx) ? nx : null, banc.anneauBrut) : 0;     // cible élargie
     });
     // cible élargie de la source : pas dans un boîtier (lanterne : seule sort la lumière de sa face avant) ;
     // émetteur = disque circonscrit à la source
     var Rs = em.forme === "rect" ? 0.5 * Math.sqrt(Math.pow(em.a + (em.fil ? Math.abs(em.fil.pente) * em.b : 0), 2) + em.b * em.b) : em.a;
     if (seq.cible) seq.cible.push(Ts.boitier || em.forme === "gauss" ? 0 : elargir(prims, seq.iDet, 0, [frs.O[0] + em.dz * frs.ez[0],
-      frs.O[1] + em.dz * frs.ez[1], frs.O[2] + em.dz * frs.ez[2]], Rs, seq.cible, p0));
+      frs.O[1] + em.dz * frs.ez[1], frs.O[2] + em.dz * frs.ez[2]], Rs, seq.cible, p0, banc.anneauBrut));
     // Tirage depuis l'objet éclairé : petit objet (trou, fente source : rayon utile ≤ 6 mm) que seules des
     // lentilles séparent de la source (lampe à incandescence ou spectrale) : point tiré dans l'objet, direction visée
     // dans l'ouverture suivante, rayon remonté À REBOURS à travers ces lentilles (`arriere`, verres échangés) jusqu'au
@@ -1576,6 +1620,8 @@
   // ouvertures : false = une ouverture ordinaire (iris, trou ou fente source, monture) n'ouvre jamais le calcul
   // ondulatoire, même si elle diffracte (optique parfaite de l'instrument) ; elle peut encore couper la
   // lumière diffractée par un plan précédent.
+  // Strates de la source par axe au plus quand la lecture filtrée vaut la maille entière (chemin à un plan)
+  var NS_FORME = 8;
   var ONDE_OPTIONS = { maxN: 4096, maxCellules: 1 << 20, nl: 16, champ: 16, fin: 8, maxPoints: 400, graine: 7, ouvertures: true };
   // Plan du calcul ondulatoire : source (lampe, ou dernier objet éclairé avant le premier plan diffractant), plans
   // diffractants, grille du premier plan. {ok: false, raison} quand le moteur géométrique doit servir.
@@ -1592,7 +1638,7 @@
     var lm = lref * 1e-6;
     var src = { i: -1, forme: em.forme, O: [Oe[0], Oe[1]], ang: angRepere(S.fr), g: em.forme === "rect" ? [0, 0, em.a / 2, em.b / 2] : [0, 0, em.a, em.a] };
     function wLaser(q) { return Math.sqrt(lm / (Math.PI * invQ(chaine(seq, lref, -1, q), Math.PI * em.a * em.a / lm)[1])); }
-    var planes = [], ouv = [], coupes = [], reseau = null, i1 = -1, z1 = 0, th = 0, thD = 0, rw = GRAND, ang0 = 0, N = [0, 0], d = [0, 0], limite = false, pl;
+    var planes = [], ouv = [], coupes = [], coupesObs = [], reseau = null, i1 = -1, z1 = 0, ext = 0, th = 0, thD = 0, rw = GRAND, ang0 = 0, N = [0, 0], d = [0, 0], limite = false, pl;
     for (i = 0; i < nd; i++) {
       var pr = P[i], k = pr.k;
       if (k === K.AIRY || (k === K.MASQUE && pr.p[0] === F.RETICULE)) continue;
@@ -1637,31 +1683,46 @@
           if (N[axr] * d[axr] < 3 * zone[axr]) { d[axr] = 3 * zone[axr] / N[axr]; limite = true; }
         }
         z1 = Math.max(zone[0], zone[1]);
+        // étendue du premier plan qui interfère au détecteur, par axe : la zone éclairée, bornée par la largeur de
+        // cohérence que laisse la source (λ |Bs| / taille de la source ; laser : toute la zone)
+        var bsv = laser ? null : boiteVue(src.g.concat([GRAND, GRAND]), src.ang - ang0);
+        ext = laser ? 2 * z1 : Math.max(Math.min(2 * zone[0], lm * Math.abs(Bs) / (2 * bsv[0])), Math.min(2 * zone[1], lm * Math.abs(Bs) / (2 * bsv[1])));
         thD = 2 * lm / Math.min(g[4], g[5], z1 / 4); th += thD;
         planes.push(pl);
       } else {
         var Mt = mul(chaine(seq, lref, i1, i), abcdPrim(P[i1], lref));
         // ouverture ordinaire qui ne coupe que l'étalement dû à la taille de la source (thD : diffraction seule) :
-        // coupure géométrique (`coupeOnde`), pas un plan (qui ferait passer en somme brute)
-        if (structure || a < Math.abs(Mt[0]) * z1 + Math.abs(Mt[1]) * thD) planes.push(planOnde(pr, i));
+        // coupure géométrique (`coupeOnde`), pas un plan (qui ferait passer en somme brute) ; de même quand elle coupe
+        // la lumière diffractée mais que sa propre diffraction reste sous la frange la plus fine au détecteur
+        // (`coupeNette`) ; montures d'un instrument (viseur, lunette) et pupille de l'œil : TOUJOURS, jamais des plans,
+        // à partir du dernier plan qui les précède (`coupesObs` : leur diffraction ne compte que pour des franges qu'elles
+        // ne séparent pas, la diffusion dans l'œil est le halo ; en plans, elles mettaient en somme brute pour presque rien)
+        if (T.instrument || pr.type === "oeil") { if (a < GRAND / 2) coupesObs.push(i); }
+        else if (structure || (a < Math.abs(Mt[0]) * z1 + Math.abs(Mt[1]) * thD && !coupeNette(seq, lref, i1, i, nd, a, ext))) planes.push(planOnde(pr, i));
         else if (a < Math.abs(Mt[0]) * z1 + Math.abs(Mt[1]) * th) coupes.push(i);
       }
     }
     // Coupures géométriques : seulement derrière un plan unique et un détecteur qui n'en est pas l'image (B ≠ 0) ;
     // sinon elles redeviennent des plans, comme avant.
     var cps = [];
+    // coupure de l'ouverture ic à partir du dernier plan qui la précède (centre c de ce plan) ; détecteur image de ce
+    // plan (B2 = 0) : la droite c → X n'existe pas, pas de coupure
+    function couper(ic) {
+      var k = planes.length - 1;
+      while (k > 0 && planes[k].i > ic) k--;
+      var pa = planes[k], Md = mul(chaine(seq, lref, pa.i, nd), abcdPrim(P[pa.i], lref)), Ma = mul(chaine(seq, lref, pa.i, ic), abcdPrim(P[pa.i], lref));
+      if (Math.abs(Md[1]) > 1e-9) cps.push({ i: ic, A1: Ma[0], B1: Ma[1], A2: Md[0], B2: Md[1], c: [pa.O[0], pa.O[1]] });
+    }
     if (coupes.length) {
       var Md = planes.length ? mul(chaine(seq, lref, i1, nd), abcdPrim(P[i1], lref)) : null;
-      if (planes.length === 1 && Math.abs(Md[1]) > 1e-9) coupes.forEach(function (ic) {
-        var Ma = mul(chaine(seq, lref, i1, ic), abcdPrim(P[i1], lref));
-        cps.push({ i: ic, A1: Ma[0], B1: Ma[1], A2: Md[0], B2: Md[1] });
-      });
+      if (planes.length === 1 && Math.abs(Md[1]) > 1e-9) coupes.forEach(couper);
       else { coupes.forEach(function (ic) { planes.push(planOnde(P[ic], ic)); }); planes.sort(function (x, y) { return x.i - y.i; }); }
     }
+    if (planes.length) coupesObs.forEach(couper);
     if (reseau !== null && planes.length && planes[planes.length - 1].i > reseau) return non("reseau");
     if (!planes.length && !laser) return non("geometrique");
     var plan = { ok: true, seq: seq, laser: laser, src: src, planes: planes, reseau: reseau, lref: lref, opt: opt, ang: planes.length ? ang0 : 0,
-      N: N, d: d, rw: rw, limite: planes.length ? limite : false, pasSource: 1, cache: {}, coupes: cps };
+      N: N, d: d, rw: rw, limite: planes.length ? limite : false, pasSource: 1, cache: {}, coupes: cps, ouv: laser ? [] : ouv };
     if (planes.length > 1 && !laser) {
       var Ba = Math.abs(chaine(seq, lref, src.i, i1)[1]), bb = boiteVue(src.g.concat([GRAND, GRAND]), src.ang - ang0);
       var np = (2 * bb[0] * N[0] * d[0] / (lm * Ba) + 1) * (2 * bb[1] * N[1] * d[1] / (lm * Ba) + 1);
@@ -1669,6 +1730,31 @@
     }
     plan.lambdas = lambdasOnde(seq, opt.nl);
     return plan;
+  }
+  // Ouverture ordinaire (demi-ouverture a) derrière le premier plan i1, qui coupe la lumière qu'il diffracte : sa propre
+  // diffraction étale le champ au détecteur de λ |B'| / a (B' : de l'ouverture au détecteur), la frange la plus fine du
+  // premier plan y vaut λ |B2| / e (B2 : du premier plan au détecteur, e : étendue qui interfère, zone éclairée bornée
+  // par la cohérence de la source, `ext` d'`ondePlan`). Moins d'un quart de
+  // frange : l'ouverture ne fait que borner le champ (coupure géométrique, `coupeOnde`). Détecteur image du premier
+  // plan (B2 = 0, filtrage 4f) : jamais, l'ouverture filtre alors les fréquences de la figure.
+  var COUPE_NETTE = 0.25;
+  function coupeNette(seq, l, i1, i, nd, a, e) {
+    var B2 = mul(chaine(seq, l, i1, nd), abcdPrim(seq.prims[i1], l))[1], Bo = mul(chaine(seq, l, i, nd), abcdPrim(seq.prims[i], l))[1];
+    return a < GRAND / 2 && e * Math.abs(Bo) <= COUPE_NETTE * a * Math.abs(B2);
+  }
+  // Coût prédit de l'image fine ondulatoire, d'après le plan seul (le même sur toute machine) : nombre de propagations
+  // (somme brute : une par couple point source × λ, `pointsOnde` ; sinon une par λ), chacune sur tous les plans
+  // diffractants d'une grille de N cellules ; travail = propagations × plans × cellules. lourd : travail ≥ COUT_LOURD
+  // (l'image fine se compte alors en secondes sur une carte intégrée). La lenteur MESURÉE (stats.apercuMs) est une
+  // autre affaire : elle dépend de la machine et ne dit pas que le montage est lourd.
+  var COUT_LOURD = 2e8;
+  function coutOnde(plan) {
+    if (!plan || !plan.ok) return null;
+    var brute = !plan.laser && plan.planes.length > 1, n = 0, cel = plan.N[0] * plan.N[1];
+    if (brute) plan.lambdas.forEach(function (wl) { n += pointsOnde(plan, wl[0]).length; });
+    else n = plan.lambdas.length;
+    var travail = n * Math.max(1, plan.planes.length) * Math.max(1, cel);
+    return { brute: brute, propagations: n, plans: plan.planes.map(function (p) { return p.i; }), lambdas: plan.lambdas.length, cellules: cel, travail: travail, lourd: travail >= COUT_LOURD };
   }
   // Choix du moteur : « onde » si un élément diffractant éclairé est sur le trajet (ou le laser), sinon « rayons ».
   function ondeMoteur(seq, o) { var pl = ondePlan(seq, o); return { moteur: pl.ok ? "onde" : "rayons", raison: pl.raison || null, plan: pl.ok ? pl : null }; }
@@ -1692,6 +1778,10 @@
     return t;
   }
   // Longueurs d'onde [λ, poids XYZ] : continu = nl strates (milieux), raies = chacune avec son poids ; filtres compris.
+  // Une λ que les filtres éteignent (X + Y + Z sous LAMBDA_NEGLIGEABLE du plus fort) est retirée : en somme brute, un
+  // aperçu de quelques couples tomberait sur elle (raies du mercure derrière le filtre vert, à 1e-245) et l'image entière
+  // varierait de douze ordres de grandeur d'une passe à l'autre.
+  var LAMBDA_NEGLIGEABLE = 1e-6;
   function lambdasOnde(seq, nl) {
     var sp = seq.source.sp, out = [], ls = [], i;
     if (sp.type === 0) for (i = 0; i < nl; i++) ls.push([sp.a + (sp.b - sp.a) * (i + 0.5) / nl, 1 / nl]);
@@ -1700,7 +1790,9 @@
       var t = x[1] * facteurOnde(seq, x[0]), f = facteurXYZ(sp, x[0]);
       if (t > 0) out.push([x[0], [f[0] * t, f[1] * t, f[2] * t]]);
     });
-    return out;
+    var mx = 0;
+    out.forEach(function (x) { mx = Math.max(mx, x[1][0] + x[1][1] + x[1][2]); });
+    return out.filter(function (x) { return x[1][0] + x[1][1] + x[1][2] >= LAMBDA_NEGLIGEABLE * mx; });
   }
   // Transmission complexe d'un plan sur la grille (pas d, repère de la grille tourné de plan.ang).
   function tPlan(plan, pl, d) {
@@ -1932,7 +2024,31 @@
     }
     return { r: r, d: d, off: off, Nx: n[0], Ny: n[1] };
   }
-  function natif(ch, h, cible) {
+  // Filtre de lecture (lot.bw) : la grille réduite, constante par maille, moyennée sur une fenêtre de largeur bw[a]
+  // centrée sur chaque nœud (part exacte de chaque maille couverte), grille élargie de m[a] mailles de chaque côté.
+  // Lue ensuite en bilinéaire comme avant : plus de détail plus fin qu'un pixel qui tombe entre deux lectures, et
+  // l'intégrale est conservée (chaque maille est couverte en tout par bw / pas fenêtres). Commun à la carte.
+  function filtreGeom(gm, bw) {
+    var m = [0, 0], u = [0, 0];
+    for (var a = 0; a < 2; a++) if (bw && bw[a] > 0) { u[a] = bw[a] / gm.d[a]; m[a] = Math.ceil(u[a] / 2 + 0.5); }
+    return { u: u, m: m, Nx: gm.Nx + 2 * m[0], Ny: gm.Ny + 2 * m[1] };
+  }
+  // part de la maille k (indices) dans la fenêtre du nœud kp, largeur u mailles ; écrit en k − kp (entier exact), sans
+  // soustraire deux nombres voisins de kp (la carte, en float32, y perdait 3e-4 quand u ≪ 1)
+  function poidsFiltre(kp, k, u) {
+    var dk = k - kp, a = Math.min(u / 2, dk + 0.5) - Math.max(-u / 2, dk - 0.5);
+    return a > 0 ? a / u : 0;
+  }
+  function filtrer(I, Nx, Ny, axe, u, m) {   // axe 0 : x ; sortie élargie de m mailles de chaque côté le long de axe
+    var Mx = axe === 0 ? Nx + 2 * m : Nx, My = axe === 0 ? Ny : Ny + 2 * m, n = axe === 0 ? Nx : Ny, J = new Float64Array(Mx * My);
+    for (var j = 0; j < My; j++) for (var i = 0; i < Mx; i++) {
+      var kp = (axe === 0 ? i : j) - m, k0 = Math.max(0, Math.floor(kp - u / 2 - 0.5)), k1 = Math.min(n - 1, Math.ceil(kp + u / 2 + 0.5)), s = 0;
+      for (var k = k0; k <= k1; k++) { var w = poidsFiltre(kp, k, u); if (w > 0) s += w * (axe === 0 ? I[j * Nx + k] : I[k * Nx + i]); }
+      J[j * Mx + i] = s;
+    }
+    return J;
+  }
+  function natif(ch, h, cible, bw) {
     var I = ch.I, Nx = ch.Nx, Ny = ch.Ny, gm = natifGeom(Nx, Ny, ch.d, h, cible), d = gm.d, off = gm.off, i, j, k, r, J, s;
     r = gm.r[0];
     if (r > 1) {
@@ -1946,6 +2062,9 @@
       for (j = 0; j < Ny / r; j++) for (i = 0; i < Nx; i++) { s = 0; for (k = 0; k < r; k++) s += I[(j * r + k) * Nx + i]; J[j * Nx + i] = s / r; }
       Ny /= r; I = J;
     }
+    var fg = filtreGeom(gm, bw);
+    if (fg.m[0]) { I = filtrer(I, Nx, Ny, 0, fg.u[0], fg.m[0]); Nx += 2 * fg.m[0]; }
+    if (fg.m[1]) { I = filtrer(I, Nx, Ny, 1, fg.u[1], fg.m[1]); Ny += 2 * fg.m[1]; }
     var mx = new Float64Array(Ny), my = new Float64Array(Nx), tot = 0;
     for (j = 0; j < Ny; j++) for (i = 0; i < Nx; i++) { var v = I[j * Nx + i]; mx[j] += v * d[0]; my[i] += v * d[1]; tot += v; }
     return { I: I, Nx: Nx, Ny: Ny, d: d, off: off, L: [Nx * d[0], Ny * d[1]], mx: mx, my: my, tot: tot * d[0] * d[1] };
@@ -1974,6 +2093,52 @@
     if (em.forme === "rect") return Math.abs(xe) < 0.5 * em.a && Math.abs(ye) < 0.5 * em.b ? 1 : 0;
     return xe * xe + ye * ye < em.a * em.a ? 1 : 0;
   }
+  // Boîte [x0, x1, y0, y1], dans le repère propre de la source, qui contient la zone qu'`eclaire` déclare éclairée
+  // (image de l'émetteur de la lampe, rectangle ou disque) ; null : tout est éclairé.
+  function boiteEclairee(plan, l) {
+    var seq = plan.seq, src = plan.src, em = seq.source.em;
+    if (src.i < 0) return null;
+    var Me = chaine(seq, l, -1, src.i), Ms = chaine(seq, l, src.i, plan.planes[0].i), Oe = seq.source.fr.O, g = Me[3] + Me[1] * Ms[0] / Ms[1];
+    if (Math.abs(g) < 1e-12) return null;
+    var hx = em.forme === "rect" ? 0.5 * em.a : em.a, hy = em.forme === "rect" ? 0.5 * em.b : em.a;
+    var cx = Oe[0] / g, cy = Oe[1] / g, rx = hx / Math.abs(g), ry = hy / Math.abs(g), ca = Math.cos(src.ang), sa = Math.sin(src.ang), b = [GRAND, -GRAND, GRAND, -GRAND];
+    for (var k = 0; k < 4; k++) {
+      var xl = cx + (k & 1 ? rx : -rx) - src.O[0], yl = cy + (k & 2 ? ry : -ry) - src.O[1], xs = ca * xl + sa * yl, ys = -sa * xl + ca * yl;
+      b[0] = Math.min(b[0], xs); b[1] = Math.max(b[1], xs); b[2] = Math.min(b[2], ys); b[3] = Math.max(b[3], ys);
+    }
+    return b;
+  }
+  // Pupille de la source : les ouvertures ordinaires avant le premier plan (`plan.ouv`, disques de demi-ouverture a)
+  // ne laissent passer, d'un point P de la source vers le centre c du premier plan, que le rayon qui y passe ; en
+  // paraxial, P doit être dans un disque du plan source, un par ouverture : x_j = (Aj − Bj A / B) P + (Bj / B) c.
+  // Sans elle, un condenseur qui fait l'image de la source près du premier plan (B → 0, éclairement en 1/B²) y verse
+  // une énergie sans borne : en lumière blanche, le bleu (condenseur chromatique) l'emportait d'un facteur 20.
+  // Disques [qx, qy, r] dans le repère propre de la source (r = GRAND : sans effet ; r = 0 : rien ne passe).
+  function vignetteOnde(plan, l) {
+    var key = "V" + l;
+    if (plan.cache[key]) return plan.cache[key];
+    var seq = plan.seq, src = plan.src, pl = plan.planes[0], P = seq.prims, out = [];
+    var M = chaine(seq, l, src.i, pl.i), c = pl.O, ca = Math.cos(src.ang), sa = Math.sin(src.ang);
+    (plan.ouv || []).forEach(function (oj) {
+      var j = oj[0], a = oj[1], Mj = chaine(seq, l, src.i, j), Oj = P[j].O;
+      if (Math.abs(M[1]) < 1e-9) return;
+      var sj = Mj[0] - Mj[1] * M[0] / M[1], tx = Mj[1] * c[0] / M[1] - Oj[0], ty = Mj[1] * c[1] / M[1] - Oj[1];
+      if (Math.abs(sj) < 1e-12) { out.push([0, 0, tx * tx + ty * ty < a * a ? GRAND : 0]); return; }
+      var qx = -tx / sj - src.O[0], qy = -ty / sj - src.O[1];
+      out.push([ca * qx + sa * qy, -sa * qx + ca * qy, a / Math.abs(sj)]);
+    });
+    return (plan.cache[key] = out);
+  }
+  // Part de la maille (xs ± dx/2, ys ± dy/2) du repère propre de la source que laisse passer la pupille.
+  function pupilleOnde(vg, xs, ys, dx, dy) {
+    var w = 1;
+    for (var k = 0; k < vg.length && w > 0; k++) {
+      var v = vg[k];
+      if (v[2] >= GRAND / 2) continue;
+      w *= v[2] > 0 ? aireDisque(v[2], xs - v[0], ys - v[1], dx, dy) : 0;
+    }
+    return w;
+  }
   // Réseau : copies décalées, une par ordre (sin θ = mλ/a, décalage B tan θ le long de l'axe du réseau).
   function ordresOnde(plan, l) {
     if (plan.reseau === null) return [[0, 0, 1]];
@@ -1992,7 +2157,7 @@
     var sx = s * l * 1e-6 * Math.abs(Bs) / (Nx * d[0]), sy = s * l * 1e-6 * Math.abs(Bs) / (Ny * d[1]), sg = Bs > 0 ? 1 : -1;
     var c0 = Math.cos(plan.ang), s0 = Math.sin(plan.ang), ca = Math.cos(src.ang), sa = Math.sin(src.ang), b = boiteVue(src.g.concat([GRAND, GRAND]), src.ang - plan.ang);
     var cx = c0 * src.O[0] + s0 * src.O[1] + b[4], cy = -s0 * src.O[0] + c0 * src.O[1] + b[5];
-    var cp = Math.abs(Math.cos(src.ang - plan.ang)), sp = Math.abs(Math.sin(src.ang - plan.ang)), ex = sx * cp + sy * sp, ey = sx * sp + sy * cp, g = src.g, out = [];
+    var cp = Math.abs(Math.cos(src.ang - plan.ang)), sp = Math.abs(Math.sin(src.ang - plan.ang)), ex = sx * cp + sy * sp, ey = sx * sp + sy * cp, g = src.g, out = [], vg = vignetteOnde(plan, l);
     for (var ky = Math.ceil((cy - b[1]) / sy - 1); ky <= Math.floor((cy + b[1]) / sy + 1); ky++)
       for (var kx = Math.ceil((cx - b[0]) / sx - 1); kx <= Math.floor((cx + b[0]) / sx + 1); kx++) {
         var xl = c0 * kx * sx - s0 * ky * sy, yl = s0 * kx * sx + c0 * ky * sy;
@@ -2000,29 +2165,32 @@
         if (src.forme === "masque") w = couverture(src.f, src.a, xs, ys, ex, ey, true);
         else if (src.forme === "rect") w = c1(0, 2 * g[2], xs, ex) * c1(0, 2 * g[3], ys, ey);
         else w = disqueC(g[2], xs, ys, ex, ey);
-        w = w * eclaire(plan, l, xl, yl) * sx * sy;
+        w = w * eclaire(plan, l, xl, yl) * pupilleOnde(vg, xs, ys, ex, ey) * sx * sy;
         if (w > 0) out.push([-kx * s * sg, -ky * s * sg, w]);
       }
     return out;
   }
-  // Coupure géométrique d'une ouverture ordinaire derrière le plan unique (`plan.coupes`) : toute la lumière passe par
-  // la petite zone éclairée du premier plan, centre c ; le point X du détecteur reçoit la lumière si la droite c → X
+  // Coupure géométrique d'une ouverture derrière un plan (`plan.coupes`) : toute la lumière passe par la petite zone
+  // éclairée du dernier plan qui la précède, centre c (`cp.c`) ; le point X du détecteur reçoit la lumière si la droite c → X
   // (paraxial : y = A1 c + B1 (X − A2 c) / B2 au plan de l'ouverture) y passe dans l'ouverture utile ou à côté de la
-  // monture (même règle que les rayons : `monture`, `forme` d'un masque). Pénombre (largeur de la zone éclairée) et
+  // monture (même règle que les rayons : `monture`, `forme` d'un masque ; instrument et œil : rien à côté). Pénombre (largeur de la zone éclairée) et
   // diffraction par le bord ignorées. Facteur par pixel, ligne 0 en bas, mis en cache ; null sans coupure.
   function coupeOnde(plan, rendu) {
     var cps = plan.coupes;
     if (!cps || !cps.length) return null;
     var res = rendu.res, W = rendu.W, h = 2 * W / res, cx0 = rendu.cx || 0, cy0 = rendu.cy || 0, key = "C|" + res + "|" + W + "|" + cx0 + "|" + cy0;
     if (plan.cache[key]) return plan.cache[key];
-    var seq = plan.seq, det = seq.prims[seq.iDet], c = plan.planes[0].O, out = new Float64Array(res * res), i, j, k;
+    var seq = plan.seq, det = seq.prims[seq.iDet], out = new Float64Array(res * res), i, j, k;
     for (j = 0; j < res; j++) for (i = 0; i < res; i++) {
       var X = cx0 - W + (i + 0.5) * h, Y = cy0 - W + (j + 0.5) * h, t = 1;
       var xl = det.O[0] + X * det.ex[0] + Y * det.ey[0], yl = det.O[1] + X * det.ex[1] + Y * det.ey[1];
       for (k = 0; k < cps.length && t > 0; k++) {
-        var cp = cps[k], pr = seq.prims[cp.i];
+        var cp = cps[k], pr = seq.prims[cp.i], c = cp.c;
         var dx = cp.A1 * c[0] + cp.B1 * (xl - cp.A2 * c[0]) / cp.B2 - pr.O[0], dy = cp.A1 * c[1] + cp.B1 * (yl - cp.A2 * c[1]) / cp.B2 - pr.O[1];
-        var xa = dx * pr.ex[0] + dy * pr.ex[1], ya = dx * pr.ey[0] + dy * pr.ey[1], m = monture(pr, xa, ya);
+        var xa = dx * pr.ex[0] + dy * pr.ex[1], ya = dx * pr.ey[0] + dy * pr.ey[1], m = monture(pr, xa, ya), T = TYPES[pr.type] || {};
+        // à côté de la plaque : passe, sauf dans un instrument ou l'œil (un tube : le rayon paraxial n'y entre pas, et
+        // la lumière « passée à côté » de l'objectif dessinait des copies du champ autour de lui)
+        if (m === 2 && (T.instrument || pr.type === "oeil")) m = 1;
         t *= m === 1 ? 0 : m === 2 ? 1 : pr.k === K.MASQUE ? forme(pr.p[0], pr.p.slice(1), xa, ya) : 1;
       }
       out[j * res + i] = t;
@@ -2047,10 +2215,10 @@
         key = "I" + lot.l;
         if (!plan.cache[key]) plan.cache[key] = ondeChamp(plan, lot.l);
         var ch = plan.cache[key];
-        key = "N" + lot.l + "|" + h + "|" + lot.cible[0] + "|" + lot.cible[1];
-        if (!plan.cache[key]) plan.cache[key] = natif(ch, h, lot.cible);
+        key = "N" + lot.l + "|" + h + "|" + lot.cible[0] + "|" + lot.cible[1] + "|" + lot.bw[0] + "|" + lot.bw[1];
+        if (!plan.cache[key]) plan.cache[key] = natif(ch, h, lot.cible, lot.bw);
         nat = plan.cache[key];
-      } else nat = natif(ondeChamp(plan, lot.l, lot.mx, lot.my), h);
+      } else nat = natif(ondeChamp(plan, lot.l, lot.mx, lot.my), h, null, lot.bw);
       lot.strates.forEach(function (st) {
         for (q = 0; q < res * res; q++) {
           var s = 0;
@@ -2070,11 +2238,14 @@
     var seq = plan.seq, res = rendu.res, W = rendu.W, P = seq.prims, nd = seq.iDet, det = P[nd], em = seq.source.em, h = 2 * W / res;
     var c0 = Math.cos(plan.ang), s0 = Math.sin(plan.ang), pls = plan.planes, src = plan.src, lams = plan.lambdas;
     var passe = rendu.passe || 0, graine = rendu.graine == null ? 1 : rendu.graine, lots = [], npaires = 0;
+    // filament spiralé : le moteur ondulatoire garde le rectangle, à la luminance moyenne (flux L · a · b · plein du
+    // moteur géométrique, aireSource)
+    var Lm = em.L * (em.forme === "rect" && em.fil ? em.fil.plein : 1);
     function gr(xl, yl) { return [c0 * xl + s0 * yl, -s0 * xl + c0 * yl]; }
     var X0 = (rendu.cx || 0) - W, Y0 = (rendu.cy || 0) - W;
     var G = { o: gr(det.O[0] + X0 * det.ex[0] + Y0 * det.ey[0], det.O[1] + X0 * det.ex[1] + Y0 * det.ey[1]), u: gr(h * det.ex[0], h * det.ex[1]), v: gr(h * det.ey[0], h * det.ey[1]) };
     function lot(wl, o) {
-      var r = { l: wl[0], f: wl[1], mx: 0, my: 0, cache: false, gauss: null, cible: [0, 0], boite: null, ordres: ordresOnde(plan, wl[0]), strates: [] };
+      var r = { l: wl[0], f: wl[1], mx: 0, my: 0, cache: false, gauss: null, cible: [0, 0], boite: null, bw: null, ordres: ordresOnde(plan, wl[0]), strates: [] };
       for (var k in o) r[k] = o[k];
       lots.push(r); return r;
     }
@@ -2088,37 +2259,81 @@
       var al = Math.abs(Math.sin(ph)) < 1e-9 ? 0 : Math.abs(Math.cos(ph)) < 1e-9 ? 1 : -1;      // axes de la source ↔ grille
       var sep = src.forme === "rect" || (src.forme === "masque" && (src.f === F.RECT || (src.f === F.FENTES && src.a[0] <= 1)));
       lams.forEach(function (wl) {
-        var l = wl[0], kp = -mul(chaine(seq, l, i1, nd), abcdPrim(P[i1], l))[1] / chaine(seq, l, src.i, i1)[1];
-        var dn = ondePas(plan, l), Lg = [plan.N[0] * dn[0], plan.N[1] * dn[1]];
-        var T = [2 * g[2] * Math.abs(kp), 2 * g[3] * Math.abs(kp)];
-        var nn = [Math.min(ns, Math.max(1, Math.ceil(T[0] / h))), Math.min(ns, Math.max(1, Math.ceil(T[1] / h)))], boite = [0, 0], cible = [0, 0], pr;
-        for (pr = 0; pr < 2; pr++) {       // source bien plus étendue que la figure le long d'un axe
-          var ga = al === 0 ? pr : 1 - pr;
-          if (al >= 0 && sep && T[pr] >= 2 * Lg[ga]) nn[pr] = 1;
-          if (al >= 0) { cible[ga] = T[pr] / nn[pr]; if (cible[ga] >= 2 * Lg[ga]) boite[ga] = cible[ga]; }
+        var l = wl[0], kp = -mul(chaine(seq, l, i1, nd), abcdPrim(P[i1], l))[1] / chaine(seq, l, src.i, i1)[1], vg = vignetteOnde(plan, l), k;
+        // source utile : son rectangle coupé par les disques de la pupille (vignetteOnde) ; rien ne passe : pas de lot
+        var x0 = g[0] - g[2], x1 = g[0] + g[2], y0 = g[1] - g[3], y1 = g[1] + g[3];
+        for (k = 0; k < vg.length; k++) if (vg[k][2] < GRAND / 2) {
+          x0 = Math.max(x0, vg[k][0] - vg[k][2]); x1 = Math.min(x1, vg[k][0] + vg[k][2]); y0 = Math.max(y0, vg[k][1] - vg[k][2]); y1 = Math.min(y1, vg[k][1] + vg[k][2]);
         }
-        var bo = al === 0 ? boite : [boite[1], boite[0]], L = lot(wl, { cache: true, cible: cible, boite: boite });      // bo : par axe propre de la source
+        // et par la zone que la lampe éclaire (boiteEclairee) : sinon les strates, centrées dans leurs mailles, peuvent
+        // toutes tomber hors de l'image du filament (fente source de 10 mm, filament imagé sur 2 mm : aperçu noir à 4
+        // strates par axe, lumière à 8)
+        var eb = boiteEclairee(plan, l);
+        if (eb) { x0 = Math.max(x0, eb[0]); x1 = Math.min(x1, eb[1]); y0 = Math.max(y0, eb[2]); y1 = Math.min(y1, eb[3]); }
+        if (x1 <= x0 || y1 <= y0) return;
+        var dn = ondePas(plan, l), Lg = [plan.N[0] * dn[0], plan.N[1] * dn[1]];
+        var T = [(x1 - x0) * Math.abs(kp), (y1 - y0) * Math.abs(kp)];
+        // source uniforme dans la pupille (rectangle aligné sur la grille, éclairé et passé partout) : la somme des
+        // strates est la figure filtrée par l'image de la source, une seule strate suffit
+        var uni = al >= 0 && (src.forme === "rect" || (src.forme === "masque" && src.f === F.RECT)), cn;
+        for (cn = 0; cn < 4 && uni; cn++) {
+          var xc = cn & 1 ? x1 : x0, yc = cn & 2 ? y1 : y0;
+          for (k = 0; k < vg.length && uni; k++) if (vg[k][2] < GRAND / 2 && (xc - vg[k][0]) * (xc - vg[k][0]) + (yc - vg[k][1]) * (yc - vg[k][1]) > vg[k][2] * vg[k][2]) uni = false;
+          if (uni && !eclaire(plan, l, src.O[0] + ca * xc - sa * yc, src.O[1] + sa * xc + ca * yc)) uni = false;
+        }
+        // (une seule le long d'un axe où la grille est plus fine que le pixel : ailleurs, la lecture bilinéaire d'une
+        // seule copie colle les zéros aux nœuds, décalés jusqu'à un demi-pas ; plusieurs copies décalées les lissent)
+        var nn = [Math.min(ns, Math.max(1, Math.ceil(T[0] / h))), Math.min(ns, Math.max(1, Math.ceil(T[1] / h)))], boite = [0, 0], cible = [0, 0], bw = [h, h], pr;
+        if (uni) for (pr = 0; pr < 2; pr++) if (dn[al === 0 ? pr : 1 - pr] <= h) nn[pr] = 1;
+        // ailleurs, chaque strate vaut sa maille entière (lecture filtrée) : il n'en faut que pour dessiner la forme de
+        // la source (bord d'un disque, de la pupille), pas une par pixel de son image
+        if (al >= 0) for (pr = 0; pr < 2; pr++) nn[pr] = Math.min(nn[pr], NS_FORME);
+        // lecture filtrée (natif) : chaque strate vaut l'image de sa maille de source (largeur cel), lue sur un pixel h
+        for (pr = 0; pr < 2; pr++) {
+          var ga = al === 0 ? pr : 1 - pr;
+          if (al >= 0 && sep && T[pr] >= 2 * Lg[ga]) nn[pr] = 1;      // source bien plus étendue que la figure le long d'un axe
+          if (al >= 0) {
+            var cel = T[pr] / nn[pr];
+            if (cel >= 2 * Lg[ga]) { boite[ga] = cible[ga] = cel; bw[ga] = 0; } else bw[ga] = Math.sqrt(cel * cel + h * h);
+          }
+        }
+        for (pr = 0; pr < 2; pr++) if (!boite[pr]) cible[pr] = bw[pr] / 4;
+        var bo = al === 0 ? boite : [boite[1], boite[0]], L = lot(wl, { cache: true, cible: cible, boite: boite, bw: bw });      // bo : par axe propre de la source
+        var dx = (x1 - x0) / nn[0], dy = (y1 - y0) / nn[1];
         for (var b = 0; b < nn[1]; b++) for (var a = 0; a < nn[0]; a++) {
           var u1 = 0.5, u2 = 0.5;
-          if (passe) { var al2 = new Alea(graineRayon(graine, passe, a + nn[0] * b)); u1 = al2.u(); u2 = al2.u(); if (bo[0]) u1 = 0.5; if (bo[1]) u2 = 0.5; }
-          var xs = g[0] - g[2] + (a + u1) * 2 * g[2] / nn[0], ys = g[1] - g[3] + (b + u2) * 2 * g[3] / nn[1], w;
+          if (passe && !uni) { var al2 = new Alea(graineRayon(graine, passe, a + nn[0] * b)); u1 = al2.u(); u2 = al2.u(); if (bo[0]) u1 = 0.5; if (bo[1]) u2 = 0.5; }
+          var xs = x0 + (a + u1) * dx, ys = y0 + (b + u2) * dy, w;
           if (src.forme === "rect") w = 1;
-          else if (src.forme === "disque" || src.f === F.DISQUE) w = aireDisque(g[2], xs, ys, 2 * g[2] / nn[0], 2 * g[3] / nn[1]);
+          else if (src.forme === "disque" || src.f === F.DISQUE) w = aireDisque(g[2], xs, ys, dx, dy);
           else w = forme(src.f, src.a, xs, ys);
+          if (!uni) w *= pupilleOnde(vg, xs, ys, dx, dy);
           var px = src.O[0] + ca * xs - sa * ys, py = src.O[1] + sa * xs + ca * ys;
-          w = w * eclaire(plan, l, px, py) * (2 * g[2] / nn[0]) * (2 * g[3] / nn[1]);
-          if (w > 0) L.strates.push([kp * (c0 * px + s0 * py), kp * (-s0 * px + c0 * py), w * em.L]);
+          w = w * eclaire(plan, l, px, py) * dx * dy;
+          if (w > 0) L.strates.push([kp * (c0 * px + s0 * py), kp * (-s0 * px + c0 * py), w * Lm]);
         }
       });
     } else {                               // somme brute : une propagation par point source et par λ
       var paires = [];
       lams.forEach(function (wl, il) { pointsOnde(plan, wl[0]).forEach(function (pt) { paires.push([il, pt]); }); });
-      var ordre = paires.map(function (x, q2) { return [hash32((graine ^ hash32(q2)) >>> 0), q2]; }).sort(function (x, y) { return x[0] - y[0] || x[1] - y[1]; });
+      // ordre stratifié par λ : battu à la graine dans chaque λ, puis entrelacé (clé (rang + u) / effectif, u tiré par
+      // λ) ; toute suite de np couples contient chaque λ en proportion de son effectif (sinon un aperçu, toujours la
+      // passe 0 pendant le geste, tombe sur quelques λ seulement et se teinte) ; les passes couvrent toujours chaque
+      // couple une fois
+      var parL = [], cle = [];
+      paires.forEach(function (x, q2) { (parL[x[0]] = parL[x[0]] || []).push([hash32((graine ^ hash32(q2)) >>> 0), q2]); });
+      parL.forEach(function (L, il) {
+        if (!L) return;
+        L.sort(function (x, y) { return x[0] - y[0] || x[1] - y[1]; });
+        var u = hash32((graine ^ hash32(il + 7919)) >>> 0) / 4294967296;
+        L.forEach(function (x, r) { cle[x[1]] = (r + u) / L.length; });
+      });
+      var ordre = paires.map(function (x, q2) { return [cle[q2], q2]; }).sort(function (x, y) { return x[0] - y[0] || x[1] - y[1]; });
       var n = Math.min(rendu.np || paires.length, paires.length);
       npaires = paires.length;
       for (var q3 = 0; q3 < n; q3++) {
         var pa = paires[ordre[(passe * (rendu.np || paires.length) + q3) % paires.length][1]];
-        lot(lams[pa[0]], { mx: pa[1][0], my: pa[1][1], strates: [[0, 0, pa[1][2] * em.L * paires.length / n]] });
+        lot(lams[pa[0]], { mx: pa[1][0], my: pa[1][1], bw: [h, h], strates: [[0, 0, pa[1][2] * Lm * paires.length / n]] });
       }
     }
     return { h: h, G: G, lots: lots, paires: npaires };
@@ -2159,10 +2374,10 @@
     transmission: transmission, phase: phase, jonesPrim: jonesPrim, jones: jones, interConique: interConique, etape: etape,
     suivre: suivre, passeCPU: passeCPU, pinceau: pinceau, retenir: retenir, choisir: choisir, rejouer: rejouer, abcdPrim: abcdPrim, chaine: chaine, zDeS: zDeS, images: images,
     ouverture: ouverture, enveloppe: enveloppe, gaussien: gaussien, emballer: emballer, sourceGPU: sourceGPU, poidsType: poidsType,
-    rayonUtile: rayonUtile, centrePlan: centrePlan, disque: disque, GUIDE: GUIDE, GUIDE_SITES: GUIDE_SITES, guidePaire: guidePaire,
+    rayonUtile: rayonUtile, centrePlan: centrePlan, anneauPerdu: anneauPerdu, disque: disque, GUIDE: GUIDE, GUIDE_SITES: GUIDE_SITES, guidePaire: guidePaire,
     guideTables: guideTables, guideCPU: guideCPU, guideHistos: guideHistos, sitesGuide: sitesGuide,
     ONDE_OPTIONS: ONDE_OPTIONS, fft1: fft1, couverture: couverture, geomForme: geomForme, ondePlan: ondePlan, structurante: structurante, demiOuverture: demiOuverture, ondeMoteur: ondeMoteur,
-    lambdasOnde: lambdasOnde, propAxe: propAxe, tfAxe: tfAxe, ondeEtapes: ondeEtapes, ondeJouer: ondeJouer, tableTF: tableTF, jouerTF: jouerTF, ondeChamp: ondeChamp, pointsOnde: pointsOnde, ondePasse: ondePasse, ondeProgramme: ondeProgramme, ondePas: ondePas,
+    lambdasOnde: lambdasOnde, propAxe: propAxe, tfAxe: tfAxe, ondeEtapes: ondeEtapes, ondeJouer: ondeJouer, tableTF: tableTF, jouerTF: jouerTF, ondeChamp: ondeChamp, pointsOnde: pointsOnde, ondePasse: ondePasse, ondeProgramme: ondeProgramme, ondePas: ondePas, vignetteOnde: vignetteOnde, boiteEclairee: boiteEclairee, coutOnde: coutOnde, COUT_LOURD: COUT_LOURD,
     kSpectre: kSpectre, casesSpectre: casesSpectre, spectreCPU: spectreCPU, poidsSpectre: poidsSpectre, facteurOnde: facteurOnde,
     planSpectre: planSpectre, rendreSpectre: rendreSpectre, ondeSpectre: ondeSpectre,
     DIAPO_NOMS: DIAPO_NOMS, DIAPOS: DIAPOS, chargerDiapos: chargerDiapos, couvDiapo: couvDiapo
@@ -2680,6 +2895,18 @@
     "  for (int j = 0; j < uR.y; j++) for (int i = 0; i < uR.x; i++) { vec2 v = texelFetch(uU, q + ivec2(i, j), 0).rg; s += dot(v, v); }",
     "  o = vec4(s / float(uR.x * uR.y), 0.0, 0.0, 1.0);",
     "}"].join("\n");
+  // Filtre de lecture le long de uAxe (1 : x, 0 : y) : filtrer du processeur, sortie élargie de uM texels de chaque côté.
+  var FS_ONDE_FILTRE = "#version 300 es\nprecision highp float; precision highp int;\n" + [
+    "uniform highp sampler2D uI; uniform int uAxe, uN, uM; uniform float uU; out vec4 o;",
+    "void main() {",
+    "  ivec2 q = ivec2(gl_FragCoord.xy); float kp = float((uAxe == 1 ? q.x : q.y) - uM), s = 0.0;",
+    "  int k0 = max(0, int(floor(kp - uU / 2.0 - 0.5))), k1 = min(uN - 1, int(ceil(kp + uU / 2.0 + 0.5)));",
+    "  for (int k = k0; k <= k1; k++) {",
+    "    float dk = float(k) - kp, a = min(uU / 2.0, dk + 0.5) - max(-uU / 2.0, dk - 0.5);",
+    "    if (a > 0.0) s += a / uU * texelFetch(uI, uAxe == 1 ? ivec2(k, q.y) : ivec2(q.x, k), 0).r;",
+    "  }",
+    "  o = vec4(s, 0.0, 0.0, 1.0);",
+    "}"].join("\n");
   // Somme le long d'un axe (uAxe 1 : x, sortie 1 × Ny ; 0 : y, sortie Nx × 1), fois uK : marges et total de natif.
   var FS_ONDE_SOMME = "#version 300 es\nprecision highp float; precision highp int;\n" + [
     "uniform highp sampler2D uI; uniform int uAxe, uN; uniform float uK; out vec4 o;",
@@ -3092,7 +3319,7 @@
     }
     function progsOnde() {
       if (PO) return PO;
-      PO = { dep: progO(FS_ONDE_DEPART), et: progO(FS_ONDE_ETAGE), nat: progO(FS_ONDE_NATIF), som: progO(FS_ONDE_SOMME), lec: progO(FS_ONDE_LECTURE) };
+      PO = { dep: progO(FS_ONDE_DEPART), et: progO(FS_ONDE_ETAGE), nat: progO(FS_ONDE_NATIF), som: progO(FS_ONDE_SOMME), lec: progO(FS_ONDE_LECTURE), fil: progO(FS_ONDE_FILTRE) };
       vide = texF(4, 1, 1, new Float32Array(4));
       return PO;
     }
@@ -3187,12 +3414,20 @@
       dessiner(PO.som, dst, { uI: src.t }, function (U) { gl.uniform1i(U.uAxe, axe); gl.uniform1i(U.uN, n); gl.uniform1f(U.uK, k); });
     }
     // natif sur la carte : {g (natifGeom), I, et les marges mx (1 × Ny), my (Nx × 1), tot (1 × 1) si demandées}.
-    function natifGL(plan, ch, h, cible, marges) {
-      var gm = natifGeom(plan.N[0], plan.N[1], ch.d, h, cible), n = { g: gm, I: cibleF(1, gm.Nx, gm.Ny), mx: null, my: null, tot: null };
+    // bw : filtre de lecture (lot.bw), grille élargie (filtreGeom) ; n.Nx, n.Ny : dimensions lues.
+    function natifGL(plan, ch, h, cible, marges, bw) {
+      var gm = natifGeom(plan.N[0], plan.N[1], ch.d, h, cible), fg = filtreGeom(gm, bw), n = { g: gm, Nx: fg.Nx, Ny: fg.Ny, I: cibleF(1, gm.Nx, gm.Ny), mx: null, my: null, tot: null };
       dessiner(PO.nat, n.I, { uU: ch.c.t }, function (U) { gl.uniform2i(U.uR, gm.r[0], gm.r[1]); });
+      var nx = gm.Nx, ny = gm.Ny;
+      [0, 1].forEach(function (a) {
+        if (!fg.m[a]) return;
+        var mx = a === 0 ? nx + 2 * fg.m[0] : nx, my = a === 0 ? ny : ny + 2 * fg.m[1], J = cibleF(1, mx, my);
+        dessiner(PO.fil, J, { uI: n.I.t }, function (U) { gl.uniform1i(U.uAxe, a === 0 ? 1 : 0); gl.uniform1i(U.uN, a === 0 ? nx : ny); gl.uniform1i(U.uM, fg.m[a]); gl.uniform1f(U.uU, fg.u[a]); });
+        rendre(n.I); n.I = J; nx = mx; ny = my;
+      });
       if (marges) {
-        n.mx = cibleF(1, 1, gm.Ny); n.my = cibleF(1, gm.Nx, 1); n.tot = cibleF(1, 1, 1);
-        somme(n.I, n.mx, 1, gm.Nx, gm.d[0]); somme(n.I, n.my, 0, gm.Ny, gm.d[1]); somme(n.mx, n.tot, 0, gm.Ny, gm.d[1]);
+        n.mx = cibleF(1, 1, ny); n.my = cibleF(1, nx, 1); n.tot = cibleF(1, 1, 1);
+        somme(n.I, n.mx, 1, nx, gm.d[0]); somme(n.I, n.my, 0, ny, gm.d[1]); somme(n.mx, n.tot, 0, ny, gm.d[1]);
       }
       return n;
     }
@@ -3204,7 +3439,7 @@
       dessiner(PO.lec, { fb: acc[1 - cour].fb, w: res, h: res }, { uAcc: acc[cour].t, uNat: nat.I && nat.I.t, uMx: nat.mx && nat.mx.t, uMy: nat.my && nat.my.t, uTot: nat.tot && nat.tot.t, uStr: tS, uCoupe: tC }, function (U) {
         gl.uniform2f(U.uGo, G.o[0], G.o[1]); gl.uniform2f(U.uGu, G.u[0], G.u[1]); gl.uniform2f(U.uGv, G.v[0], G.v[1]);
         gl.uniform2f(U.uD, gm ? gm.d[0] : 1, gm ? gm.d[1] : 1); gl.uniform2f(U.uOff, gm ? gm.off[0] : 0, gm ? gm.off[1] : 0); gl.uniform2f(U.uBoite, bo[0], bo[1]);
-        gl.uniform2i(U.uDim, gm ? gm.Nx : 0, gm ? gm.Ny : 0); gl.uniform1i(U.uNs, n); gl.uniform1i(U.uNord, no); gl.uniform3fv(U.uOrd, od);
+        gl.uniform2i(U.uDim, gm ? nat.Nx : 0, gm ? nat.Ny : 0); gl.uniform1i(U.uNs, n); gl.uniform1i(U.uNord, no); gl.uniform3fv(U.uOrd, od);
         gl.uniform1i(U.uGauss, ga ? 1 : 0); gl.uniform1f(U.uW2, ga ? ga.w2 : 1); gl.uniform2f(U.uC, ga ? ga.c[0] : 0, ga ? ga.c[1] : 0);
         gl.uniform3f(U.uF, lot.f[0], lot.f[1], lot.f[2]); gl.uniform1f(U.uH, pr.h); gl.uniform1f(U.uAlpha, alpha); gl.uniform1i(U.uCp, tC ? 1 : 0);
       });
@@ -3221,9 +3456,9 @@
         var nat, temp = false, mg = !!(lot.boite && (lot.boite[0] || lot.boite[1]));
         if (lot.gauss) nat = { g: null };
         else if (lot.cache && !rendu.jetable) {
-          var key = lot.l + "|" + h + "|" + lot.cible[0] + "|" + lot.cible[1] + "|" + mg;
-          nat = G.nat[key] || (G.nat[key] = natifGL(plan, champGL(plan, lot.l, 0, 0), h, lot.cible, mg));
-        } else { nat = natifGL(plan, champGL(plan, lot.l, lot.mx, lot.my), h, lot.cache ? lot.cible : null, mg); temp = true; }
+          var key = lot.l + "|" + h + "|" + lot.cible[0] + "|" + lot.cible[1] + "|" + mg + "|" + lot.bw[0] + "|" + lot.bw[1];
+          nat = G.nat[key] || (G.nat[key] = natifGL(plan, champGL(plan, lot.l, 0, 0), h, lot.cible, mg, lot.bw));
+        } else { nat = natifGL(plan, champGL(plan, lot.l, lot.mx, lot.my), h, lot.cache ? lot.cible : null, mg, lot.bw); temp = true; }
         lecture(pr, lot, nat, premier ? 1e6 : 0, tC); premier = false;
         if (temp) rendreNat(nat);
       });
@@ -3317,9 +3552,9 @@
     var T = creerTraceurGL(canvas, opts);
     if (!T) return null;
     var seq = null, emb = null, aff = {}, sale = false, etat = "repos", fin = 0, tChange = 0, t0Fin = 0, nRay = 0, expoAuto = 1, graine = opts.graine || 1;
-    var mode = "rayons", planA = null, planF = null, paires = 0;
-    var stats = { apercuMs: 0, passeMs: 0, passes: 0, finMs: 0, objectif: 0, rayons: 0, eclairement: 0, moteur: "rayons", onde: null, vision: null, adaptMs: 0, adaptLa: null, bruit: null, bruitMs: 0, guide: null };
-    var visP = null, geoVoile = 0, RES_ADAPT = 128, cleAdapt = null, seqAdapt = null, adaptAttente = false;
+    var mode = "rayons", planA = null, planF = null, paires = 0, planCout = null;
+    var stats = { apercuMs: 0, apercuPasseMs: 0, passeMs: 0, passes: 0, finMs: 0, objectif: 0, rayons: 0, eclairement: 0, moteur: "rayons", onde: null, cout: null, vision: null, adaptMs: 0, adaptLa: null, bruit: null, bruitMs: 0, guide: null };
+    var visP = null, geoVoile = 0, geoOrig = 0, tHalo = 0, RES_ADAPT = 128, cleAdapt = null, seqAdapt = null, adaptAttente = false;
     // Niveau d'adaptation affiché (cf. `suiviAdaptation` du module couleur) : `stats.vision` reste la CIBLE mesurée,
     // `visP` porte les paramètres du niveau affiché ; `sceneAncre` = la scène où il a été ancré en dernier. La clé de
     // scène vient de l'instrument (`aff.scene`) : le moteur ne sait pas distinguer la source d'un iris.
@@ -3365,6 +3600,8 @@
           planA = ondePlan(s, q().apercu.opt);
           if (!planA.ok) { mode = "rayons"; stats.onde = infoOnde(null, planA.raison); planA = null; } else stats.onde = infoOnde(planA);
         } else stats.onde = null;
+        // coût de l'image fine (coutOnde) : posé à sa première passe, gardé d'un geste à l'autre tant qu'on reste en onde
+        if (mode !== "onde") { stats.cout = null; planCout = null; }
         stats.moteur = mode;
       }
       if (a) { aff = a; if (!a.vision) { stats.vision = null; visP = null; cleAdapt = null; geoVoile = 0; SUIVI = M.suiviAdaptation(); sceneAncre = null; } }
@@ -3380,7 +3617,7 @@
         var pl = niv === "apercu" ? planA : (planF || (planF = ondePlan(seq, Q.opt)));
         if (!pl.ok) pl = planA;
         var r = T.onde(pl, { res: res, W: W, cx: cx, cy: cy, ns: Q.ns, np: Q.np, graine: graine, passe: p });
-        if (niv === "fin") { paires = r.paires; stats.onde = infoOnde(pl); }
+        if (niv === "fin") { if (pl !== planCout) { planCout = pl; stats.cout = coutOnde(pl); } paires = r.paires; stats.onde = infoOnde(pl); }
         nRay += 1;
       } else {
         var nr = g ? Math.max(ADAPT_NR, Q.Nr >> 2) : Q.Nr;      // passe d'adaptation : au moins ADAPT_NR rayons (aperçu adaptatif descendu à 2^14 : La et plus clair faux au microscope)
@@ -3576,16 +3813,18 @@
         ph = { lect: aff.photo.lect || 0, voile: [sv[0] * kv, sv[1] * kv, sv[2] * kv], cap: aff.photo.cap };
       }
       T.afficher({ lisse: lis ? 5 : 0, lisseY: lisY ? LISSE_Y.r : 0, seuilY: LISSE_Y.n, moy: sm && sm[3] > 0 ? [sm[0] / sm[3], sm[1] / sm[3], sm[2] / sm[3]] : null, K: k, bal: aff.bal || BAL, vue: aff.vue || (seq ? seq.vue : [1, 1]), comp: aff.comp || 1, fond: aff.fond, net: aff.net, bruit: aff.bruit || 0, photo: ph, vision: vr ? visP || [0, 1, 1, -1] : vv ? M.parametresVisible(0.9 * (aff.expo || 1)) : null,
-        voile: vr && geoVoile ? [aff.W / geoVoile, aff.W / geoVoile, ((aff.cx || 0) - aff.W + geoVoile) / (2 * geoVoile), ((aff.cy || 0) - aff.W + geoVoile) / (2 * geoVoile)] : null });
+        voile: vr && geoVoile ? [aff.W / geoVoile, aff.W / geoVoile, ((aff.cx || 0) - aff.W + geoOrig) / (2 * geoVoile), ((aff.cy || 0) - aff.W + geoOrig) / (2 * geoVoile)] : null });
     }
     // Vision : niveau d'adaptation et pupille d'après la passe du champ entier (demi-largeur W, centrée sur le
     // détecteur). `bloc` : lire l'accumulateur en blocs de `bloc` × `bloc` au lieu de sa résolution — l'aperçu d'un
     // geste, déjà calculé, se mesure ainsi sans passe supplémentaire (le 99e centile et le halo y sont plus grossiers).
     function adapter(W, rayons, bloc) {
-      var N = bloc || T.res, cpt = new Float64Array(N * N), V = aff.vision;
-      var img = bloc ? T.reduire(bloc, cpt) : T.lire(0, T.res, cpt), n = img.length / 3, h = 2 * W / N, k = V.s / Math.max(1, nRay) / (mode === "onde" && !rayons ? 1 : h * h);
-      var L = new Float64Array(n), i;
-      for (i = 0; i < n; i++) L[i] = img[3 * i + 1] * k;
+      var R = bloc ? blocsApercu(bloc) : null, N = R ? R.n : T.res, cpt = new Float64Array(N * N), V = aff.vision;
+      var img = R ? T.reduire(N, cpt) : T.lire(0, T.res, cpt), h = 2 * W / (R ? T.res / R.b : N), k = V.s / Math.max(1, nRay) / (mode === "onde" && !rayons ? 1 : h * h);
+      var L, i;
+      if (R) L = luminancesBlocs(img, R, k);
+      else { L = new Float64Array(N * N); for (i = 0; i < N * N; i++) L[i] = img[3 * i + 1] * k; }
+      var n = N * N;
       // plus clair du champ (99e centile des texels éclairés) : plancher de `parametresVision` ; débiaisé si la passe a
       // deux moitiés (`centileCroise`). Le DRAPEAU « trop peu de lumière » se lit sur un autre estimateur
       // (`M.plusClairDrapeau`) : un cœur brillant de 1 % du champ (laser focalisé) écrase ce centile sans que l'image
@@ -3600,7 +3839,7 @@
       var c = new Float64Array(3 * n), t0 = performance.now();
       for (i = 0; i < 3 * n; i++) c[i] = img[i] * k;
       if (mode !== "onde" || rayons) teinteLissee(c, cpt, N);
-      a.voile = halo(c, N, W, a.seuil);
+      a.voile = R ? halo(c, N, W * N * R.b / T.res, a.seuil, W) : halo(c, N, W, a.seuil);
       if (geoVoile) a.voileMs = performance.now() - t0;
       stats.vision = a;
       return a;
@@ -3665,15 +3904,48 @@
     }
     // Voile du halo sur une image n × n du champ entier (demi-largeur W) en luminances XYZ (cd/m²) : au plus
     // Ψ(un élément) × angle solide × ΣL ; sauté (geoVoile = 0) s'il reste sous le dixième du seuil. Rend son maximum.
-    function halo(c, n, W, seuil) {
+    // W : demi-largeur de la grille ; W0 (défaut W) : son coin bas gauche est à −W0 du centre du détecteur (grille d'un
+    // aperçu réduit, `blocsApercu` : plus large que la fenêtre, alignée sur son coin). n : puissance de 2 (FFT radix 2 de
+    // `voileHalo` : sinon voile NaN, et l'image entière sort noire).
+    // Champ proche : `voileHalo` ne donne rien à moins d'un élément ; sur une grille plus grossière que celle de la
+    // passe d'adaptation (RES_ADAPT sur le champ entier), la lumière diffusée entre les deux tailles d'élément manquait
+    // (halo d'un aperçu à 64² : 0,57 de celui à 128², d'où le halo qui « arrivait » avec l'image fine). Elle est rendue
+    // sur l'élément lui-même : ∫ Ψ(θ) 2πθ dθ entre les rayons des disques de même aire que les deux éléments
+    // (`procheHalo`, 0 à la définition de la passe d'adaptation : image au repos inchangée).
+    function halo(c, n, W, seuil, W0) {
       var V = aff.vision, pas = 2 * W / n * Math.sqrt(V.omega || 0), om = Math.pow(pas * Math.PI / 180, 2), sY = 0, i;
       for (i = 0; i < n * n; i++) sY += c[3 * i + 1];
       geoVoile = 0;
       if (!(V.halo && V.affiche !== false && pas > 0 && M.psiHalo(pas) * om * sY > 0.1 * seuil)) return 0;
-      var vo = M.voileHalo(c, n, pas), vm = 0;
+      var vo = M.voileHalo(c, n, pas), vm = 0, kp = procheHalo(pas, 2 * (V.Wg || W) / RES_ADAPT * Math.sqrt(V.omega || 0));
+      if (kp > 0) for (i = 0; i < 3 * n * n; i++) vo[i] += kp * Math.max(c[i], 0);
       for (i = 0; i < n * n; i++) if (vo[3 * i + 1] > vm) vm = vo[3 * i + 1];
-      T.voile(vo, n); geoVoile = W;
+      T.voile(vo, n); geoVoile = W; geoOrig = W0 == null ? W : W0;
       return vm;
+    }
+    var cacheProche = { cle: null, v: 0 };
+    function procheHalo(pas, pasRef) {
+      if (!(pas > 1.0001 * pasRef)) return 0;
+      var cle = pas.toPrecision(6) + ":" + pasRef.toPrecision(6);
+      if (cacheProche.cle === cle) return cacheProche.v;
+      var a0 = pasRef / Math.sqrt(Math.PI), a1 = pas / Math.sqrt(Math.PI), N = 200, s = 0, d = (a1 - a0) / N;
+      for (var i = 0; i < N; i++) { var t = a0 + (i + 0.5) * d; s += M.psiHalo(t) * 2 * Math.PI * t * d; }
+      cacheProche = { cle: cle, v: s * Math.pow(Math.PI / 180, 2) };
+      return cacheProche.v;
+    }
+    // Aperçu réduit en n × n blocs, n puissance de 2 quelle que soit la résolution : blocs de b = ⌈res / n⌉ texels
+    // (`T.reduire`), nv = ⌈res / b⌉ blocs utiles par côté, le reste à zéro ; la grille couvre n·b texels depuis le coin
+    // bas gauche de la fenêtre. (Choisir un n qui divise res prenait 48 à 480², la vue de l'œil en Fin et au-delà.)
+    function blocsApercu(n) { var b = Math.ceil(T.res / n); return { n: n, b: b, nv: Math.ceil(T.res / b) }; }
+    // Luminances Y des nv × nv blocs utiles (img : XYZ des n × n blocs), chacune ramenée à l'aire d'un bloc entier
+    // (k : facteur d'un bloc entier) : le dernier bloc d'une ligne peut être partiel.
+    function luminancesBlocs(img, R, k) {
+      var L = new Float64Array(R.nv * R.nv), x, y;
+      for (y = 0; y < R.nv; y++) for (x = 0; x < R.nv; x++) {
+        var wx = Math.min(R.b, T.res - x * R.b), wy = Math.min(R.b, T.res - y * R.b);
+        L[y * R.nv + x] = img[3 * (y * R.n + x) + 1] * k * R.b * R.b / (wx * wy);
+      }
+      return L;
     }
     // Le halo, optique, suit l'image pendant un geste : refait sur l'aperçu réduit à 64² (≈ 5 ms) quand l'aperçu couvre
     // le champ entier ; zoomé, retiré jusqu'à l'image fine (un voile figé restait en surimpression de la pièce qu'on
@@ -3681,16 +3953,19 @@
     // cible y est remesurée en blocs de 64² sur le même aperçu (cf. `tick`) — quand elle vient d'y être mesurée, le
     // voile est déjà à jour et cette passe ne sert plus.
     function haloApercu() {
-      var V = aff.vision, sv = stats.vision;
-      geoVoile = 0;
-      if (!V || !V.halo || V.affiche === false || !sv || sv.rayons || Math.abs(aff.W - V.Wg) > 1e-9 * V.Wg || aff.cx || aff.cy) return;
-      var n = [64, 48, 32].filter(function (m) { return T.res % m === 0; })[0];
-      if (!n) return;
-      var cpt = new Float64Array(n * n), img = T.reduire(n, cpt), b = T.res / n, h = 2 * aff.W / n, k = V.s / Math.max(1, nRay) / (mode === "onde" ? b * b : h * h), c = new Float64Array(3 * n * n);
+      var V = aff.vision, sv = stats.vision, now = performance.now();
+      if (!V || !V.halo || V.affiche === false || !sv || sv.rayons || Math.abs(aff.W - V.Wg) > 1e-9 * V.Wg || aff.cx || aff.cy) { geoVoile = 0; return; }
+      // refait 10 fois par seconde au plus (≈ 25 ms à 64², autant que la passe de rayons qu'on veut garder) : entre deux,
+      // le voile précédent reste affiché
+      if (geoVoile && now - tHalo < HALO_GESTE_MS) return;
+      tHalo = now;
+      var R = blocsApercu(64), n = R.n, cpt = new Float64Array(n * n), img = T.reduire(n, cpt), h = 2 * aff.W * R.b / T.res,
+        k = V.s / Math.max(1, nRay) / (mode === "onde" ? R.b * R.b : h * h), c = new Float64Array(3 * n * n);
       for (var i = 0; i < c.length; i++) c[i] = img[i] * k;
       if (mode !== "onde") teinteLissee(c, cpt, n);
-      halo(c, n, aff.W, sv.seuil);
+      halo(c, n, aff.W * n * R.b / T.res, sv.seuil, aff.W);
     }
+    var HALO_GESTE_MS = 100;
     // Exposition automatique : 99e centile de l'éclairement des pixels éclairés (une tache d'un point n'en couvre que
     // quelques-uns : un centile sur toute l'image tomberait dans le noir).
     function eclairement() {
@@ -3719,7 +3994,10 @@
           if (!visP || cle !== cleAdapt || etat === "repos") adapterChamp(); else adaptAttente = true;
         }
         T.dimensionner(q().apercu.res); T.raz(); nRay = 0;
-        var ta = unePasse("apercu", 0);
+        // stats.apercuPasseMs : la passe de rayons seule — c'est elle que l'aperçu adaptatif de l'instrument règle
+        // (nombre de rayons) ; les coûts fixes (adaptation, halo) n'y baissent pas avec les rayons, et les y compter
+        // faisait descendre l'aperçu à 2^14 rayons sans rien gagner.
+        var ta = unePasse("apercu", 0), tPasse = ta;
         // Pendant un geste, l'œil continue de s'adapter : la cible est remesurée sur l'aperçu DÉJÀ calculé (blocs de
         // 64², aucune passe), 5 fois par seconde au plus, et seulement quand l'aperçu couvre le champ entier (agrandi,
         // il ne dit plus l'exposition). L'image fine remesurera de toute façon à sa définition (`adaptAttente` reste
@@ -3727,9 +4005,9 @@
         var mesGeste = false;
         if (adaptAttente && aff.vision && mode !== "onde" && now - tGeste > 200 &&
             Math.abs(aff.W - aff.vision.Wg) <= 1e-9 * aff.vision.Wg && !aff.cx && !aff.cy) {
-          var tg = performance.now(); adapter(aff.W, false, 64); ta += performance.now() - tg; tGeste = now; mesGeste = true;
+          var tg = performance.now(); adapter(aff.W, false, 64); ta += performance.now() - tg; tGeste = now; tHalo = performance.now(); mesGeste = true;
         }
-        stats.apercuMs = ta + stats.adaptMs; stats.passes = 0;
+        stats.apercuPasseMs = tPasse; stats.apercuMs = ta + stats.adaptMs; stats.passes = 0;
         if (adaptAttente && aff.vision && !mesGeste) { var th = performance.now(); haloApercu(); stats.haloGeste = geoVoile > 0; stats.apercuMs += performance.now() - th; }
         else if (mesGeste) stats.haloGeste = geoVoile > 0;
         if (aff.auto) exposer();
