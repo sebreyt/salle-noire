@@ -200,9 +200,10 @@
     titre: TRAD("2, 3, 4, 5 ou 10 fentes de 40 µm au pas de 0,2 mm.") };
   PIECES.reseau = { nom: TRAD("Réseau"), court: TRAD("réseau"), type: "reseau", params: { n: 100 }, max: 1, titre: TRAD("Réseau de 100, 300 ou 600 traits par millimètre.") };
   PIECES.fente.orientable = true;
-  // Optique de Fourier (tiroir « Fourier »), le cheveu, la lampe à mercure (raie verte filtrée).
-  PIECES.mercure = { nom: TRAD("Lampe à mercure"), court: TRAD("mercure"), type: "spectrale", params: { gaz: "hg", filtre: true }, max: 1,
-    titre: TRAD("Lampe spectrale à vapeur de mercure, ampoule de 15 mm ; un filtre ne laisse passer que la raie verte (546,1 nm).") };
+  // Optique de Fourier (tiroir « Fourier »), le cheveu, la lampe à mercure (nue : la raie verte seule s'obtient en
+  // posant devant elle un filtre interférentiel, PIECES.filtre).
+  PIECES.mercure = { nom: TRAD("Lampe à mercure"), court: TRAD("mercure"), type: "spectrale", params: { gaz: "hg", filtre: false }, max: 1,
+    titre: TRAD("Lampe spectrale à vapeur de mercure, ampoule de 15 mm ; toutes ses raies, un filtre interférentiel posé devant elle isole la raie verte (546,1 nm).") };
   PIECES.fil = { nom: TRAD("Cheveu"), court: TRAD("cheveu"), type: "fil", params: { w: 0.07 }, max: 1, orientable: true,
     titre: TRAD("Un cheveu (environ 70 µm d'épaisseur) tendu sur un cadre, orientable.") };
   PIECES.grilleCroisee = { nom: TRAD("Grille croisée"), court: TRAD("grille"), type: "grilleCroisee", params: { pas: 0.25 }, max: 1,
@@ -377,6 +378,11 @@
   // ================= montages types =================
   // m.f(st) pose les éléments ; optique, vue et aides reviennent à celles du bac sauf mention ; le cahier est gardé.
   function eclaire(st, zL, zLent) { return poser(st, "lanterne", zL, { tirage: tirageVers(zLent - zL) }); }
+  // Lampe au mercure avec le filtre interférentiel qui isole sa raie verte : la pièce `filtre` 10 mm devant elle (la
+  // lampe sort par sa face avant, la pièce suivante est à 20 mm au moins). Même geste pour un état sauvé d'avant la
+  // lampe nue (`migrerMercure`).
+  var Z_FILTRE_MERCURE = 10;
+  function lampeMercure(st, z) { poser(st, "mercure", z); return poser(st, "filtre", z + Z_FILTRE_MERCURE, { couleur: "interferentiel" }); }
   var MONTAGES = {
     depart: { nom: TRAD("Montage de départ"), titre: TRAD("La lanterne, la lettre F, une lentille de 200 mm et l'écran : chercher l'image."),
       aides: { faisceau: true }, f: function (st) { eclaire(st, 150, 700); poser(st, "lettreF", 300); poser(st, "l200", 700); poser(st, "ecran", 1400); } },
@@ -436,7 +442,9 @@
   // Fente source au foyer de la première lentille, bifentes dans le faisceau parallèle, écran au foyer de la seconde :
   // franges à l'infini, interfrange λf′/a (589 nm, 200 mm, a = 0,25 mm : 0,47 mm).
   function young(st, lampe, b) {
-    if (lampe === "lanterne") poser(st, "lanterne", 80, { tirage: tirageVers(150) }); else poser(st, lampe || "sodium", 200);
+    if (lampe === "lanterne") poser(st, "lanterne", 80, { tirage: tirageVers(150) });
+    else if (lampe === "mercure") lampeMercure(st, 200);
+    else poser(st, lampe || "sodium", 200);
     poser(st, "fenteSource", 230, { b: b }); poser(st, "l200", 430); poser(st, "bifentes", 480); poser(st, "l200", 530); poser(st, "ecran", 730);
   }
   MONTAGES.young = { nom: TRAD("Young au sodium"), titre: TRAD("Lampe à sodium, fente source au foyer d'une lentille de 200 mm, bifentes dans le faisceau parallèle, écran au foyer d'une seconde lentille : les franges sont celles de l'infini. Élargir la fente source : elles se brouillent."),
@@ -457,7 +465,7 @@
   // faisceau parallèle, objet au foyer objet de la deuxième lentille ; le plan focal commun (750 mm) reçoit l'image du
   // trou et la figure de diffraction de l'objet, l'écran (1150 mm) l'image de l'objet, renversée.
   function quatreF(st, D, objet, filtre) {
-    poser(st, "mercure", 40); poser(st, "trouSource", 70, { d: 0.1 }); poser(st, "l200", 270); poser(st, "iris", 310, { D: D });
+    lampeMercure(st, 40); poser(st, "trouSource", 70, { d: 0.1 }); poser(st, "l200", 270); poser(st, "iris", 310, { D: D });
     poser(st, objet[0], 350, objet[1]); poser(st, "l200", 550); poser(st, filtre[0], 750, filtre[1]); poser(st, "l200", 950); poser(st, "ecran", 1150);
   }
   MONTAGES.abbe = { nom: "Abbe-Porter", titre: TRAD("Une grille croisée éclairée en lumière parallèle, son image sur l'écran par deux lentilles de 200 mm. Une fente fine est placée dans leur plan focal commun, où se forme la figure de diffraction de la grille : elle ne laisse passer que les taches alignées avec elle, et l'image ne garde que les traits perpendiculaires à la fente. Tourner la fente."),
@@ -497,7 +505,7 @@
   // f = 200 mm) ; un iris de 1 mm, une fente horizontale de 0,6 mm les arrêtent. USAF : coupure à r/λf (iris de 1,2 mm :
   // 5,5 traits/mm, les derniers éléments du groupe 2 disparaissent).
   function diapo4F(st, image, filtre) {
-    poser(st, "mercure", 40); poser(st, "trouSource", 70, { d: 0.1 }); poser(st, "l200", 270); poser(st, "diapo", 350, { image: image });
+    lampeMercure(st, 40); poser(st, "trouSource", 70, { d: 0.1 }); poser(st, "l200", 270); poser(st, "diapo", 350, { image: image });
     poser(st, "l200", 550); var e = poser(st, filtre[0], 750, filtre[1]); if (filtre[2] != null) e.rot = filtre[2];
     poser(st, "l200", 950); poser(st, "ecran", 1150);
   }
@@ -512,7 +520,7 @@
   // (λf/a) ; trame du portrait (pas 156 µm), taches à ±0,70 mm. Spectre de la mire de Siemens écarté : une tache saturée
   // et la croix du cadre carré de la diapo, pas l'étoile attendue.
   function spectre(st, objet, D) {
-    poser(st, "mercure", 40); poser(st, "trouSource", 70, { d: 0.1 }); poser(st, "l200", 270);
+    lampeMercure(st, 40); poser(st, "trouSource", 70, { d: 0.1 }); poser(st, "l200", 270);
     if (D) poser(st, "iris", 310, { D: D });
     poser(st, objet[0], 350, objet[1]); poser(st, "l200", 550); poser(st, "ecran", 750);
   }
@@ -674,14 +682,14 @@
   // Réseau de 100 traits/mm dans le faisceau parallèle, écran au foyer d'une lentille de 200 mm : ordre p d'une raie λ
   // en x = f′ tan(arcsin(p λ n)) (546,1 nm, ordre 1 : 10,94 mm). Fibre du spectromètre posée sur cette raie.
   function reseau(st, lampe) {
-    if (lampe === "lanterne") poser(st, "lanterne", 80, { tirage: tirageVers(150) }); else poser(st, "mercure", 200, { filtre: false });
+    if (lampe === "lanterne") poser(st, "lanterne", 80, { tirage: tirageVers(150) }); else poser(st, "mercure", 200);
     poser(st, "fenteSource", 230, { b: 0.1 }); poser(st, "l200", 430); poser(st, "reseau", 480, { n: 100 }); poser(st, "l200", 530); poser(st, "ecran", 730);
   }
-  MONTAGES.reseauMercure = { nom: TRAD("Réseau à la lampe à mercure"), titre: TRAD("La lampe à mercure, sans son filtre, éclaire une fente source au foyer d'une lentille de 200 mm ; un réseau de 100 traits par millimètre dans le faisceau parallèle, l'écran au foyer d'une seconde lentille de 200 mm : de part et d'autre de l'ordre 0, où toutes les raies se superposent, chaque raie donne une image de la fente, d'autant plus déviée que sa longueur d'onde est grande (sin θ = pnλ). La fibre du spectromètre est posée sur la raie verte d'ordre 1, à 10,9 mm : la glisser sur les autres."),
+  MONTAGES.reseauMercure = { nom: TRAD("Réseau à la lampe à mercure"), titre: TRAD("La lampe à mercure nue, toutes raies, éclaire une fente source au foyer d'une lentille de 200 mm ; un réseau de 100 traits par millimètre dans le faisceau parallèle, l'écran au foyer d'une seconde lentille de 200 mm : de part et d'autre de l'ordre 0, où toutes les raies se superposent, chaque raie donne une image de la fente, d'autant plus déviée que sa longueur d'onde est grande (sin θ = pnλ). La fibre du spectromètre est posée sur la raie verte d'ordre 1, à 10,9 mm : la glisser sur les autres."),
     vue: "dessus", aides: { faisceau: true }, zoom: 3, fibre: [10.94, 0], f: function (st) { reseau(st, "mercure"); } };
   MONTAGES.reseauBlanc = { nom: TRAD("Réseau en lumière blanche"), titre: TRAD("La lanterne à la place de la lampe : chaque ordre étale tout le spectre, du violet, le moins dévié, au rouge. Le spectre d'ordre 2 est deux fois plus large que celui d'ordre 1, et son rouge se mêle au violet de l'ordre 3."),
     vue: "dessus", aides: { faisceau: true }, zoom: 3, f: function (st) { reseau(st, "lanterne"); } };
-  MONTAGES.youngMercure = { nom: TRAD("Young au mercure"), titre: TRAD("La lampe à mercure et son filtre vert (546,1 nm) dans le montage de Young : des franges vertes d'interfrange λf′/a ≈ 0,44 mm, un peu plus serrées qu'au sodium. Élargir la fente source : elles disparaissent quand sa largeur atteint λf′/a, 0,44 mm, puis reviennent, inversées."),
+  MONTAGES.youngMercure = { nom: TRAD("Young au mercure"), titre: TRAD("La lampe à mercure et un filtre interférentiel vert (546,1 nm) dans le montage de Young : des franges vertes d'interfrange λf′/a ≈ 0,44 mm, un peu plus serrées qu'au sodium. Élargir la fente source : elles disparaissent quand sa largeur atteint λf′/a, 0,44 mm, puis reviennent, inversées."),
     vue: "dessus", aides: { faisceau: true }, zoom: 32, f: function (st) { young(st, "mercure", 0.1); } };
   var INCL_MAX = 3, INCL_LENTILLE = 30;
   // Pièces qu'on décale latéralement (x) à tous les niveaux : vis de translation sur le cavalier (vue de dessus), réglette
@@ -719,6 +727,7 @@
       special: [T_FENTES], ouvert: "Fentes et réseaux",
       etagere1: [{ nom: "Sources", pieces: ["sodium", "mercure", "lanterne", "laser"] }, { nom: "Objets et diaphragmes", pieces: ["fenteSource", "trouSource", "iris", "depoli"] },
         { nom: "Lentilles et miroirs", pieces: ["objectif", "l100", "l200", "l300", "l500", "miroir"] }, T_FENTES,
+        { nom: "Filtres", pieces: ["filtre"] },     // le filtre interférentiel de la lampe au mercure (montages de niveau 1)
         { nom: "Observer", pieces: ["ecran", "capteur", "oeil", "lunette", "densite"] }],
       montages: ["youngBlanc", "youngMercure", "youngLaser", "trousLaser", "barretteLaser", "multiples", "fenteLaser", "fraunhofer", "fenteBlanc", "airy", "fresnel",
         "reseauLaser", "reseauMercure", "reseauBlanc", "cheveu", "elargir"] },
@@ -727,6 +736,7 @@
       special: [T_FOURIER], ouvert: "Fourier",
       etagere1: [{ nom: "Sources", pieces: ["mercure", "laser", "lanterne"] }, { nom: "Objets et diaphragmes", pieces: ["trouSource", "fenteSource", "iris", "lettreF", "diapo"] },
         { nom: "Lentilles et miroirs", pieces: ["objectif", "l100", "l200", "l300", "l500", "miroir"] }, T_FOURIER,
+        { nom: "Filtres", pieces: ["filtre"] },     // le filtre interférentiel de la lampe au mercure (montages de niveau 1)
         { nom: "Observer", pieces: ["ecran", "capteur", "densite"] }],
       montages: ["spectreGrille", "spectreTrame", "strioscopie", "fondNoir", "trame", "lignes", "passeBas", "orientation", "contours"] },
     // Polarisation (lumière naturelle de la lanterne ou du laser, polariseurs, lames ; photodiode sur l'écran).
@@ -929,11 +939,27 @@
     });
     return st;
   }
+  // États gardés d'avant la lampe au mercure nue : une lampe dont le paramètre `filtre` n'était pas `false` (défaut
+  // d'autrefois, `true`, ou clé absente) portait sa propre raie verte ; elle redevient nue, et le filtre interférentiel
+  // se pose devant elle, comme le fait `lampeMercure` pour les montages. Un état qui a déjà le maximum de filtres
+  // (`PIECES.filtre.max`) garde sa lampe filtrée : la pièce de plus serait refusée à l'étagère.
+  function migrerMercure(st) {
+    if (!st || !Array.isArray(st.elements)) return st;
+    var n = 0;
+    st.elements.forEach(function (e) { if (e.type === "filtre") n++; });
+    st.elements.forEach(function (e) {
+      if (e.type !== "spectrale" || !e.params || e.params.gaz === "na" || e.params.filtre === false) return;
+      if (n >= PIECES.filtre.max) return;
+      e.params.filtre = false; n++;
+      st.n = (st.n || 0) + 1;
+      st.elements.push({ type: "filtre", id: "e" + st.n, cle: "filtre", z: e.z + Z_FILTRE_MERCURE, x: 0, y: 0, params: { couleur: "interferentiel" } });
+    });
+    return st;
+  }
   function valide(st) {
     return !!(st && st.v === 1 && BACS[st.bac] && Array.isArray(st.elements) && st.aides && st.obs && st.obs.ecran && st.obs.capteur &&
       st.elements.every(function (e) { return C.TYPES[e.type] && PIECES[e.cle] && isFinite(e.z); }));
   }
-
   // ================= observation =================
   // Instrument (viseur, lunette) juste devant l'œil qui observe, posé ou implicite ; null sinon.
   function instrumentDe(seq, st) {
@@ -2128,7 +2154,7 @@
     { nom: TRAD("Maximal"), ap: 768, ms: 50, Nr: 21, bruit: 0.005, plafond: 60000, visible: 0, onde: 6, titre: TRAD("Le plus fin possible, quitte à attendre (bruit 0,5 %, au plus 1 min ; l'aperçu peut ramer).") }];
   var Banc = { RENDUS: RENDUS, LONGUEUR: LONGUEUR, polarisations: polarisations, DEC_MAX: DEC_MAX, PIECES: PIECES, MONTAGES: MONTAGES, BACS: BACS, POSES: POSES, CAPTEUR_N: CAPTEUR_N, PIXEL: PIXEL,
     K_CAPTEUR: K_CAPTEUR, ISOS: ISOS, PUITS: PUITS, CIBLE_POSE: CIBLE_POSE, BARRETTE: BARRETTE, BARRETTE_PARFAITE: BARRETTE_PARFAITE, INTEG: INTEG, integVoulue: integVoulue,
-    sensBarrette: sensBarrette, migrerBarrette: migrerBarrette, aParLumen: aParLumen, gainPhotodiode: gainPhotodiode, CALIBRES: CALIBRES, comptesSpec: comptesSpec, SPEC_SAT: SPEC_SAT, COMP_VISIBLE: COMP_VISIBLE, TIRAGE: TIRAGE, visionDe: visionDe, laserDansOeil: laserDansOeil,
+    sensBarrette: sensBarrette, migrerBarrette: migrerBarrette, migrerMercure: migrerMercure, aParLumen: aParLumen, gainPhotodiode: gainPhotodiode, CALIBRES: CALIBRES, comptesSpec: comptesSpec, SPEC_SAT: SPEC_SAT, COMP_VISIBLE: COMP_VISIBLE, TIRAGE: TIRAGE, visionDe: visionDe, laserDansOeil: laserDansOeil,
     PROFILS: PROFILS, niveauDepart: niveauDepart, montagePermis: montagePermis, tiroirsDe: tiroirsDe, TIROIRS_COMMUNS: TIROIRS_COMMUNS, piecePermise: piecePermise, estRecepteur: estRecepteur, recepteurs: recepteurs, recepChoisi: recepChoisi, escamote: escamote, neutre: neutre, neutralisees: neutralisees, DECALABLE: DECALABLE,
     poser: poser, trouver: trouver, ranger: ranger, remplacerPiece: remplacerPiece, compte: compte, banc: banc, tirageVers: tirageVers, monter: monter, changerOptique: changerOptique, intact: intact, memesPieces: memesPieces, etatDepart: etatDepart, groupesDe: groupesDe, THEMES: THEMES,
     valide: valide, dansOeil: dansOeil, detecteur: detecteur, instrumentDe: instrumentDe, distanceNette: distanceNette, puissance: puissance, visee: visee, sequence: sequence, amplitude: amplitude, W_OEIL: W_OEIL, RETINE: RETINE, OCULAIRE: OCULAIRE, fenetre: fenetre, focaleVraie: focaleVraie, inclinaison: inclinaison, incliner: incliner, W_PLAQUE: W_PLAQUE, poseVoulue: poseVoulue, nomPose: nomPose, nomDe: nomDe, demiHauteur: demiHauteur,
@@ -2285,7 +2311,7 @@
     if (mem && mem.bacs && (mem.v === 1 || mem.v === 2)) Object.keys(mem.bacs).forEach(function (b) {
       var o = mem.bacs[b];
       AB[b] = mem.v === 2 && o ? { A: o.A || null, B: o.B || null, cour: o.cour === "B" ? "B" : "A" } : { A: o, B: null, cour: "A" };
-      migrerBarrette(AB[b].A); migrerBarrette(AB[b].B);
+      migrerBarrette(AB[b].A); migrerBarrette(AB[b].B); migrerMercure(AB[b].A); migrerMercure(AB[b].B);
       tous[b] = AB[b][AB[b].cour];
     });
     if (K.estProf() && mem && BACS[mem.actif]) bac = mem.actif;      // le prof retrouve le bac qu'il avait choisi (le menu des bacs n'est qu'à lui)
@@ -3665,8 +3691,6 @@
         curseur(BD, "Orientation", tour ? -180 : -90, tour ? 180 : 90, 0.5, function () { return (e.rot || 0) * 180 / Math.PI; }, function (v) { e.rot = v * Math.PI / 180; sale.dessin = true; }, function (v) { return fmt(v, 1) + "°"; }, 0)
           .title = (e.type === "couteau" ? TRAD("Rotation de la lame autour de l'axe du banc (à 180°, elle arrête l'autre côté).") : e.type === "polariseur" ? TRAD("Rotation du polariseur autour de l'axe du banc (0° : axe vertical), graduée en degrés.") :
             e.type === "lame" ? TRAD("Rotation de la lame autour de l'axe du banc (0° : une ligne neutre verticale), graduée en degrés.") : TRAD("Rotation autour de l'axe du banc (0° : verticale).")) + TRAD(" Double-clic : retour à 0°.");
-      if (e.type === "spectrale" && C.params(e).gaz === "hg")
-        seg(BD, [[true, TRAD("filtre vert"), TRAD("Seule la raie verte (546,1 nm) passe.")], [false, TRAD("sans filtre"), TRAD("Toutes les raies du mercure : violet, bleu, vert, jaune.")]], !!p.filtre, function (v) { e.params.filtre = v; modifie("seq bandeau"); });
       if (e.type === "bifentes") { var rb = el("span", "bc-reg", BD); el("span", "", rb, TRAD("Bifente utilisée"));
         seg(rb, ECARTS.map(function (a, i) { return [i, "a = " + fmtV(a) + " mm"]; }), decouverte(p), function (i) { decouvrir(e, i); modifie("seq bandeau"); })
           .title = TRAD("Les deux autres bifentes du support sont masquées."); }
