@@ -48,16 +48,16 @@
   // en verre D 263 M (Schott), pas en BK7.
   var VERRES_LAMES = { t: 0.006, verre: "bk7", fantome: 0.05 }, EP_LAMELLE = 1.7e-4, VERRE_LAMELLE = "d263";
   var S2 = Math.SQRT1_2;
+  // Le mercure est toujours la lampe NUE : le filtre vert d'autrefois (« Mercure + filtre vert ») est le filtre
+  // interférentiel posé devant elle (st.filtre, `hgVert`).
   var LAMPES = {
     na: { nom: TRAD("lampe à vapeur de sodium"), court: "Sodium", spectre: "na", type: "spectrale", coul: "#ffc23a" },
-    hg: { nom: TRAD("lampe à vapeur de mercure haute pression + filtre vert"), court: TRAD("Mercure + filtre vert"), spectre: "hg", type: "spectrale", coul: "#8cff6a" },
-    hgb: { nom: TRAD("lampe spectrale au mercure basse pression + filtre vert"), court: TRAD("Mercure basse pression + filtre vert"), spectre: "hgb", type: "spectrale", coul: "#8cff6a" },
     hgc: { nom: TRAD("lampe à vapeur de mercure"), court: TRAD("Mercure"), spectre: "hgc", type: "spectrale", coul: "#c3ccff" },
     hgcb: { nom: TRAD("lampe spectrale au mercure basse pression"), court: TRAD("Mercure basse pression"), spectre: "hgcb", type: "spectrale", coul: "#c3ccff" },
     bl: { nom: TRAD("lanterne"), court: TRAD("Lanterne"), spectre: "bl", type: "filament", coul: "#fff1d2" },
     laser: { nom: TRAD("laser He-Ne"), court: "Laser", spectre: "laser", type: "point", coul: "#ff3b2f" }
   };
-  var ORDRE_LAMPES = ["na", "hg", "hgc", "bl", "laser"];
+  var ORDRE_LAMPES = ["na", "hgc", "bl", "laser"];
   // Forme lumineuse vue sans dépoli (plan de la source, x horizontal, y vertical, m) : brûleur d'une lampe spectrale
   // (fenêtre Ø 32 mm) — corps droit de 9 mm de large aux calottes arrondies, centré SUR l'axe (le centre du champ doit
   // rester éclairé), deux cols étroits terminés par la boule de chaque électrode (20 mm de bout en bout) et, à droite au-dessus
@@ -85,6 +85,106 @@
   };
   var R_DEPOLI = 0.04, IRIS_MIN = 0.00025;
   var MI_ = (root && root.VITRINE_MICHELSON) || (typeof require === "function" ? require("./_app-michelson-coeur.js").Coeur : null);
+
+  // ================= filtres devant la lampe =================
+  // Un seul filtre à la fois, sur le porte-dépoli (`st.filtre`, null ou une clé de FILTRES) : il vaut pour TOUTES les
+  // lampes, c'est la physique qui décide (laser rouge derrière le filtre vert : presque noir). Couleurs des pastilles et
+  // des cartes : la teinte du verre, pas la couleur transmise.
+  var FILTRES = {
+    rouge: { kind: 1, nom: TRAD("filtre rouge"), court: TRAD("Rouge"), coul: "#e2503f" },
+    vert: { kind: 2, nom: TRAD("filtre vert"), court: TRAD("Vert"), coul: "#3fa85a" },
+    bleu: { kind: 3, nom: TRAD("filtre bleu"), court: TRAD("Bleu"), coul: "#3f6fd0" },
+    interferentiel: { kind: 4, nom: TRAD("filtre interférentiel 546 nm"), court: TRAD("Interférentiel"), coul: "#7fe3a0" }
+  };
+  var CLES_FILTRE = ["rouge", "vert", "bleu", "interferentiel"], FILTRE_DEFAUT = "interferentiel";
+  // Transmission d'un filtre à la longueur d'onde l (nm). Copie de transFiltre de _app-banc-coeur.js : garder les deux
+  // identiques (kind 1 rouge, 2 vert, 3 bleu : bandes larges ; 4 : interférentiel vert, 546 nm, 10 nm à mi-hauteur).
+  function transFiltre(kind, l) {
+    if (kind >= 10) return Math.pow(10, 10 - kind);
+    if (kind === 1) return 0.85 / (1 + Math.exp(-(l - 600) / 8));
+    var mu = kind === 2 ? 530 : kind === 3 ? 450 : 546, fw = kind === 4 ? 10 : 80, t = (l - mu) / (fw / 2.3548200450309493);
+    return (kind === 4 ? 0.6 : 0.75) * Math.exp(-0.5 * t * t);
+  }
+  function filtre(st) { return st.filtre && FILTRES[st.filtre] ? FILTRES[st.filtre] : null; }
+  // « Mercure + filtre vert » n'est plus une lampe : c'est le mercure nu et le filtre interférentiel devant lui. Le
+  // moteur le reçoit comme avant (spectres nommés hg / hgb, même luminance : `emission`), d'où l'équivalence exacte.
+  function hgVert(st) { return (st.lampe === "hgc" || st.lampe === "hgcb") && st.filtre === "interferentiel"; }
+  // Lampe de base d'un état : la pression (basse) est un réglage de l'ampoule au mercure, pas une autre lampe.
+  function baseLampe(k) { return k === "hgcb" ? "hgc" : k; }
+  // Ce que la lampe envoie à travers le filtre : { cle, lum, part, allumee }, mémorisé par couple (lampe, filtre).
+  //  - cle : ce que reçoit le moteur — nom d'un SPECTRES (couleur exacte, bande sans filtre) ou OBJET spectre (mêmes
+  //    raies, poids × T(λ), quand le filtre en décale le contenu ; `spectreDe` du cœur accepte les deux) ;
+  //  - lum : luminance de la surface qui émet (cd/m²), filtre compris ; null pour une source ponctuelle (son
+  //    intensité dépend de l'objectif, `part` la corrige) ;
+  //  - part : part de Y transmise (1 sans filtre) ;
+  //  - allumee : faux quand le filtre ne laisse rien passer (`lumSource` rend alors LUM_ETEINTE : le moteur calcule sur
+  //    du noir, sans planter).
+  // Les caches du cœur qui prennent un spectre en CLÉ (`xyzSpectre`, `bandes`, `BANDES`) sérialisent l'objet : rien à
+  // faire ici. `luminanceSource` du cœur, elle, n'accepte que des NOMS : la luminance est donc calculée ici.
+  var SEUIL_RAIE = 1e-4, N_RAIES_LANTERNE = 8, LUM_ETEINTE = 1e-12, EMIS = {};
+  function emission(st) {
+    var L = lampe(st), F = filtre(st), cle = st.lampe + "|" + (st.filtre || "");
+    if (EMIS[cle]) return EMIS[cle];
+    var E;
+    if (!F) E = { cle: L.spectre, lum: null, nom: L.spectre, part: 1, allumee: true };
+    else if (hgVert(st)) E = { cle: st.lampe === "hgcb" ? "hgb" : "hg", lum: null, nom: st.lampe === "hgcb" ? "hgb" : "hg", part: 1, allumee: true };
+    else if (L.type === "point") E = { cle: { raies: [{ l: 632.8, poids: 1 }], profil: "mono", lmoy: 632.8 }, lum: null, nom: "laser",
+      part: transFiltre(F.kind, 632.8), allumee: transFiltre(F.kind, 632.8) > 1e-6 };
+    else E = spectreFiltre(MI_.spectreDe(L.spectre), F.kind, L.spectre);
+    if (!(E.part > 1e-6)) { E.allumee = false; E.part = 0; }     // rien ne passe : la lampe est éteinte derrière le filtre
+    EMIS[cle] = E;
+    return E;
+  }
+  // Luminance (ou intensité) de la source, filtre compris. `luminanceSource` du cœur ne prend que des noms : on lui
+  // donne celui du spectre NU, et `part` porte le filtre — sauf « mercure + filtre vert », qui garde la sienne.
+  function lumSource(st) {
+    var E = emission(st);
+    if (!E.allumee) return LUM_ETEINTE;     // jamais 0 : le moteur prend `luminance || 1`, et 1 cd/m² n'est pas noir
+    if (lampe(st).type === "point") return intensiteLaser(st) * E.part;
+    return MI_.luminanceSource(E.nom) * E.part;
+  }
+  // Spectre d'une lampe à travers un filtre : mêmes raies, poids × T(λ), celles de poids négligeable (< 1e-4 du plus
+  // fort) retirées ; continu (lanterne) : 8 raies gaussiennes au plus, de largeur égale à leur espacement, poids =
+  // Planck × T aux centres — le filtre interférentiel n'en garde qu'une, à 546 nm sur 10 nm.
+  function spectreFiltre(sp, kind, nomNu) {
+    var raies = [], i, part, pt = 0, py = 0, pTot = 0, lm = 0, mx = 0, largeur = sp.largeur;
+    if (sp.continu) {          // lanterne : Planck × T aux centres de 8 cases, largeur = leur espacement
+      var a = sp.continu[0], b = sp.continu[1], pas = (b - a) / N_RAIES_LANTERNE;
+      largeur = kind === 4 ? 10 : pas;
+      if (kind === 4) raies.push({ l: 546.1, poids: 1 });     // une seule raie : celle du filtre
+      else for (i = 0; i < N_RAIES_LANTERNE; i++) {
+        var lc = a + (i + 0.5) * pas;
+        raies.push({ l: lc, poids: MI_.planck(lc, sp.T) * transFiltre(kind, lc) });
+      }
+      part = partYContinu(kind);
+    } else {
+      for (i = 0; i < sp.raies.length; i++) {
+        var r = sp.raies[i], w = r.poids * transFiltre(kind, r.l);
+        raies.push({ l: r.l, poids: w, largeur: r.largeur });
+        pt += r.poids * MI_.cie(r.l)[1]; py += w * MI_.cie(r.l)[1];
+      }
+      part = pt > 0 ? py / pt : 0;
+    }
+    for (i = 0; i < raies.length; i++) mx = Math.max(mx, raies[i].poids);
+    var gardees = raies.filter(function (r) { return r.poids >= SEUIL_RAIE * mx; });
+    if (!gardees.length) gardees = [raies[0]];
+    gardees.forEach(function (r) { pTot += r.poids; lm += r.poids * r.l; });
+    var out = { raies: gardees.map(function (r) { var o = { l: r.l, poids: r.poids / pTot }; if (r.largeur != null) o.largeur = r.largeur; return o; }),
+      profil: sp.profil || "gauss", lmoy: pTot > 0 ? lm / pTot : raies[0].l };
+    if (largeur != null) out.largeur = largeur;
+    return { cle: out, lum: null, nom: nomNu, part: part, allumee: true };
+  }
+  // Part de Y d'un continu de Planck (fenêtre du spectre) qui traverse le filtre : quadrature sur la fenêtre.
+  var PART_Y = {};
+  function partYContinu(kind) {
+    if (PART_Y[kind] != null) return PART_Y[kind];
+    var sp = MI_.SPECTRES.bl, a = sp.continu[0], b = sp.continu[1], n = 600, s = 0, t = 0;
+    for (var i = 0; i < n; i++) {
+      var l = a + (i + 0.5) * (b - a) / n, w = MI_.planck(l, sp.T) * MI_.cie(l)[1];
+      t += w; s += w * transFiltre(kind, l);
+    }
+    return (PART_Y[kind] = t > 0 ? s / t : 0);
+  }
   // Luminances ABSOLUES (cd/m²) : lampe nue = luminance typique de la partie
   // qui émet (module couleur, `luminanceSource`). Dépoli (verre dépoli posé à D_DEPOLI devant le tube ou le filament,
   // transmission T_DEPOLI, diffusion lambertienne) : L = T E / π, E = L_lampe ∫ cos θ cos θ' dA / r² sur la forme
@@ -124,7 +224,7 @@
 
   // ================= état =================
   function bancDepart() {
-    return { lampe: "na", ent: { lampe: 0.27, cond: null, coll: null, dep: null }, depoli: true, iris: 0.010, lanterne: { cond: true, tirage: TIRAGE_DEFAUT },
+    return { lampe: "na", filtre: null, ent: { lampe: 0.27, cond: null, coll: null, dep: null }, depoli: true, iris: 0.010, lanterne: { cond: true, tirage: TIRAGE_DEFAUT },
       sor: { l20: null, l1: 0.12, ecran: 1.12, oeil: OEIL_DEPART }, det: "ecran", acc: 0, accMode: "infini", feuille: null, vue: "det", porte: 1 };
   }
   // Dérèglement n° graine : contact de C3 dans 5-20 mm, |e| de 0,3 à 3 mm, inclinaison de 2 à 10 mrad (franche :
@@ -223,8 +323,8 @@
   function intensiteLaser(st) { return MI_.fluxLaser() / (Math.PI * Math.pow(laserNu(st) ? R_LASER / P_LASER : thLaser(st), 2)); }
   function source(st) {
     var L = lampe(st), d = ARM + st.ent.lampe;
-    if (L.type === "point") return { src: { d: d, rayon: 0, intensite: 1 }, lum: intensiteLaser(st) };
-    var k = MI_.luminanceSource(L.spectre), F = FORMES[L.type], iris = st.iris != null ? Math.max(IRIS_MIN, st.iris) : Infinity;
+    if (L.type === "point") return { src: { d: d, rayon: 0, intensite: 1 }, lum: lumSource(st) };
+    var k = lumSource(st), F = FORMES[L.type], iris = st.iris != null ? Math.max(IRIS_MIN, st.iris) : Infinity;
     if (condLanterne(st)) {     // lanterne à condenseur : dépoli devant lui, ou le filament
       var t = lanterne(st).tirage;
       if (st.depoli) return { src: { d: d - t, rayon: Math.min(R_COND_L, iris) }, lum: k * kDepoli(L.type, t) };
@@ -269,7 +369,7 @@
   var T_SEP = 0.25;
   function configOptique(st, c3) {
     var S = source(st), inc = inclinaison(st), B = compensatrice(st), VL = VERRES_LAMES, c = {
-      spectre: lampe(st).spectre, luminance: S.lum * T_SEP, source: S.src, entree: entree(st),
+      spectre: emission(st).cle, luminance: S.lum * T_SEP, source: S.src, entree: entree(st),
       miroirs: { e: epaisseur(st, c3), ax: inc.ax, ay: inc.ay, R1: st.feuille === "M1" && feuilleEntiere(st) ? R_CACHE : R_MIROIR, R2: st.feuille === "M2" && feuilleEntiere(st) ? R_CACHE : R_MIROIR },
       lames: { t: VL.t, verre: VL.verre, b1: B.b1, b2: B.b2, d: ARM, fantome: VL.fantome },
       sortie: [], detecteur: {}
@@ -301,7 +401,7 @@
       var Fs = FORMES.spectrale;
       vig = { D: Math.max(D_DEPOLI, st.ent.lampe - posDep(st)), R: Math.max(IRIS_MIN, st.iris) };
       src = { d: ARM + st.ent.lampe, rayon: Fs.rayon, forme: Fs.forme };
-      S = { src: src, lum: MI_.luminanceSource(L0.spectre) };
+      S = { src: src, lum: lumSource(st) };
       ent = ent.filter(function (o) { return o.nom !== "iris"; });
     }
     ent = ent.sort(function (a, b) { return b.d - a.d; });
@@ -320,7 +420,7 @@
       var Mf = transfert(ent.filter(function (o) { return o.nom !== "laser"; }).map(function (o) { return { z: src.d - P_LASER - o.d, f: o.f }; }), 0, src.d - P_LASER);
       var Phi = MI_.fluxLaser(), Rl2 = R_LASER * R_LASER;
       return { A: Mf.A, B: Mf.B, th: DIV_LASER, rb: Math.abs(Mf.B) * DIV_LASER, forme: [{ t: "ell", cx: 0, cy: 0, a: R_LASER, b: R_LASER }],
-        rayon: R_LASER, lum: 0.5 * Phi / (Math.PI * DIV_LASER * DIV_LASER * Math.PI * Rl2), E: 0.5 * Phi / (Math.PI * Rl2 * Math.max(1e-6, Mf.A * Mf.A)), spectre: lampe(st).spectre };
+        rayon: R_LASER, lum: 0.5 * Phi / (Math.PI * DIV_LASER * DIV_LASER * Math.PI * Rl2), E: 0.5 * Phi / (Math.PI * Rl2 * Math.max(1e-6, Mf.A * Mf.A)), spectre: emission(st).cle };
     }
     // Laser à objectif : point source d'intensité I, rendu comme un petit disque (rayon 0,1 mm) de luminance
     // I / aire, dans le cône de l'objectif (thLaser).
@@ -331,7 +431,7 @@
     var lum = (laser ? S.lum / (Math.PI * RL * RL) : S.lum) * 0.5;      // une traversée de la séparatrice (50/50)
     if (vig) { vig.th = th; vig.dl = dl; }
     return { A: A, B: B, th: th, rb: Math.abs(B) * th, forme: forme, rayon: laser ? RL : src.rayon, lum: lum, vig: vig,
-      E: lum * Math.PI * th * th / Math.max(1e-12, A * A), spectre: lampe(st).spectre };
+      E: lum * Math.PI * th * th / Math.max(1e-12, A * A), spectre: emission(st).cle };
   }
   // Inclinaison ABSOLUE de M1 (sa normale par rapport à l'axe du banc d'entrée) : sans effet sur les franges (seule
   // l'inclinaison relative compte), elle place le retour de M1 sur l'iris. Tirée de la graine (2 mrad, direction au
@@ -368,7 +468,7 @@
       im.push({ x: R1.Bb * 2 * t1.x, y: R1.Bb * 2 * t1.y, w: 0.25, R: R1 });
     }
     if (st.feuille !== "M2") im.push({ x: R2.Bb * 2 * (t1.x + inc.ax), y: R2.Bb * 2 * (t1.y + inc.ay), w: 0.25, R: R2 });
-    return { r: src.rayon, images: im, spectre: lampe(st).spectre };
+    return { r: src.rayon, images: im, spectre: emission(st).cle };
   }
   var W_VUE = { ecran: 0.09, oeil: 0.07 * Q_OEIL, feuille: 0.045, iris: 0.004 };   // iris : demi-champ fixe (±4 mm), sans zoom : l'iris fermé (autocollimation) se voit bien, grand ouvert ses bords sortent du champ
   function irisVisible(st) { return st.iris != null && lampe(st).type !== "point"; }
@@ -387,7 +487,7 @@
   // Réglages de `vision` pour le moteur (cf. creerMoteur du module couleur) : vue "ecran" ou "oeil" ; visible : vue
   // « toujours visible », l'adaptation ne sert plus qu'à la pupille.
   function visionDe(st, v, visible) {
-    var V = MI_.VISION, sc = MI_.rapportScotopique(lampe(st).spectre), o;
+    var V = MI_.VISION, sc = MI_.rapportScotopique(emission(st).cle), o;
     if (v === "oeil") { var p = pupilleDe(st); o = { s: 289 / (Math.PI * p * p / 4), omega: 3283 / (Q_OEIL * Q_OEIL), M: 0.1, pup: p }; }
     else o = { s: V.rho / Math.PI, omega: 3283 / Math.pow(V.dObs / 1000, 2), M: 1 };
     o.Fsalle = 3283 * V.Esalle; o.salle = V.Lsalle; o.scot = sc == null ? -1 : sc;
@@ -435,7 +535,12 @@
   }
   // États d'avant le porte-dépoli (st.porte absent) : la position de la lampe était celle du dépoli et de l'iris posés
   // sur elle ; la lampe recule de D_DEPOLI, le plan de la source ne bouge pas.
+  // États sauvés : « Mercure + filtre vert » (lampes `hg` / `hgb`, retirées) devient la lampe au mercure nue et le filtre
+  // interférentiel posé devant elle — le moteur en reçoit exactement la même chose (`hgVert`). `filtre` absent : aucun.
   function migrer(st) {
+    if (st.lampe === "hg") { st.lampe = "hgc"; st.filtre = "interferentiel"; }
+    else if (st.lampe === "hgb") { st.lampe = "hgcb"; st.filtre = "interferentiel"; }
+    if (st.filtre === undefined) st.filtre = null;
     if (st.porte) return;
     if (porte(st)) st.ent.lampe = Math.min(BORNES.ent[1], Math.round((st.ent.lampe + D_DEPOLI) * 1e5) / 1e5);
     st.ent.dep = null; st.porte = 1;
@@ -782,8 +887,9 @@
     return { l: l, I: I, I0: I0 };
   }
   // Fenêtre par défaut du spectromètre selon la lampe (nm).
-  function fenetreSpectro(lampeK) {
-    return { na: [587.6, 591.0], hg: [540, 552], hgb: [540, 552], hgc: [395, 595], hgcb: [395, 595], bl: [400, 700], laser: [631.8, 633.8] }[lampeK] || [380, 720];
+  function fenetreSpectro(lampeK, filtreK) {
+    if (filtreK === "interferentiel" && lampeK !== "laser") return [540, 552];     // la seule bande qui passe
+    return { na: [587.6, 591.0], hgc: [395, 595], hgcb: [395, 595], bl: [400, 700], laser: [631.8, 633.8] }[lampeK] || [380, 720];
   }
 
   // Réglages, dans l'ordre où on les fait : ils mènent au Michelson réglé (lame d'air au contact). Trois choses
@@ -861,7 +967,7 @@
       titre: TRAD("au moins cinq anneaux du sodium sur l'écran, barrette posée.") },
     { id: "coherence", nom: TRAD("Longueur de cohérence"),
       observe: TRAD("Une raie n'est jamais parfaitement fine. Sa largeur limite les différences de marche qui donnent encore des franges : en s'éloignant du contact, le contraste diminue, puis s'annule au-delà de la longueur de cohérence, de l'ordre de λ²/Δλ. En lame d'air, l'étendue de la source n'y est pour rien ; en coin d'air, une source étendue brouille aussi les franges quand e grandit, et il faut fermer le diaphragme pour ne voir que l'effet de la raie."),
-      etapes: [TRAD("Anneaux au voisinage du contact, en lame d'air, observés à l'infini, au mercure avec son filtre vert (au sodium, le brouillage du doublet vient bien avant). Ou bien un coin d'air observé dans le plan des miroirs, la source peu étendue."),
+      etapes: [TRAD("Anneaux au voisinage du contact, en lame d'air, observés à l'infini, au mercure avec son filtre interférentiel devant elle (au sodium, le brouillage du doublet vient bien avant). Ou bien un coin d'air observé dans le plan des miroirs, la source peu étendue."),
         TRAD("Charioter toujours dans le même sens en suivant le contraste : les franges pâlissent, jusqu'à disparaître."),
         TRAD("Lire C₃ au contact et au brouillage : la différence de marche vaut le double du déplacement du miroir.")],
       titre: TRAD("franges ou anneaux brouillés par la largeur de la raie, à une épaisseur où la géométrie seule en donnerait encore.") },
@@ -869,7 +975,7 @@
       observe: TRAD("Sans son filtre, la lampe au mercure donne plusieurs raies : la verte, le doublet jaune, des raies bleues et violettes. Chacune donne ses franges, d'interfrange propre : elles ne restent en phase qu'au voisinage immédiat du contact. Plus loin, celles de la raie verte et du doublet jaune, les plus lumineuses, se décalent puis se retrouvent : le contraste fluctue d'une région du champ à l'autre et reste en deçà de celui de la raie verte seule. Le filtre ne garde qu'une raie, et des franges régulières."),
       etapes: [TRAD("Coin d'air près du contact, observé dans le plan des miroirs, à la lampe au mercure sans filtre."),
         TRAD("Incliner davantage un miroir avec C₁ ou C₂ : beaucoup de franges dans le champ, dont le contraste varie le long du coin d'air."),
-        TRAD("Comparer avec le filtre vert (étagère, onglet Sources) : même figure, contraste régulier.")],
+        TRAD("Comparer avec le filtre interférentiel devant la lampe (étagère, onglet Entrée, carte Filtre) : même figure, contraste régulier.")],
       titre: TRAD("franges ou anneaux du mercure sans filtre nettement moins contrastés que ceux de la raie verte seule, au même réglage.") },
     { id: "doublet", nom: TRAD("Doublet du sodium"),
       observe: TRAD("La lumière du sodium contient deux raies très proches, et chacune donne ses anneaux. Quand l'épaisseur change, les deux systèmes glissent l'un par rapport à l'autre : là où les anneaux brillants de l'un tombent sur les sombres de l'autre (anticoïncidence), le contraste s'annule ; il revient quand ils coïncident de nouveau. Le déplacement du miroir entre deux anticoïncidences donne l'écart entre les deux raies."),
@@ -948,10 +1054,10 @@
     R.vu.coin = G.plan === "miroirs" && L.type !== "filament" && etendue && visible && m.nfr >= 1.5 && m.quad < 1;
     R.vu.anneaux = G.plan === "infini" && etendue && visible && m.nfr >= 0.35 && m.centreDedans && m.ratio > 0.8;
     R.ok.blanc = !!sp.continu && G.plan === "miroirs" && etendue && m.Vmax > 0.5 && m.nfr >= 1.5;
-    if (!sp.continu && (st.lampe === "na" || st.lampe === "hg" || st.lampe === "hgb" || st.lampe === "hgcb") && (G.plan === "infini" || G.plan === "miroirs") && etendue) {
+    if (!sp.continu && (st.lampe === "na" || hgVert(st) || st.lampe === "hgcb") && (G.plan === "infini" || G.plan === "miroirs") && etendue) {
       // brouillage : la géométrie seule donnerait des franges (raie fine), la vraie lumière non. En coin d'air (plan des
       // miroirs), le contraste tombe aussi avec e par l'étendue de la source : la même mesure en raie infiniment fine
-      // (Vgeom) le démêle. Mercure + filtre vert, coin d'air de CONFIGS (lampe nue loin) : V 0,97 au contact, 0,19 à
+      // (Vgeom) le démêle. Mercure au filtre interférentiel, coin d'air de CONFIGS (lampe nue loin) : V 0,97 au contact, 0,19 à
       // 0,1 mm, 0,03 à 0,15 mm, Vgeom 0,92 ; au dépoli grand ouvert, Vgeom baisse aussi (0,43 à 0,15 mm).
       var cm = {}; for (var k in cfg) cm[k] = cfg[k];
       cm.spectre = mono(sp);
@@ -969,9 +1075,10 @@
     // battent (période ≈ 10 µm de δ), le contraste fluctue entre 0,6 et 0,95 du vert. Coin d'air au contact :
     // rapport 0,87 à 0,12 mrad (14 franges), 0,78 à 0,25 mrad (30 franges, contraste local de 0,52 à 0,92) ; lame
     // d'air : 0,62 à 1 µm, 0,64 à 22 µm, 0,71 à 50 µm. Seuil 0,82.
-    if ((st.lampe === "hgc" || st.lampe === "hgcb") && etendue && (G.plan === "infini" || G.plan === "miroirs")) {
+    // (au filtre interférentiel, c'est déjà la raie verte seule : rien à comparer)
+    if (!hgVert(st) && (st.lampe === "hgc" || st.lampe === "hgcb") && etendue && (G.plan === "infini" || G.plan === "miroirs")) {
       var cv = {}; for (var kv in cfg) cv[kv] = cfg[kv];
-      cv.spectre = st.lampe === "hgcb" ? "hgb" : "hg";
+      cv.spectre = st.lampe === "hgcb" ? "hgb" : "hg";     // noms de SPECTRES du moteur : la raie verte seule
       R.Vvert = mesure(cv, W, CO, { n: 15, K: 8 }).V;
       R.ok.mercure = R.Vvert > 0.5 && m.V < 0.82 * R.Vvert;
     }
@@ -987,7 +1094,7 @@
     if (cap && cap.type === "photodiode" && v === "ecran" && G.plan === "infini" && etendue && visible && m.centreDedans && m.P0) {
       var P = m.P0, dq = function (X, Y) { return P.cx * X + P.cy * Y + P.cxx * X * X + P.cyy * Y * Y + P.cxy * X * Y; };
       R.pdCentre = Math.abs(dq(cap.x, cap.y) - dq(m.centre[0], m.centre[1])) < sp.lmoy * 1e-9 / 4;
-      R.ok.defilement = R.pdCentre && (st.lampe === "na" || st.lampe === "hg" || st.lampe === "hgb");
+      R.ok.defilement = R.pdCentre && (st.lampe === "na" || hgVert(st));
     }
     // Laser : anneaux contrastés loin du contact, au-delà de la longueur de cohérence du sodium (V du sodium 0,04 à
     // 10 mm ; celui du laser 0,60, limité par la seule finesse des anneaux sur la grille de la mesure).
@@ -1140,7 +1247,7 @@
     return null;                                  // Michelson réglé : les indices attendent une manipulation ouverte
   }
   var APPLIS = {
-    coherence: TRAD("En lame d'air (ou en coin d'air, dans le plan des miroirs), au mercure et son filtre vert, en haute pression : partir du contact optique et charioter dans le même sens jusqu'à la disparition du contraste (lire C₃ aux deux bouts)."),
+    coherence: TRAD("En lame d'air (ou en coin d'air, dans le plan des miroirs), au mercure haute pression et son filtre interférentiel : partir du contact optique et charioter dans le même sens jusqu'à la disparition du contraste (lire C₃ aux deux bouts)."),
     doublet: TRAD("En lame d'air, au sodium : charioter lentement dans le même sens ; le contraste des anneaux s'annule, puis revient."),
     rayons: TRAD("Anneaux du sodium bien contrastés sur l'écran, au foyer de la lentille de 1 m (au moins cinq) : poser la barrette sur l'écran."),
     lamelle: TRAD("Coin d'air en lumière blanche, puis la lamelle devant un miroir, sur une partie du faisceau : charioter pour retrouver les franges derrière elle.")
@@ -1532,6 +1639,8 @@
     }
     if (c === "mercure") {
       if (st.lampe !== "hgc" && st.lampe !== "hgcb") return { cle: "m-lampe", t1: TRAD("Prendre la lampe au mercure sans son filtre : plusieurs raies, de la verte au violet."), t2: TRAD("Étagère, onglet Sources : un clic sur la carte Mercure, elle remplace la lampe.") };
+      if (hgVert(st)) return { cle: "m-filtre", t1: TRAD("Retirer le filtre interférentiel posé devant la lampe : c'est lui qui ne garde qu'une raie."),
+        t2: TRAD("Un clic sur la carte Filtre (étagère, onglet Entrée), ou Suppr quand le filtre est choisi.") };
       if (G.plan !== "miroirs" && G.plan !== "infini") return { cle: "m-plan", t1: TRAD("Observer un coin d'air dans le plan des miroirs : beaucoup de franges, d'épaisseurs différentes, dans le même champ."), t2: gesteDetecteur(st, "miroirs") };
       if (R.Vvert == null) return { cle: "m-conv", t1: TRAD("Éclairer les miroirs par une source étendue : dépoli près de la lampe, sans lentille d'entrée."),
         t2: !st.depoli ? TRAD("Poser le dépoli : étagère, onglet Entrée.") : TRAD("Retirer la lentille d'entrée : un clic sur sa carte (étagère, onglet Entrée), ou Suppr.") };
@@ -1554,11 +1663,11 @@
       return { cle: "b-C3", t1: TRAD("Modifier très légèrement C₃ : en lumière blanche, on ne voit de franges qu'au voisinage immédiat du contact optique."), t2: sensBlanc(st, CO) };
     }
     if (c === "coherence" || c === "doublet" || c === "rayons" || c === "defilement" || c === "rolecomp") {
-      if (c === "coherence" && st.lampe === "hgb") return { cle: "h-pression", t1: TRAD("Repasser la lampe au mercure en haute pression : basse pression, la raie est si fine que les anneaux gardent leur contraste sur toute la course de C₃, le brouillage ne vient jamais."),
+      if (c === "coherence" && st.lampe === "hgcb") return { cle: "h-pression", t1: TRAD("Repasser la lampe au mercure en haute pression : basse pression, la raie est si fine que les anneaux gardent leur contraste sur toute la course de C₃, le brouillage ne vient jamais."),
         t2: TRAD("Lampe choisie (bandeau des réglages) : Pression, haute.") };
-      if (c === "coherence" && st.lampe !== "hg" && st.lampe !== "na") return { cle: "h-lampe", t1: TRAD("Observer les anneaux avec la lampe au mercure et son filtre vert : une seule raie, assez fine pour des anneaux loin du contact, assez large pour qu'ils finissent par se brouiller."),
-        t2: TRAD("Étagère, onglet Sources : un clic sur la carte Mercure + filtre vert, elle remplace la lampe.") };
-      if ((c === "doublet" || c === "rayons" || c === "rolecomp" || (c === "defilement" && st.lampe !== "hg") || L.type !== "spectrale") && st.lampe !== "na") return { cle: "n-lampe", t1: TRAD("Observer les anneaux avec la lampe au sodium."), t2: SODIUM };
+      if (c === "coherence" && !hgVert(st) && st.lampe !== "na") return { cle: "h-lampe", t1: TRAD("Observer les anneaux avec la lampe au mercure et le filtre interférentiel devant elle : une seule raie, assez fine pour des anneaux loin du contact, assez large pour qu'ils finissent par se brouiller."),
+        t2: TRAD("Étagère, onglet Sources : la carte Mercure ; onglet Entrée : la carte Filtre, puis « Interférentiel » au bandeau du filtre.") };
+      if ((c === "doublet" || c === "rayons" || c === "rolecomp" || (c === "defilement" && !hgVert(st)) || L.type !== "spectrale") && st.lampe !== "na") return { cle: "n-lampe", t1: TRAD("Observer les anneaux avec la lampe au sodium."), t2: SODIUM };
       if (G.plan !== "infini" && !((c === "coherence" || c === "mercure") && G.plan === "miroirs")) return { cle: "n-infini", t1: TRAD("Les anneaux sont localisés à l'infini : l'œil accommode à l'infini (dépoli près de la lampe), ou on les recueille sur un écran dans le plan focal image de la lentille de 1 m."),
         t2: gesteDetecteur(st, "infini") };
       if (G.collimate || !m.nl) return { cle: "n-conv", t1: TRAD("Pour voir les anneaux, il faut un faisceau convergent vers les miroirs : dépoli près de la lampe, ou le condenseur, qui forme l'image de la lampe sur les miroirs."),
@@ -1608,11 +1717,12 @@
   // contraste tombe de 0,57 à 0,50, au seuil de l'application) ;
   // anneaux (dépoli, écran au foyer de la lentille 1 m) ; autocollimation (iris presque fermé au foyer de la
   // lentille 20 cm, œil accommodé à l'infini).
-  function banc(st, quoi, lampeK) {
+  function banc(st, quoi, lampeK, filtreK) {
     var b = bancDepart();
     if (quoi === "coin") { b.depoli = false; b.iris = null; b.ent.lampe = 0.8; b.sor = { l20: 0.12, l1: null, ecran: 1.12, oeil: OEIL_DEPART }; }
     if (quoi === "auto") { b.iris = 0.0005; b.ent = { lampe: 0.35 + D_DEPOLI, cond: null, coll: 0.15, dep: null }; b.sor = { l20: null, l1: null, ecran: 1.12, oeil: OEIL_DEPART }; b.det = "oeil"; }
     if (lampeK) b.lampe = lampeK;
+    if (filtreK) b.filtre = filtreK;
     if (lampeK === "bl") b.lanterne.tirage = TIRAGE_L[1];
     for (var k in b) st[k] = b[k];
     st.lamelle = null;
@@ -1630,8 +1740,9 @@
     { id: "contact", nom: TRAD("Contact"), f: function (st) { banc(st, "anneaux"); compReglee(st); viser(st, 0, 0, 0); } },
     // ----- situations des manipulations (manip: true, id = celui de MANIPS ; nom posé d'après MANIPS) : mode prof -----
     { id: "blanc", manip: true, f: function (st) { banc(st, "coin", "bl"); compReglee(st); viser(st, 0, 0.06e-3, 0); } },
-    // mercure + filtre vert (raie de 1 nm du cœur) : contraste perdu dès 0,15 mm environ, géométrie encore bonne
-    { id: "coherence", manip: true, f: function (st) { banc(st, "anneaux", "hg"); compReglee(st); viser(st, 0.2e-3, 0, 0); } },
+    // mercure nu et son filtre interférentiel (raie de 1 nm du cœur, spectre nommé hg) : contraste perdu dès 0,15 mm
+    // environ, géométrie encore bonne
+    { id: "coherence", manip: true, f: function (st) { banc(st, "anneaux", "hgc", "interferentiel"); compReglee(st); viser(st, 0.2e-3, 0, 0); } },
     // doublet et lamelle : posés au point de départ (anticoïncidence ; lamelle sans chariotage), le constat vient en chariotant
     { id: "doublet", manip: true, f: function (st) { banc(st, "anneaux"); compReglee(st); viser(st, EP_DOUBLET / 2, 0, 0); } },
     { id: "rayons", manip: true, f: function (st) { banc(st, "anneaux"); compReglee(st); viser(st, 2e-3, 0, 0); st.capteur = { type: "barrette", x: 0, y: -0.05, ang: 0 }; } },
@@ -1848,12 +1959,12 @@
     }
 
     // ================= éléments des bancs : ids, déplacer, régler, retirer =================
-    // Ids : lampe, depoli, iris (sur le porte-dépoli d'une lampe spectrale, `porte` ; vissés sur la lanterne), cond, coll
-    // (entrée), l20, l1, det (l'écran ou l'œil posé), et
+    // Ids : lampe, filtre (sur le porte-dépoli, comme le dépoli et l'iris), depoli, iris (sur le porte-dépoli d'une lampe
+    // spectrale, `porte` ; vissés sur la lanterne), cond, coll (entrée), l20, l1, det (l'écran ou l'œil posé), et
     // hors des bancs comp, feuille, lamelle. st.sel = l'élément choisi (un seul), hors annulation.
-    var NOMS_EL = { depoli: TRAD("Dépoli"), iris: TRAD("Iris"), cond: TRAD("Condenseur"), coll: TRAD("Lentille 20 cm"), l20: TRAD("Lentille 20 cm"), l1: TRAD("Lentille 1 m"),
+    var NOMS_EL = { filtre: TRAD("Filtre"), depoli: TRAD("Dépoli"), iris: TRAD("Iris"), cond: TRAD("Condenseur"), coll: TRAD("Lentille 20 cm"), l20: TRAD("Lentille 20 cm"), l1: TRAD("Lentille 1 m"),
       comp: TRAD("Compensatrice"), feuille: TRAD("Feuille"), lamelle: TRAD("Lamelle") };
-    var MED_LAMPE = { na: "sodium", hg: "hgv", hgb: "hgv", hgc: "mercure", hgcb: "mercure", bl: "lanterne", laser: "laser" };
+    var MED_LAMPE = { na: "sodium", hgc: "mercure", hgcb: "mercure", bl: "lanterne", laser: "laser" };
     function nomEl(id) {
       if (id === "lampe") return lampe(st).court.replace(" (blanche)", "");
       if (id === "det") return st.det === "oeil" ? TRAD("Œil") : TRAD("Écran");
@@ -1861,6 +1972,7 @@
     }
     function figureEl(id) {
       if (id === "lampe") return { med: MED_LAMPE[st.lampe] || "sodium" };
+      if (id === "filtre") return { med: "filtre", teinte: (filtre(st) || FILTRES[FILTRE_DEFAUT]).coul };
       if (id === "iris") return { med: "iris", d: Math.min(40, (st.iris || 0) * 1600) };
       if (id === "cond") return { med: "conv", mo: "60" };
       if (id === "coll" || id === "l20") return { med: "conv", mo: "200" };
@@ -1873,6 +1985,7 @@
     function posEl(id) { return lirePos(st, bancDe(id), cleBanc(id)); }
     function present(id) {
       var pt = lampe(st).type === "point";
+      if (id === "filtre") return !!filtre(st);
       if (id === "depoli") return !!st.depoli && !pt;
       if (id === "iris") return st.iris != null && !pt;
       if (id === "cond" || id === "coll") return st.ent[id] != null;
@@ -1904,15 +2017,17 @@
       else if (id === "cond" || id === "coll") st.ent[id] = null; else if (id === "l20" || id === "l1") st.sor[id] = null;
       else if (id === "feuille") { st.feuille = null; if (st.vue === "feuille") st.vue = "det"; }
       else if (id === "lamelle") st.lamelle = null;
+      else if (id === "filtre") st.filtre = null;
       else return false;
       if (st.sel === id) st.sel = null;
       return true;
     }
-    // Ordre de la lumière (Tab) : lampe, dépoli, iris, lentilles d'entrée vers l'appareil, lentilles de sortie, détecteur.
+    // Ordre de la lumière (Tab) : lampe, filtre, dépoli, iris, lentilles d'entrée vers l'appareil, lentilles de sortie,
+    // détecteur.
     function ordreLumiere() {
       var ent = ["cond", "coll"].filter(present).sort(function (a, b) { return st.ent[b] - st.ent[a]; });
       var sor = ["l20", "l1"].filter(present).sort(function (a, b) { return st.sor[a] - st.sor[b]; });
-      return ["lampe", "depoli", "iris"].filter(present).concat(ent, sor, ["det"]);
+      return ["lampe", "filtre", "depoli", "iris"].filter(present).concat(ent, sor, ["det"]);
     }
     // Sélection multiple (comme le banc d'optique), sur UN banc : st.selL = les éléments choisis, le dernier au bout ;
     // st.sel = celui-là (bandeau, réglages). Une affectation directe de st.sel vaut « lui seul » (sels() remet la liste).
@@ -1951,13 +2066,24 @@
     function modeClic(ev) { return ev && (ev.ctrlKey || ev.metaKey) ? "ajout" : ev && ev.shiftKey ? "plage" : ""; }
     function changerLampe(k) {
       // la pression choisie (basse) est retenue en passant d'une lampe mercure à l'autre ; hors lampes mercure, elle dort
-      if (st.pression === "basse") k = { hg: "hgb", hgc: "hgcb" }[k] || k;
-      st.lampe = k;          // même position : celle de la lampe (st.ent.lampe), dépoli et iris restent posés (ignorés avec le laser)
+      if (st.pression === "basse") k = { hgc: "hgcb" }[k] || k;
+      st.lampe = k;          // même position : celle de la lampe (st.ent.lampe) ; filtre, dépoli et iris restent posés (ignorés avec le laser)
       if (condLanterne(st)) reglerLanterne(st, lanterne(st).tirage);   // son condenseur doit tenir devant elle
       if (LAMPES[k].type === "point" && (st.sel === "depoli" || st.sel === "iris")) st.sel = "lampe";
       modifie("dessin optique loupe obs etagere");
     }
     function changerDet(d) { if (st.det !== d) { detecteur(st, d); st.vue = "det"; modifie("dessin optique obs etagere"); } }
+    // Filtre devant la lampe : un seul à la fois, sur le porte-dépoli (comme le dépoli et l'iris). `null` : aucun.
+    function poserFiltre(v) {
+      st.filtre = v || null;
+      if (v) st.sel = "filtre";
+      TAPE = null; modifie("dessin optique loupe obs etagere");
+    }
+    function itemsFiltre() {     // menu : les quatre filtres et « aucun », coché sur celui qui est posé
+      return [null].concat(CLES_FILTRE).map(function (f) {
+        return { lab: f ? FILTRES[f].nom : TRAD("aucun"), coche: (st.filtre || null) === f, act: function () { poserFiltre(f); } };
+      });
+    }
 
     // ---- éléments des bancs vus de dessus (cavalier, index doré, contour doré quand choisi) et leurs pastilles ----
     // Banc d'entrée tourné de 90° : repère local x le long du banc vers l'appareil. Pastilles : lampe, dépoli,
@@ -2028,10 +2154,14 @@
         .insertAdjacentHTML("beforeend", K.Dessin.corps({ genre: "iris", d: Math.min(R_DEPOLI, st.iris) * 2000 }, 0, 0, 1, false));
       if (pd && st.ent.dep != null)        // index doré du porte-dépoli, par-dessus le dépoli : le plan du dépoli sur la règle
         svg("path", { d: "M-3.5 14l3.5 5 3.5-5z", fill: "#e0b84c", transform: "translate(0 " + yDe.toFixed(2) + ") rotate(-90)", "pointer-events": "none" }, g);
+      // filtre : devant le dépoli et l'iris, sur le même support — et devant toutes les lampes, lanterne et laser compris
+      var yFi = yIr - 9;
+      if (present("filtre")) groupe("filtre", "translate(0 " + yFi.toFixed(2) + ") rotate(-90)", [-4, -24, 8, 48])
+        .insertAdjacentHTML("beforeend", K.Dessin.corps({ genre: "plaque", teinte: filtre(st).coul }, 0, 0, 1, false));
       // rangée sous la lampe (à hauteur de la lampe quand elle est au bout du banc : la place manque dessous)
-      var grp = ["iris", "depoli", "lampe"].filter(present), yr = yl + (pt ? 100 : 74);
+      var grp = ["filtre", "iris", "depoli", "lampe"].filter(present), yr = yl + (pt ? 100 : 74);
       if (yr > VB.y + VB.h - 40) yr = yl + 6;
-      var yel = { iris: yIr, depoli: yDe, lampe: yl + (pt ? 40 : lant ? 14 : 30) }, xel = { iris: -31, depoli: -31, lampe: pt ? -15 : -27 };
+      var yel = { filtre: yFi, iris: yIr, depoli: yDe, lampe: yl + (pt ? 40 : lant ? 14 : 30) }, xel = { filtre: -8, iris: -31, depoli: -31, lampe: pt ? -15 : -27 };
       grp.forEach(function (id, i) { var cx = -62 - 36 * (grp.length - 1 - i); P.push({ id: id, cx: cx, cy: yr, nom: "b", filet: [[cx, yr - 17], [cx, yel[id]], [xel[id], yel[id]]] }); });
       // ---- sortie : lentilles, puis l'écran ou l'œil ----
       var px = -1e9;
@@ -2292,6 +2422,7 @@
           : [["depoli", TRAD("Dépoli"), !!st.depoli], ["iris", TRAD("Iris"), st.iris != null]]).forEach(function (q) {
           it.push({ lab: q[1], coche: q[2], act: function () { clicCarte(q[0]); } });
         });
+        if (id === "lampe" || id === "filtre") it.push({ lab: TRAD("Filtre") + " ▸", sub: itemsFiltre() });
         if (id === "det") it.push({ lab: TRAD("Remplacer par"), sub: [{ lab: st.det === "ecran" ? TRAD("Œil") : TRAD("Écran"), act: function () { changerDet(st.det === "ecran" ? "oeil" : "ecran"); } }] });
         if (/^(cond|coll|l20|l1)$/.test(id)) {
           var bl = bancDe(id), lis = bl === "ent" ? ["cond", "coll"] : ["l20", "l1"];
@@ -2391,7 +2522,7 @@
       var id = st.sel && present(st.sel) ? st.sel : null;
       if (st.sel && !id) st.sel = null;
       var ecDep = porte(st) && st.ent.dep != null ? Math.round((st.ent.lampe - st.ent.dep) * 1000) : null;
-      var cle = JSON.stringify([id, st.lampe, condLanterne(st), st.det, st.feuille, st.lamelle && st.lamelle.miroir, st.lc, st.obj, !!TAPE, porte(st), ecDep, sels()]);
+      var cle = JSON.stringify([id, st.lampe, st.filtre, condLanterne(st), st.det, st.feuille, st.lamelle && st.lamelle.miroir, st.lc, st.obj, !!TAPE, porte(st), ecDep, sels()]);
       if (!force && cle === cleBD) {      // valeurs en place (un curseur qu'on tient n'est pas refait)
         var pz = BD.querySelector(".pl-mi-pos"); if (pz && id) pz.textContent = fmtNb(posEl(id) * 100, 1) + " cm";
         if (bdIris) bdIris();
@@ -2406,10 +2537,10 @@
         TRAD("<b>Groupe</b> — glisser, molette, flèches, ◂ ▸ : tous ensemble, écarts gardés · {0}+clic : ajouter ou retirer un élément · {1}+clic : tous ceux d'entre les deux · {2} : plus rien de choisi", [k_("Ctrl"), k_(TRAD("Maj")), k_(TRAD("Échap"))]));
       if (id === "lampe") {
         blocPos("lampe");
-        K.seg(BD, ORDRE_LAMPES.map(function (k) { return [k, LAMPES[k].court.replace(" (blanche)", "").replace(" vert", ""), TRAD("Remplacer la lampe par : {0} (même position)", [LAMPES[k].nom])]; }), { hgb: "hg", hgcb: "hgc" }[st.lampe] || st.lampe, changerLampe);
-        var baseL = { hgb: "hg", hgcb: "hgc" }[st.lampe] || st.lampe, basseL = { hg: "hgb", hgc: "hgcb" }[baseL];
+        K.seg(BD, ORDRE_LAMPES.map(function (k) { return [k, LAMPES[k].court.replace(" (blanche)", ""), TRAD("Remplacer la lampe par : {0} (même position)", [LAMPES[k].nom])]; }), baseLampe(st.lampe), changerLampe);
+        var baseL = baseLampe(st.lampe), basseL = baseL === "hgc" ? "hgcb" : null;
         if (basseL) {
-          var a3P = baseL === "hg" ? [
+          var a3P = hgVert(st) ? [
             TRAD("<b>Pression : haute</b> — l'arc dans une ampoule claire, à une trentaine de bar : les collisions élargissent la raie verte (∆λ ≈ 1 nm), d'où une longueur de cohérence ℓc ≈ 0,3 mm seulement : les anneaux finissent par se brouiller, à portée du tambour C₃ (c'est elle que demande la manipulation Longueur de cohérence)"),
             TRAD("<b>Pression : basse</b> — la décharge d'une vapeur rarefaite, la lampe spectrale des salles de TP : raie fine, presque limitée par l'effet Doppler (2 millièmes de nm), d'où ℓc ≈ 15 cm : les anneaux gardent leur contraste sur toute la course de C₃, le brouillage reste hors d'atteinte")] : [
             TRAD("<b>Pression : haute</b> — l'arc dans une ampoule claire, à une trentaine de bar : chaque raie y est élargie par les collisions (∆λ ≈ 1 nm sur la verte) ; sans le filtre, les franges superposées des raies ensemble ne tiennent qu'au voisinage immédiat du contact optique"),
@@ -2458,6 +2589,11 @@
             function () { deplacer(st, "ent", "lampe", posDep(st) + D_DEPOLI); modifie(TOUT); });
         } else el("span", "bc-vide", BD, TRAD("sur la lanterne"));
         retirerBtn(id);
+      } else if (id === "filtre") {
+        K.seg(BD, [[null, TRAD("aucun")]].concat(CLES_FILTRE.map(function (f) { return [f, FILTRES[f].court, majuscule(FILTRES[f].nom)]; })),
+          st.filtre || null, function (v) { poserFiltre(v); });
+        el("span", "bc-vide", BD, TRAD("devant la lampe, sur le porte-dépoli : il vaut pour toutes les lampes"));
+        retirerBtn(id);
       } else if (/^(cond|coll|l20|l1)$/.test(id)) {
         blocPos(id); retirerBtn(id);
       } else if (id === "det") {
@@ -2498,10 +2634,10 @@
       var pt = lampe(st).type === "point", posez = TRAD("clic : le poser · glisser sur son banc : le poser où on le lâche"), retire = TRAD("clic : le retirer · glisser sur son banc : le déplacer");
       function el_(k) { var p = present(k); return carte(k, nomEl(k), figureEl(k), p, "<b>" + nomEl(k) + "</b> — " + (p ? retire : posez)); }
       if (T.nom === "Sources") return ORDRE_LAMPES.map(function (k) {
-        var L = LAMPES[k], nm = L.court.replace(" (blanche)", "").replace(" vert", ""), posee = st.lampe === k || k === "hg" && st.lampe === "hgb" || k === "hgc" && st.lampe === "hgcb";
+        var L = LAMPES[k], nm = L.court.replace(" (blanche)", ""), posee = baseLampe(st.lampe) === k;
         return carte("L" + k, nm, { med: MED_LAMPE[k] }, posee, "<b>" + K.esc(L.nom.charAt(0).toUpperCase() + L.nom.slice(1)) + "</b> — " +
           (posee ? TRAD("la lampe posée") : TRAD("clic : remplace la lampe, même position · glisser sur le banc d'entrée : idem")) +
-          (k === "hg" || k === "hgc" ? TRAD(" · haute ou basse pression dans l'ampoule : bandeau de la lampe") : ""));
+          (k === "hgc" ? TRAD(" · haute ou basse pression dans l'ampoule : bandeau de la lampe") : ""));
       });
       if (T.nom === "Entrée") {
         var E = ["depoli", "iris"].map(function (k) {
@@ -2510,6 +2646,10 @@
             : TRAD("vissé sur la lanterne")), (c.pose ? TRAD("le retirer") : TRAD("le poser"))]);
           return c;
         }).concat([el_("cond"), el_("coll")]);
+        var cf = el_("filtre");
+        cf.a3 = TRAD("<b>Filtre</b> — devant la lampe, sur le porte-dépoli, pour toutes les lampes (un seul à la fois) · clic : {0} · sa couleur : au bandeau, ou clic droit",
+          [cf.pose ? TRAD("le retirer") : TRAD("poser le {0}", [FILTRES[FILTRE_DEFAUT].nom])]);
+        E.splice(2, 0, cf);      // après le dépoli et l'iris, devant le condenseur et la lentille
         if (pt) E.push(carte("lc", TRAD("Objectif ×{0}", [objectif(st)]), { med: "conv", mo: "×" + objectif(st) }, st.lc !== false,
           TRAD("<b>Objectif de microscope ×{0}</b> vissé sur le laser — clic : {1} · ×10, ×20, ×40 : au bandeau du laser", [objectif(st),
             (st.lc !== false ? TRAD("le retirer (le faisceau nu, de moins d'un millimètre)") : TRAD("le visser (un cône de lumière)"))])));
@@ -2523,7 +2663,8 @@
     }
     var TOUT = "dessin optique loupe obs etagere";
     function clicCarte(k) {
-      if (k.charAt(0) === "L" && LAMPES[k.slice(1)]) { if (st.lampe !== k.slice(1) && !(st.lampe === "hgb" && k.slice(1) === "hg") && !(st.lampe === "hgcb" && k.slice(1) === "hgc")) { st.sel = "lampe"; changerLampe(k.slice(1)); } return; }
+      if (k.charAt(0) === "L" && LAMPES[k.slice(1)]) { if (baseLampe(st.lampe) !== k.slice(1)) { st.sel = "lampe"; changerLampe(k.slice(1)); } return; }
+      if (k === "filtre") { if (filtre(st)) retirer("filtre"); else poserFiltre(FILTRE_DEFAUT); TAPE = null; modifie(TOUT); return; }
       if (k === "ecran" || k === "oeil") { if (st.det !== k) { changerDet(k); st.sel = "det"; } return; }
       if (k === "lc") st.lc = st.lc === false;
       else if (k === "depoli") { st.depoli = !st.depoli; st.sel = st.depoli ? "depoli" : st.sel === "depoli" ? null : st.sel; }
@@ -2543,8 +2684,8 @@
           if (k === "feuille") { if (st.feuille !== m) st.fbord = null; st.feuille = m; } else st.lamelle = { miroir: m, bord: st.lamelle ? st.lamelle.bord : 0 };
           st.sel = k; modifie(TOUT); } };
       }
-      if (k === "depoli" || k === "iris" || k === "lc") {          // sur la lampe (l'objectif : sur le laser)
-        var pose = k === "lc" ? st.lc !== false : present(k), ok = (k === "lc") === (lampe(st).type === "point");
+      if (k === "depoli" || k === "iris" || k === "lc" || k === "filtre") {     // sur la lampe (l'objectif : sur le laser)
+        var pose = k === "lc" ? st.lc !== false : present(k), ok = k === "filtre" ? true : (k === "lc") === (lampe(st).type === "point");
         return surBanc(p, "ent") && ok && !pose ? { texte: TRAD("<b>{0}</b> — lâché ici : posé sur la lampe", [nm]), f: function () { clicCarte(k); } } : null;
       }
       var b = k === "ecran" || k === "oeil" ? "sor" : ELEMENTS[k] && ELEMENTS[k].banc;
@@ -2595,7 +2736,7 @@
       CAD.t = now;
     }
     function qualite(cfg) {
-      var s = typeof cfg.spectre === "string" ? cfg.spectre : "bl", blanc = s === "bl", forme = !!cfg.source.forme;
+      var blanc = !!CO.spectreDe(cfg.spectre).continu, forme = !!cfg.source.forme;
       var pt = !(cfg.source.rayon > 0);
       // Lumière blanche : 16 bandes de nombre d'onde intégrées exactement (`bandes` du cœur), sans tirage : rien à
       // moyenner sur le spectre, l'image fine n'a pas plus de passes qu'en lumière monochromatique ; les mêmes à
@@ -2919,8 +3060,8 @@
     var FEN_PD = [1, 2, 5, 10, 20, 50, 100, 200, 500, 1000, 2000];   // largeur de la fenêtre de la photodiode, µm de chariot
     var GM = { g: 34, d: 8, h: 8, b: 30 };                            // marges du graphe (px)
     function fenetre() {
-      var c = st.capteur;
-      if (!c.fen || c.fenLampe !== st.lampe) { var f = fenetreSpectro(st.lampe); c.fen = [f[0], f[1]]; c.fenLampe = st.lampe; }
+      var c = st.capteur, cle = st.lampe + "|" + (st.filtre || "");
+      if (!c.fen || c.fenLampe !== cle) { var f = fenetreSpectro(st.lampe, st.filtre); c.fen = [f[0], f[1]]; c.fenLampe = cle; }
       return c.fen;
     }
     // Panneau ouvert tant qu'un capteur est posé et l'écran observé ; un autre capteur repart de zéro.
@@ -2945,7 +3086,7 @@
         el("span", "pl-cap-n", CAP.pied, TRAD("Charioter : l'éclairement s'inscrit selon le déplacement du chariot. Molette sur le graphe : largeur de la fenêtre."));
       } else if (c.type === "fibre") {
         K.bouton(CAP.pied, TRAD("Fenêtre de la lampe"), function () { c.fen = null; CAP.sale = true; K.modifie(); }, "pl-btn-p");
-        K.bouton(CAP.pied, TRAD("Tout le visible"), function () { c.fen = [380, 720]; c.fenLampe = st.lampe; CAP.sale = true; K.modifie(); }, "pl-btn-p");
+        K.bouton(CAP.pied, TRAD("Tout le visible"), function () { c.fen = [380, 720]; c.fenLampe = st.lampe + "|" + (st.filtre || ""); CAP.sale = true; K.modifie(); }, "pl-btn-p");
         boutonReel(c);
         el("span", "pl-cap-n", CAP.pied, TRAD("Molette sur le spectre : zoomer autour du pointeur. {0}.{1}", [majuscule(capteurs(st).fibre),
           (st.capReels ? TRAD(" Le spectromètre parfait (résolution 0,02 nm, fibre de 50 µm) sépare le doublet du sodium (0,6 nm), que celui-ci ne résout pas.") : "")]));
@@ -3389,6 +3530,8 @@
       if (id === "comp") return TRAD("<b>Compensatrice</b> — clic : la choisir (au bandeau, « Régler la compensatrice ») · B₁ l'oriente, B₂ règle son excentricité");
       if (id === "feuille") return TRAD("<b>Feuille</b> sur {0} — elle cache ce miroir · clic : la choisir (bandeau : sur M₁ · sur M₂, Retirer) · glisser le long du miroir : n'en couvrir qu'une partie · tirer loin du miroir, {1} : la retirer · sa vue : pastille « Feuille » au-dessus de l'image", [(st.feuille === "M1" ? "M₁" : "M₂"), k_(TRAD("Suppr"))]);
       if (id === "lamelle") return TRAD("<b>Lamelle</b> — glisser : son bord le long du miroir · clic : la choisir (bandeau : miroir, épaisseur au palmer, Retirer) · {0} : la retirer", [k_(TRAD("Suppr"))]);
+      if (id === "filtre") return TRAD("<b>{0}</b> devant la lampe, sur le porte-dépoli (toutes les lampes) — clic : le choisir, sa couleur au bandeau · clic droit : le remplacer · {1} : le retirer",
+        [K.esc(filtre(st) ? majuscule(filtre(st).nom) : TRAD("Filtre")), k_(TRAD("Suppr"))]);
       if (!b) return null;
       var dep = b === "ent" ? k_("↑ ↓") : k_("← →"), reg = b === "ent" ? k_("← →") : k_("↑ ↓");
       var avec = id === "depoli" || id === "iris" ? (porte(st) ? TRAD(" (avec {0} ; contre la lampe, vers l'appareil : il la quitte, loin de l'appareil : il la pousse)", [id === "iris" ? TRAD("le dépoli") : TRAD("l'iris")]) : TRAD(" (avec la lanterne)"))
@@ -3464,7 +3607,8 @@
         [TRAD("Faisceau"), TRAD("la lumière à l'échelle des bancs")]],
       [TRAD("Étagère")]: [[TRAD("carte : clic"), TRAD("poser ou retirer l'élément (un seul de chaque ; carte surlignée : posé) ; une source remplace la source, l'écran et l'œil se remplacent ; feuille, lamelle : posées sur M₂ (au bandeau : sur M₁ · sur M₂)")],
         [TRAD("carte : glisser"), TRAD("sur son banc : la poser où on la lâche (une source sur le banc d'entrée : remplace la lampe) ; feuille, lamelle : sur un miroir ; ailleurs : rien")],
-        [TRAD("onglets"), TRAD("Sources · Entrée · Sortie · Accessoires")], [TRAD("clic droit sur une lentille"), TRAD("Remplacer par l'autre lentille du banc (même position)")]],
+        [TRAD("onglets"), TRAD("Sources · Entrée · Sortie · Accessoires")], [TRAD("clic droit sur une lentille"), TRAD("Remplacer par l'autre lentille du banc (même position)")],
+        [TRAD("carte Filtre"), TRAD("devant la lampe, sur le porte-dépoli : un seul à la fois, pour toutes les lampes ; sa couleur (rouge, vert, bleu, interférentiel) au bandeau ou par clic droit")]],
       [TRAD("Image")]: [[TRAD("vues"), TRAD("pastilles au-dessus de l'image : le détecteur, la face de l'iris, la feuille")], [TRAD("à l'œil : glisser"), TRAD("déplacer l'œil (Maj : fin · Ctrl+Maj : ultrafin)")],
         [TRAD("à l'œil : sous l'image"), TRAD("« À l'infini » ou « Sur les miroirs » : l'œil accommode seul sur ce plan ; « À la main » : curseur")],
         [TRAD("à l'œil : molette"), TRAD("« À la main » seulement : accommoder, vers le haut = plus loin (Maj : fin · Ctrl+Maj : ultrafin · Ctrl : gros)")], [TRAD("à l'œil : double-clic"), TRAD("œil recentré")],
