@@ -5,7 +5,11 @@
 // window.OPTIQUE_RETOUR.ouvrir(instrument) (appelé par le panneau « ? » des instruments) et branche les [data-retour].
 (function () {
   "use strict";
-  var NOMS = { michelson: "Michelson", goniometre: "Goniomètre", banc: "Banc d'optique", site: "Le site" };
+  // Langue de la page (<html lang>) : le même fichier sert le site français et le site anglais.
+  var EN = /^en/i.test(document.documentElement.lang || "");
+  function L(fr, en) { return EN ? en : fr; }
+  var NOMS = { michelson: "Michelson", goniometre: L("Goniomètre", "Spectrometer"), banc: L("Banc d'optique", "Optical bench"),
+    site: L("Le site", "The site") };
   var app = document.body.getAttribute("data-app") || "";
   var surInstrument = !!NOMS[app] && app !== "site";
   var css = document.createElement("style");
@@ -33,15 +37,16 @@
     var type = "bug";
     var v = document.createElement("div");
     v.className = "rt-voile";
-    v.innerHTML = '<form class="rt-boite"><h2>Un bug, une idée ?</h2>' +
-      '<div class="rt-seg"><button type="button" data-t="bug" class="on">Bug</button><button type="button" data-t="suggestion">Suggestion</button></div>' +
+    v.innerHTML = '<form class="rt-boite"><h2>' + L("Un bug, une idée ?", "A bug, an idea?") + '</h2>' +
+      '<div class="rt-seg"><button type="button" data-t="bug" class="on">Bug</button><button type="button" data-t="suggestion">' + L("Suggestion", "Idea") + '</button></div>' +
       '<label>Instrument</label><select name="instrument">' +
       Object.keys(NOMS).map(function (k) { return '<option value="' + k + '"' + (k === instrument ? " selected" : "") + ">" + NOMS[k] + "</option>"; }).join("") +
-      '</select><label>Description</label><textarea name="texte" maxlength="4000" required placeholder="Ce qui se passe, ce qui était attendu, comment le refaire…"></textarea>' +
-      '<label>Signature (facultative)</label><input type="text" name="signature" maxlength="200" placeholder="Nom ou adresse, si vous souhaitez une réponse">' +
+      '</select><label>Description</label><textarea name="texte" maxlength="4000" required placeholder="' + L("Ce qui se passe, ce qui était attendu, comment le refaire…", "What happens, what you expected, how to reproduce it…") + '"></textarea>' +
+      '<label>' + L("Signature (facultative)", "Signature (optional)") + '</label><input type="text" name="signature" maxlength="200" placeholder="' +
+      L("Nom ou adresse, si vous souhaitez une réponse", "Name or email address, if you would like a reply") + '">' +
       '<div class="rt-piege" aria-hidden="true"><input type="text" name="site" tabindex="-1" autocomplete="off"></div>' +
-      (surInstrument ? '<label class="rt-case"><input type="checkbox" name="etat" checked> <span>Joindre l\'état de l\'instrument (réglages en cours, pour reproduire le problème)</span></label>' : "") +
-      '<div class="rt-pied"><span class="rt-msg"></span><button type="button" class="rt-annuler">Annuler</button><button type="submit" class="ok">Envoyer</button></div></form>';
+      (surInstrument ? '<label class="rt-case"><input type="checkbox" name="etat" checked> <span>' + L("Joindre l'état de l'instrument (réglages en cours, pour reproduire le problème)", "Attach the state of the instrument (current settings, to reproduce the problem)") + '</span></label>' : "") +
+      '<div class="rt-pied"><span class="rt-msg"></span><button type="button" class="rt-annuler">' + L("Annuler", "Cancel") + '</button><button type="submit" class="ok">' + L("Envoyer", "Send") + '</button></div></form>';
     document.body.appendChild(v);
     var f = v.querySelector("form"), msg = v.querySelector(".rt-msg"), caseEtat = f.querySelector("input[name=etat]");
     function fermer() { v.remove(); removeEventListener("keydown", echap, true); }
@@ -59,7 +64,7 @@
     f.onsubmit = function (ev) {
       ev.preventDefault();
       var texte = f.texte.value.trim();
-      if (texte.length < 3) { msg.className = "rt-msg err"; msg.textContent = "Décrivez le problème ou l'idée."; return; }
+      if (texte.length < 3) { msg.className = "rt-msg err"; msg.textContent = L("Décrivez le problème ou l'idée.", "Describe the problem or the idea."); return; }
       var etat = null;
       if (caseEtat && caseEtat.checked) {
         // l'état en cours (ce que la coque sauverait) ; à défaut, le dernier sauvé
@@ -70,13 +75,14 @@
       }
       var d = { type: type, instrument: f.instrument.value, texte: texte, signature: f.signature.value.trim(), site: f.site.value,
         page: location.pathname, ecran: innerWidth + "x" + innerHeight, etat: etat };
-      msg.className = "rt-msg"; msg.textContent = "Envoi…";
+      msg.className = "rt-msg"; msg.textContent = L("Envoi…", "Sending…");
       f.querySelector("button.ok").disabled = true;
       fetch("/api/retour", { method: "POST", body: JSON.stringify(d) }).then(function (r) {
-        if (r.ok) { f.innerHTML = '<h2>Merci</h2><p>Votre message est bien arrivé.</p><div class="rt-pied"><button type="button" class="ok">Fermer</button></div>'; f.querySelector("button").onclick = fermer; return; }
-        return r.json().catch(function () { return {}; }).then(function (j) { throw new Error(j.erreur || "Envoi refusé (" + r.status + ")."); });
+        if (r.ok) { f.innerHTML = '<h2>' + L("Merci", "Thank you") + '</h2><p>' + L("Votre message est bien arrivé.", "Your message has been received.") +
+          '</p><div class="rt-pied"><button type="button" class="ok">' + L("Fermer", "Close") + '</button></div>'; f.querySelector("button").onclick = fermer; return; }
+        return r.json().catch(function () { return {}; }).then(function (j) { throw new Error((!EN && j.erreur) || L("Envoi refusé (", "Sending refused (") + r.status + ")."); });
       }).catch(function (e) {
-        msg.className = "rt-msg err"; msg.textContent = e.message || "Envoi impossible.";
+        msg.className = "rt-msg err"; msg.textContent = e.message || L("Envoi impossible.", "Could not send.");
         var b = f.querySelector("button.ok"); if (b) b.disabled = false;
       });
     };

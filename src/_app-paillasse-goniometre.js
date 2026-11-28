@@ -820,6 +820,23 @@
       if (!(ev.target.closest && ev.target.closest("[data-lampe]"))) return;
       ev.preventDefault(); menuLampe(ev.clientX, ev.clientY);
     });
+    // Objet de la plate-forme (réseau, miroir, prisme, ou rien) : clic droit sur la plate-forme ou sur l'objet
+    // posé → le menu des objets, pour en changer sans passer par l'étagère. Même disque que la molette de la
+    // plate-forme (rayon 60 du dessin), donc la zone reste celle de l'objet que la lunette recouvre en partie.
+    function mettrePlat(k) {
+      st.plateau = k || "rien";
+      sale.etagere = sale.tete = true; modifie("dessin champ lum loupe");
+    }
+    function menuPlat(x, y) {
+      K.ouvrirCtx(x, y, [{ tit: TRAD("Sur la plate-forme") }].concat(Object.keys(PLATS).map(function (k) {
+        return { lab: PLATS[k][0], coche: st.plateau === k, a3: PLATS[k][1], act: function () { mettrePlat(k); } };
+      })).concat([{ sep: true }, { lab: TRAD("Ôter l'objet"), dis: st.plateau === "rien", act: function () { mettrePlat(null); } }]));
+    }
+    D.addEventListener("contextmenu", function (ev) {
+      var p = K.ptSvg(ev);
+      if (Math.hypot(p.x, p.y) >= 62) return;
+      ev.preventDefault(); menuPlat(ev.clientX, ev.clientY);
+    });
     // Plate-forme (tourne) et l'objet posé dessus (normale à psi).
     function dessinerPlat() {
       gPlat.innerHTML = "";
@@ -1073,9 +1090,9 @@
       var cle = (st.lampe || "") + "|" + L.join(",") + "|" + st.gpCoul;
       if (cle === clePastilles) return;
       clePastilles = cle; GPc.innerHTML = "";
-      el("span", "gn-gp-l", GPc, L.length > 1 ? "Couleurs" : "Couleur");
+      el("span", "gn-gp-l", GPc, L.length > 1 ? TRAD("Couleurs") : TRAD("Couleur"));
       if (L.length > 1) {
-        var bt = el("button", "pl-puce", GPc, "Toutes"); bt.type = "button";
+        var bt = el("button", "pl-puce", GPc, TRAD("Toutes")); bt.type = "button";
         bt.setAttribute("aria-pressed", L.indexOf(st.gpCoul) < 0 ? "true" : "false");
         bt.addEventListener("click", function () { st.gpCoul = null; sale.lum = true; K.modifie(); });
       }
@@ -1179,7 +1196,7 @@
       if (T.nom === "Plate-forme") return Object.keys(PLATS).map(function (k) {
         var pose = st.plateau === k;
         return { cle: "P" + k, nom: PLATS[k][0], mini: K.Dessin.svgMini({ med: k }), pose: pose,
-          a3: a3(PLATS[k][1].replace(/\.$/, ""), (pose ? TRAD("clic : le retirer (plate-forme vide)") : TRAD("clic : le poser sur la plate-forme (remplace)")) + TRAD(" · glisser sur la plate-forme : l'y poser")) };
+          a3: a3(PLATS[k][1].replace(/\.$/, ""), (pose ? TRAD("clic : le retirer (plate-forme vide)") : TRAD("clic : le poser sur la plate-forme (remplace)")) + TRAD(" · glisser sur la plate-forme : l'y poser") + TRAD(" · aussi : clic droit sur la plate-forme")) };
       });
       if (T.nom === "Lampes") return ORDRE_LAMPES.map(function (k) {
         var pose = st.lampe === k;
@@ -1202,7 +1219,7 @@
     }
     function clicCarte(c) {
       var t = c.charAt(0), k = c.slice(1);
-      if (t === "P") st.plateau = st.plateau === k ? "rien" : k;
+      if (t === "P") { mettrePlat(st.plateau === k ? "rien" : k); return; }
       else if (t === "L") { mettreLampe(st.lampe === k ? null : k); return; }
       else if (t === "F") { if (!continu(st)) return; st.filtre = st.filtre === k ? null : k; }
       else if (t === "D") { if (st.plateau !== "reseau") return; var d = parseFloat(k) * MM; st.diaph = st.diaph === d ? null : d; }
@@ -1645,7 +1662,7 @@
       if (t.closest("[data-ret]")) return TRAD("<b>Lampe du réticule</b> — clic : {0}", [(st.lampe_lunette ? TRAD("l'éteindre et relever la lame (comme pour les mesures : la lame baissée absorbe la moitié de la lumière)") : TRAD("l'allumer, lame baissée : réticule éclairé (autocollimation)"))]);
       var p = PT;
       if (p) {
-        if (Math.hypot(p.x, p.y) < 60) return TRAD("<b>Plate-forme</b> ({0}) — {1} · on y lâche une carte de l'étagère", [nomPlateau(), ROT]);
+        if (Math.hypot(p.x, p.y) < 60) return TRAD("<b>Plate-forme</b> ({0}) — {1} · clic droit : changer d'objet · on y lâche une carte de l'étagère", [nomPlateau(), ROT]);
         var l = versL(p), xr = xRet(), xo = xOc();
         if (l.x > xr + 3 && l.x < xo + 17 && Math.abs(l.y) < 14) return TRAD("<b>Oculaire</b> — glisser le long de la lunette, ou molette dessus (Maj : fin · Ctrl+Maj : ultrafin · Ctrl : gros) : le réticule net pour son œil");
         if (l.x > 16 && l.x < xo + 17 && Math.abs(l.y) < 22) return TRAD("<b>Lunette</b> — {0} · lecture : loupe du vernier sous le champ", [ROT]);
@@ -1666,7 +1683,7 @@
       return null;
     }
     K.gestes({ survol: survol, suivre: function (t) { return D.contains(t); }, defaut: function () {
-      return TRAD("<b>Goniomètre</b> — glisser la lunette ou la plate-forme pour les tourner · clic sur la lampe : changer, éteindre · clic sur la petite lampe de la lunette : réticule éclairé ou lame relevée · survoler un organe : ses gestes · {0} : tous les gestes et raccourcis · {1} : annuler",
+      return TRAD("<b>Goniomètre</b> — glisser la lunette ou la plate-forme pour les tourner · clic sur la lampe : changer, éteindre · clic droit sur la plate-forme : changer d'objet · clic sur la petite lampe de la lunette : réticule éclairé ou lame relevée · survoler un organe : ses gestes · {0} : tous les gestes et raccourcis · {1} : annuler",
         [k_("?"), k_(TRAD("Ctrl+Z"))]);
     } });
     K.lecture.setAttribute("data-a3", TRAD("<b>Lecture du vernier</b> — taper degrés et minutes, puis « Vérifier ma lecture » : jamais la valeur, seulement l'écart · « S'entraîner » : une autre position à lire"));
@@ -1674,6 +1691,7 @@
       [TRAD("Goniomètre")]: [[TRAD("glisser la lunette, la plate-forme"), TRAD("la tourner (Maj : dix fois plus lent · Ctrl+Maj : cent fois)")], [TRAD("molette dessus"), TRAD("10′ par cran (Maj 1′ · Ctrl+Maj 0,1′ · Ctrl 100′)")],
         [TRAD("molettes de tirage, de fente"), TRAD("les faire rouler (glisser ou molette ; Maj : fin)")], [TRAD("oculaire"), TRAD("glisser le long de la lunette, ou molette dessus (Maj : fin · Ctrl+Maj : ultrafin · Ctrl : gros)")],
         [TRAD("clic sur la lampe (ou sa pastille)"), TRAD("le menu des lampes ; Éteindre / Allumer")], [TRAD("clic sur la petite lampe de la lunette"), TRAD("réticule éclairé ↔ lampe éteinte et lame relevée")],
+        [TRAD("clic droit sur la plate-forme"), TRAD("le menu des objets : réseau, miroir, prisme, ou l'ôter")],
         [TRAD("Faisceau, Loupe du réticule, Gros plan"), TRAD("les trois aides : la lumière de la fente à l'œil ; où se forme l'image dans la lunette ; la plate-forme de près (panneaux déplaçables par leur titre)")]],
       [TRAD("Étagère")]: [[TRAD("carte : clic"), TRAD("la poser (remplace) ; sur la carte posée (surlignée) : la retirer")], [TRAD("carte : glisser"), TRAD("sur la plate-forme, la lampe, le collimateur : l'y poser ; ailleurs : rien")],
         [TRAD("onglets"), TRAD("Plate-forme · Lampes · Filtres et diaphragmes (filtres : avec l'halogène ; diaphragmes : devant le réseau)")], [TRAD("▾, Éléments ▴"), TRAD("replier l'étagère, la rouvrir")]],

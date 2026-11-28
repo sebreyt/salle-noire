@@ -58,11 +58,13 @@
     laser: { nom: TRAD("laser He-Ne"), court: "Laser", spectre: "laser", type: "point", coul: "#ff3b2f" }
   };
   var ORDRE_LAMPES = ["na", "hg", "hgc", "bl", "laser"];
-  // Forme lumineuse vue sans dépoli (plan de la source, x horizontal, y vertical, m) : ampoule droite d'une
-  // lampe spectrale (fenêtre Ø 32 mm : colonne lumineuse de 10 mm sur 25 mm aux bouts arrondis, assez large pour que son
-  // image au condenseur (×4 environ) couvre un miroir de Ø 30 mm ; de 13 mm au-dessus de
-  // l'axe à 12 mm au-dessous, et tache de l'électrode, Ø 3 mm, en bas à droite : elle montre si l'image est renversée),
-  // filament spiralé d'une halogène : celui du banc (FILAMENT de _app-banc-coeur.js,
+  // Forme lumineuse vue sans dépoli (plan de la source, x horizontal, y vertical, m) : brûleur d'une lampe spectrale
+  // (fenêtre Ø 32 mm) — corps droit de 9 mm de large aux calottes arrondies, centré SUR l'axe (le centre du champ doit
+  // rester éclairé), deux cols étroits terminés par la boule de chaque électrode (20 mm de bout en bout) et, à droite au-dessus
+  // de l'axe, le queusot (le bout de tube du scellement du verre) : il montre si l'image est renversée. Petite exprès :
+  // l'image au condenseur (×2,3 au plus près, ×4,5 par défaut) doit tenir sur la feuille posée sur un miroir ; à ×4,5
+  // le corps couvre encore le miroir (Ø 30 mm) en largeur. Plus petite, la lampe éclaire moins le dépoli (`kDepoli`).
+  // Filament spiralé d'une halogène : celui du banc (FILAMENT de _app-banc-coeur.js,
   // rectangle 4 × 2 mm, 7 spires, fil plein sur 60 % du pas, penchées de 0,25), le moteur ne prenant que des
   // rectangles droits : chaque spire en 4 marches. Luminance sur le fil : flux = L × 4 × 2 × 0,6 mm².
   function spiralee(a, b, n, plein, pente, m) {
@@ -74,9 +76,11 @@
     return out;
   }
   var FORMES = {
-    spectrale: { rayon: 0.016, forme: [{ t: "rect", x0: -0.005, y0: -0.0095, x1: 0.005, y1: 0.0105 },
-      { t: "ell", cx: 0, cy: 0.0105, a: 0.005, b: 0.0025 }, { t: "ell", cx: 0, cy: -0.0095, a: 0.005, b: 0.0025 },
-      { t: "ell", cx: 0.0055, cy: -0.013, a: 0.0015, b: 0.0015 }] },
+    spectrale: { rayon: 0.016, forme: [{ t: "rect", x0: -0.0045, y0: -0.005, x1: 0.0045, y1: 0.005 },
+      { t: "ell", cx: 0, cy: 0.005, a: 0.0045, b: 0.002 }, { t: "ell", cx: 0, cy: -0.005, a: 0.0045, b: 0.002 },
+      { t: "rect", x0: -0.001, y0: 0.0065, x1: 0.001, y1: 0.009 }, { t: "rect", x0: -0.001, y0: -0.009, x1: 0.001, y1: -0.0065 },
+      { t: "ell", cx: 0, cy: 0.009, a: 0.0019, b: 0.0012 }, { t: "ell", cx: 0, cy: -0.009, a: 0.0019, b: 0.0012 },
+      { t: "rect", x0: 0.004, y0: 0.002, x1: 0.007, y1: 0.0038 }, { t: "ell", cx: 0.007, cy: 0.0029, a: 0.0011, b: 0.001 }] },
     filament: { rayon: 0.0025, forme: spiralee(0.004, 0.002, 7, 0.6, 0.25, 4) }
   };
   var R_DEPOLI = 0.04, IRIS_MIN = 0.00025;
@@ -84,7 +88,7 @@
   // Luminances ABSOLUES (cd/m²) : lampe nue = luminance typique de la partie
   // qui émet (module couleur, `luminanceSource`). Dépoli (verre dépoli posé à D_DEPOLI devant le tube ou le filament,
   // transmission T_DEPOLI, diffusion lambertienne) : L = T E / π, E = L_lampe ∫ cos θ cos θ' dA / r² sur la forme
-  // lumineuse (plans parallèles : d² / r⁴ dA). Ampoule droite à 2 cm : 0,076 L (sodium : 7,6e3 cd/m²) ; filament : 0,002 L
+  // lumineuse (plans parallèles : d² / r⁴ dA). Brûleur à 2 cm : 0,050 L (sodium : 5e3 cd/m²) ; filament : 0,002 L
   // (halogène : 5e4 cd/m²).
   // Dépoli à D de la forme (défaut D_DEPOLI) : même calcul ; derrière le condenseur d'une lanterne, D = son tirage
   // (`source`) : chaque point du dépoli, collé au condenseur, voit le filament à travers lui sous l'angle solide A / t².
@@ -250,8 +254,14 @@
     });
     return out;
   }
-  // Une feuille posée sur un miroir arrête son bras (pupille de rayon nul ; le moteur n'a pas de « cache »).
-  var R_MIROIR = 0.015, R_CACHE = 1e-9;
+  // Feuille posée sur un miroir (st.feuille = "M1" | "M2") : elle couvre le miroir au-delà de son bord `fbord(st)` (mm,
+  // même sens que la lamelle ; −30 par défaut : la feuille, plus grande que le miroir, le couvre tout entier). Couvrant
+  // tout le miroir, elle arrête son bras (pupille de rayon nul) ; glissée en partie dessus, c'est le demi-plan opaque du
+  // moteur (cfg.cache) : derrière son bord, plus de franges et moitié moins de lumière, bord net quand le détecteur est
+  // conjugué des miroirs (le petit bout de papier qui aide à faire le point sur eux).
+  var R_MIROIR = 0.015, R_CACHE = 1e-9, FBORD_MIN = -30, FBORD_MAX = 16;
+  function fbord(st) { return st.fbord != null ? st.fbord : FBORD_MIN; }
+  function feuilleEntiere(st) { return fbord(st) <= -R_MIROIR * 1e3; }
   // Lamelle (st.lamelle = {miroir, bord (mm)}) : elle couvre le miroir au-delà de `bord`, compté le long du miroir dans
   // le dessin (M1 : vers la source, M2 : vers la sortie) ; c'est −x dans le repère déplié du moteur.
   // Séparatrice semi-réfléchissante 50/50 : chaque bras ne reçoit que R × T = 1/4 de la lumière (aller et retour) ;
@@ -260,11 +270,12 @@
   function configOptique(st, c3) {
     var S = source(st), inc = inclinaison(st), B = compensatrice(st), VL = VERRES_LAMES, c = {
       spectre: lampe(st).spectre, luminance: S.lum * T_SEP, source: S.src, entree: entree(st),
-      miroirs: { e: epaisseur(st, c3), ax: inc.ax, ay: inc.ay, R1: st.feuille === "M1" ? R_CACHE : R_MIROIR, R2: st.feuille === "M2" ? R_CACHE : R_MIROIR },
+      miroirs: { e: epaisseur(st, c3), ax: inc.ax, ay: inc.ay, R1: st.feuille === "M1" && feuilleEntiere(st) ? R_CACHE : R_MIROIR, R2: st.feuille === "M2" && feuilleEntiere(st) ? R_CACHE : R_MIROIR },
       lames: { t: VL.t, verre: VL.verre, b1: B.b1, b2: B.b2, d: ARM, fantome: VL.fantome },
       sortie: [], detecteur: {}
     };
     if (st.lamelle) c.lamelle = { bras: st.lamelle.miroir === "M1" ? 1 : 2, ep: epLamelle(st), verre: VERRE_LAMELLE, nx: -1, ny: 0, c: st.lamelle.bord * 1e-3 };
+    if (st.feuille && !feuilleEntiere(st)) c.cache = { bras: st.feuille === "M1" ? 1 : 2, nx: -1, ny: 0, c: fbord(st) * 1e-3 };
     ["l20", "l1"].forEach(function (k) {
       if (st.sor[k] != null) c.sortie.push({ d: ARM + st.sor[k], f: ELEMENTS[k].f, R: ELEMENTS[k].R, nom: k });
     });
@@ -280,13 +291,25 @@
   // centre A·y_s et de rayon |B|·θmax (θmax : demi-ouverture du faisceau, limitée par la plus petite monture). Au
   // point (B = 0), l'image de la lampe est nette, de grandissement A. Flux conservé : éclairement au point
   // E = L π θmax² / A², étalé par le flou (convolution) ; sans lentille, E = L × aire / d² (uniforme).
+  // Iris d'une lampe spectrale nue (accolé au porte-dépoli ou détaché) : pour la feuille, il n'est PAS dans le plan de la
+  // lampe (2 cm devant au moins) ; la lampe entière y est imagée et l'iris en assombrit les bords (vignettage : `vig`,
+  // part du cône de chaque point source qui passe l'iris), au lieu de la découper d'un disque net. Le moteur, lui, garde
+  // la lampe bornée à l'iris (source(st)) : approximation sans conséquence pour les anneaux.
   function feuilleGeom(st) {
-    var S = source(st), src = S.src, ent = entree(st).sort(function (a, b) { return b.d - a.d; });
-    var A = 1, B = 0, C = 0, Dm = 1, z = src.d, th = Infinity;
+    var S = source(st), src = S.src, L0 = lampe(st), vig = null, ent = entree(st);
+    if (L0.type === "spectrale" && !st.depoli && st.iris != null) {
+      var Fs = FORMES.spectrale;
+      vig = { D: Math.max(D_DEPOLI, st.ent.lampe - posDep(st)), R: Math.max(IRIS_MIN, st.iris) };
+      src = { d: ARM + st.ent.lampe, rayon: Fs.rayon, forme: Fs.forme };
+      S = { src: src, lum: MI_.luminanceSource(L0.spectre) };
+      ent = ent.filter(function (o) { return o.nom !== "iris"; });
+    }
+    ent = ent.sort(function (a, b) { return b.d - a.d; });
+    var A = 1, B = 0, C = 0, Dm = 1, z = src.d, th = Infinity, dl = Infinity;
     function prop(t) { A += t * C; B += t * Dm; }
     ent.forEach(function (o) {
       prop(z - o.d); z = o.d;
-      if (o.R > 0) th = Math.min(th, o.R / Math.max(1e-9, Math.abs(B)));
+      if (o.R > 0 && o.R / Math.max(1e-9, Math.abs(B)) < th) { th = o.R / Math.max(1e-9, Math.abs(B)); dl = Math.abs(B); }
       if (o.f) { C -= A / o.f; Dm -= B / o.f; }
     });
     prop(z);
@@ -306,7 +329,8 @@
     if (laser) th = Math.min(th, thLaser(st));
     var forme = laser ? [{ t: "ell", cx: 0, cy: 0, a: RL, b: RL }] : src.forme || [{ t: "ell", cx: 0, cy: 0, a: src.rayon, b: src.rayon }];
     var lum = (laser ? S.lum / (Math.PI * RL * RL) : S.lum) * 0.5;      // une traversée de la séparatrice (50/50)
-    return { A: A, B: B, th: th, rb: Math.abs(B) * th, forme: forme, rayon: laser ? RL : src.rayon, lum: lum,
+    if (vig) { vig.th = th; vig.dl = dl; }
+    return { A: A, B: B, th: th, rb: Math.abs(B) * th, forme: forme, rayon: laser ? RL : src.rayon, lum: lum, vig: vig,
       E: lum * Math.PI * th * th / Math.max(1e-12, A * A), spectre: lampe(st).spectre };
   }
   // Inclinaison ABSOLUE de M1 (sa normale par rapport à l'axe du banc d'entrée) : sans effet sur les franges (seule
@@ -1986,9 +2010,9 @@
           var ob = OBJECTIFS[objectif(st)];
           svg("g", { transform: "translate(21 0) scale(-.85 .85)" }, ql).innerHTML = K.Dessin.corps({ genre: "lentille", forme: "objectif", diam: 5 }, 0, 0, 1, false).replace("#3fae5a", ob.bague);
         }
-      } else ql.insertAdjacentHTML("beforeend", K.Dessin.lampeDessus({ genre: "lampe", med: st.lampe === "na" ? "sodium" : "x" }, 0, 0).replace("#bfe9ff", Lp.coul));
+      } else ql.insertAdjacentHTML("beforeend", K.Dessin.lampeDessus({ genre: "lampe", med: st.lampe === "na" ? "sodium" : "x", coul: Lp.coul }, 0, 0));
       document.getElementById("plLueurC") && document.getElementById("plLueurC").setAttribute("stop-color", Lp.coul);
-      if (!pt) svg("ellipse", { cx: 0, cy: yl - (lant ? xs + 4 : 14), rx: 46, ry: 30, fill: "url(#plLueur)", opacity: st.depoli ? .45 : .6 }, gLueur);
+      if (!pt) svg("ellipse", { cx: 0, cy: yl - (lant ? xs + 4 : 0), rx: lant ? 46 : 34, ry: lant ? 30 : 26, fill: "url(#plLueur)", opacity: st.depoli ? .45 : .6 }, gLueur);
       else svg("ellipse", { cx: 0, cy: yl - 6, rx: 10, ry: 8, fill: "url(#plLueur)", opacity: .5 }, gLueur);
       // lampe spectrale : dépoli (au plan de sa position) et iris juste devant, sur le porte-dépoli ; détaché de la lampe,
       // il a son cavalier, dont l'index doré marque le plan du dépoli sur la règle
@@ -2062,7 +2086,11 @@
       svg("g", { transform: "translate(" + (cx - 15) + " " + (cy - 15) + ") scale(.75)" }, q).innerHTML = K.Dessin.miniature(figureEl(id));
       svg("circle", { class: "anneau", cx: cx, cy: cy, r: 17 }, q);
       var t = { g: [cx - 21, cy + 3, "end"], d: [cx + 21, cy + 3, "start"], h: [cx, cy - 21, "middle"], b: [cx, cy + 27, "middle"] }[posNom];
-      txt(gPast, t[0], t[1], nomEl(id), "pl-past-nom" + (sel ? " sel" : ""), t[2]);
+      // Nom sous la pastille : les pastilles voisines sont à 38 px ; un nom anglais de deux mots (« Ground glass »)
+      // déborde sur les voisins, il passe donc sur deux lignes. Le français, plus court, reste sur une ligne.
+      var nom = nomEl(id), mots = posNom === "b" && nom.length > 7 && /^en/.test(document.documentElement.lang || "") ? nom.split(" ") : [nom];
+      if (mots.length > 2) mots = [mots[0], mots.slice(1).join(" ")];
+      mots.forEach(function (m, i) { txt(gPast, t[0], t[1] + 10 * i, m, "pl-past-nom" + (sel ? " sel" : ""), t[2]); });
     }
     K.pastilles(function (t) {
       var q = t && t.closest && D.contains(t) ? t.closest("[data-past]") : null, id = q && q.getAttribute("data-past");
@@ -2169,12 +2197,14 @@
         L.bord = Math.round(clamp(G.etat + (m1 ? p.y - G.p0.y : p.x - G.p0.x), -15, 15) * 100) / 100; modifie();
       }, function () { if (st.sel !== "lamelle") { st.sel = "lamelle"; modifie("dessin etagere"); } return L.bord; });
     }
+    // Feuille de papier sur un miroir (60 mm, plus grande que lui), de son bord `fbord` vers l'extérieur ; on la fait
+    // glisser le long du miroir (même sens que la lamelle) pour n'en couvrir qu'une partie.
     function feuille(g, x, y, horiz) {
-      var gf = svg("g", { class: "bc-el", "data-el": "feuille" }, g), sel = st.sel === "feuille";
-      svg("rect", horiz ? { x: x - 32, y: y - 5, width: 64, height: 10, fill: "transparent" } : { x: x - 5, y: y - 32, width: 10, height: 64, fill: "transparent" }, gf);
-      if (horiz) svg("rect", { x: x - 30, y: y - 1, width: 60, height: 2.2, fill: "#f2f2ee", stroke: "#b8b8b0", "stroke-width": .4, filter: "url(#plOmbre)" }, gf);
-      else svg("rect", { x: x - 1, y: y - 30, width: 2.2, height: 60, fill: "#f2f2ee", stroke: "#b8b8b0", "stroke-width": .4, filter: "url(#plOmbre)" }, gf);
-      if (sel) svg("rect", horiz ? { x: x - 33, y: y - 4, width: 66, height: 8.5, rx: 3, fill: "none", stroke: "#e0b84c" } : { x: x - 4, y: y - 33, width: 8.5, height: 66, rx: 3, fill: "none", stroke: "#e0b84c" }, gf);
+      var b = fbord(st), gf = svg("g", { class: "bc-el", "data-el": "feuille" }, g), sel = st.sel === "feuille";
+      svg("rect", horiz ? { x: x + b - 2, y: y - 5, width: 64, height: 10, fill: "transparent" } : { x: x - 5, y: y + b - 2, width: 10, height: 64, fill: "transparent" }, gf);
+      if (horiz) svg("rect", { x: x + b, y: y - 1, width: 60, height: 2.2, fill: "#f2f2ee", stroke: "#b8b8b0", "stroke-width": .4, filter: "url(#plOmbre)" }, gf);
+      else svg("rect", { x: x - 1, y: y + b, width: 2.2, height: 60, fill: "#f2f2ee", stroke: "#b8b8b0", "stroke-width": .4, filter: "url(#plOmbre)" }, gf);
+      if (sel) svg("rect", horiz ? { x: x + b - 3, y: y - 4, width: 66, height: 8.5, rx: 3, fill: "none", stroke: "#e0b84c" } : { x: x - 4, y: y + b - 3, width: 8.5, height: 66, rx: 3, fill: "none", stroke: "#e0b84c" }, gf);
     }
     dessinerFixe();
     D.setAttribute("viewBox", VB.x + " " + VB.y + " " + VB.w + " " + VB.h);
@@ -2226,7 +2256,11 @@
         K.texteGeste("<b>" + K.esc(nomEl(P.id)) + "</b> — " + fmtNb(posEl(P.id) * 100, 1) + " cm");
         modifie("dessin optique obs");
       } else if (P.id === "feuille") {
-        P.hors = Math.hypot(p.x - P.p0.x, p.y - P.p0.y) > 40;
+        // le long du miroir : son bord glisse (n'en couvrir qu'une partie) ; tirée loin du miroir : retirée
+        var m1 = st.feuille === "M1", le = m1 ? p.y - P.p0.y : p.x - P.p0.x, tr = m1 ? p.x - P.p0.x : p.y - P.p0.y;
+        if (P.fb0 == null) P.fb0 = fbord(st);
+        P.hors = Math.abs(tr) > 40;
+        if (!P.hors) { st.fbord = Math.round(clamp(P.fb0 + le, FBORD_MIN, FBORD_MAX) * 100) / 100; sale.dessin = sale.optique = sale.obs = true; modifie(); }
         K.texteGeste(P.hors ? TRAD("<b>Feuille</b> — lâchée ici : retirée du miroir") : null);
         var gf = D.querySelector('[data-el="feuille"]'); if (gf) gf.classList.toggle("hors", P.hors);
       }
@@ -2253,6 +2287,11 @@
         choisir(id);
         if (id === "lampe") it.push({ lab: TRAD("Remplacer par"), sub: ORDRE_LAMPES.filter(function (k) { return k !== st.lampe; }).map(function (k) {
           return { lab: LAMPES[k].court.replace(" (blanche)", ""), act: function () { changerLampe(k); } }; }) });
+        // poser ou retirer ce qui se visse sur la lampe : dépoli et iris (lampes), objectif (laser) ; coché = posé
+        if (id === "lampe") (lampe(st).type === "point" ? [["lc", TRAD("Objectif de microscope"), st.lc !== false]]
+          : [["depoli", TRAD("Dépoli"), !!st.depoli], ["iris", TRAD("Iris"), st.iris != null]]).forEach(function (q) {
+          it.push({ lab: q[1], coche: q[2], act: function () { clicCarte(q[0]); } });
+        });
         if (id === "det") it.push({ lab: TRAD("Remplacer par"), sub: [{ lab: st.det === "ecran" ? TRAD("Œil") : TRAD("Écran"), act: function () { changerDet(st.det === "ecran" ? "oeil" : "ecran"); } }] });
         if (/^(cond|coll|l20|l1)$/.test(id)) {
           var bl = bancDe(id), lis = bl === "ent" ? ["cond", "coll"] : ["l20", "l1"];
@@ -2267,7 +2306,7 @@
         var m = mir.getAttribute("data-mir"), mn = m === "M1" ? "M₁" : "M₂";
         it.push({ tit: TRAD("Miroir {0}", [mn]) });
         it.push(st.feuille === m ? { lab: TRAD("Retirer la feuille"), act: function () { retirer("feuille"); modifie("dessin optique loupe obs etagere"); } }
-          : { lab: TRAD("Poser la feuille"), act: function () { st.feuille = m; st.sel = "feuille"; modifie("dessin optique loupe obs etagere"); } });
+          : { lab: TRAD("Poser la feuille"), act: function () { st.feuille = m; st.fbord = null; st.sel = "feuille"; modifie("dessin optique loupe obs etagere"); } });
         it.push(st.lamelle && st.lamelle.miroir === m ? { lab: TRAD("Retirer la lamelle"), act: function () { retirer("lamelle"); modifie("dessin optique loupe obs etagere"); } }
           : { lab: TRAD("Poser la lamelle"), act: function () { st.lamelle = { miroir: m, bord: 0 }; st.sel = "lamelle"; modifie("dessin optique loupe obs etagere"); } });
       } else if (bc) {
@@ -2407,8 +2446,14 @@
         if (porte(st)) {     // porte-dépoli de la lampe spectrale : sa position, contre la lampe ou détaché
           blocPos(id);
           el("span", "bc-vide", BD, ecDep == null ? TRAD("dépoli et iris : contre la lampe") : TRAD("dépoli et iris : à {0} cm du tube de la lampe", [fmtNb(ecDep / 10, 1)]));
-          if (ecDep == null) boutonBD(TRAD("Détacher de la lampe"), TRAD("<b>Détacher de la lampe</b> — le support du dépoli et de l'iris avance de 5 cm vers l'appareil (aussi : le glisser vers l'appareil sur le banc)"),
-            function () { deplacer(st, "ent", "dep", posDep(st) - 0.05); modifie(TOUT); });
+          // au bout du banc (lampe tout contre l'appareil), le support ne peut plus avancer : il reste et la lampe recule
+          if (ecDep == null) boutonBD(TRAD("Détacher de la lampe"), TRAD("<b>Détacher de la lampe</b> — le support du dépoli et de l'iris avance de 5 cm vers l'appareil, ou, au bout du banc, la lampe recule de 5 cm (aussi : le glisser vers l'appareil sur le banc)"),
+            function () {
+              var p0 = posDep(st);
+              if (p0 - 0.05 >= BORNES.ent[0] - 1e-9) deplacer(st, "ent", "dep", p0 - 0.05);
+              else { st.ent.dep = p0; deplacer(st, "ent", "lampe", Math.min(BORNES.ent[1], st.ent.lampe + 0.05)); }
+              modifie(TOUT);
+            });
           if (ecDep != null) boutonBD(TRAD("Lampe contre eux"), TRAD("<b>Lampe contre eux</b> — la lampe avance jusqu'au support du dépoli et de l'iris, qui ne bouge pas ; elle l'emmène ensuite"),
             function () { deplacer(st, "ent", "lampe", posDep(st) + D_DEPOLI); modifie(TOUT); });
         } else el("span", "bc-vide", BD, TRAD("sur la lanterne"));
@@ -2430,6 +2475,7 @@
         var cur = id === "feuille" ? st.feuille : st.lamelle.miroir;
         K.seg(BD, [["M1", TRAD("sur M₁")], ["M2", TRAD("sur M₂")]], cur, function (v) { if (id === "feuille") { st.feuille = v; } else st.lamelle.miroir = v; modifie("dessin optique loupe obs etagere"); });
         if (id === "lamelle") el("span", "bc-vide", BD, TRAD("épaisseur au palmer : {0} mm", [fmtNb(epLamelle(st) * 1000, 3)]));
+        else el("span", "bc-vide", BD, feuilleEntiere(st) ? TRAD("glisser la feuille le long du miroir pour n'en couvrir qu'une partie") : TRAD("en partie sur le miroir : son bord aide à faire le point sur les miroirs"));
         retirerBtn(id);
       }
     }
@@ -2482,7 +2528,7 @@
       if (k === "lc") st.lc = st.lc === false;
       else if (k === "depoli") { st.depoli = !st.depoli; st.sel = st.depoli ? "depoli" : st.sel === "depoli" ? null : st.sel; }
       else if (k === "iris") { if (st.iris == null) { st.iris = 0.010; st.sel = "iris"; } else retirer("iris"); }
-      else if (k === "feuille") { if (st.feuille) retirer("feuille"); else { st.feuille = "M2"; st.sel = "feuille"; } }
+      else if (k === "feuille") { if (st.feuille) retirer("feuille"); else { st.feuille = "M2"; st.fbord = null; st.sel = "feuille"; } }
       else if (k === "lamelle") { if (st.lamelle) retirer("lamelle"); else { st.lamelle = { miroir: "M2", bord: 0 }; st.sel = "lamelle"; } }
       else if (present(k)) retirer(k); else { poser(st, k); st.sel = k; }
       TAPE = null; modifie(TOUT);
@@ -2494,7 +2540,7 @@
       if (k === "feuille" || k === "lamelle") {
         var m = miroirPres(p); if (!m) return null;
         return { texte: TRAD("<b>{0}</b> — lâchée ici : sur {1}", [nm, nomMir(m)]), f: function () {
-          if (k === "feuille") st.feuille = m; else st.lamelle = { miroir: m, bord: st.lamelle ? st.lamelle.bord : 0 };
+          if (k === "feuille") { if (st.feuille !== m) st.fbord = null; st.feuille = m; } else st.lamelle = { miroir: m, bord: st.lamelle ? st.lamelle.bord : 0 };
           st.sel = k; modifie(TOUT); } };
       }
       if (k === "depoli" || k === "iris" || k === "lc") {          // sur la lampe (l'objectif : sur le laser)
@@ -2647,19 +2693,48 @@
     }
     // Luminosité : feuille blanche (ρ = VISION.rho) regardée à VISION.dObs, des deux yeux ; réelle : `vision`,
     // adaptée à la vue entière ; toujours visible : exposition sur le 99e centile, fond de salle.
+    // Flou gaussien d'écart-type sig (pixels) d'une image N × N en place, approché par trois flous en boîte (largeurs de
+    // Kovesi, « Fast almost-Gaussian filtering »), bords à zéro ; coût indépendant de sig.
+    function flouGauss(G, N, sig) {
+      var nb = 3, wi = Math.floor(Math.sqrt(12 * sig * sig / nb + 1)), wl = wi % 2 ? wi : wi - 1, wu = wl + 2;
+      var mm = Math.round((12 * sig * sig - nb * wl * wl - 4 * nb * wl - 3 * nb) / (-4 * wl - 4)), T = new Float32Array(N);
+      function passe(o, pas, r) {          // une ligne (o : début, pas : 1 ou N), boîte de demi-largeur r
+        var i, acc = 0, inv = 1 / (2 * r + 1);
+        for (i = 0; i < N; i++) T[i] = G[o + i * pas];
+        for (i = 0; i <= Math.min(r, N - 1); i++) acc += T[i];
+        for (i = 0; i < N; i++) {
+          G[o + i * pas] = acc * inv;
+          if (i + r + 1 < N) acc += T[i + r + 1];
+          if (i - r >= 0) acc -= T[i - r];
+        }
+      }
+      for (var k = 0; k < nb; k++) {
+        var r = ((k < mm ? wl : wu) - 1) / 2, j;
+        if (r < 1) continue;
+        for (j = 0; j < N; j++) passe(j * N, 1, r);
+        for (j = 0; j < N; j++) passe(j, N, r);
+      }
+    }
     function dessinerFeuille() {
       if (!ctx2) return;
       var F = feuilleGeom(st), W = W_VUE.feuille, n = 220, k = n / (2 * W), rbp = F.rb * k, sig = rbp / 2;
       var xyz = CO.xyzSpectre(CO.spectreDe(F.spectre)), expo = 1, val;
-      if (sig > n) {   // flou plus large que la vue : éclairement uniforme L × aire / B²
-        var E = F.lum * aireForme(F) / Math.max(1e-12, F.B * F.B) * expo;
+      if (sig > n) {   // flou plus large que la vue : éclairement uniforme L × aire / B² (iris devant la lampe : la part de la lampe vue à travers lui depuis l'axe)
+        var Fu = F.vig ? { forme: F.forme, rayon: Math.min(F.rayon, F.vig.R * Math.abs(F.B) / Math.max(1e-9, Math.abs(F.B) - F.vig.D)) } : F;
+        var E = F.lum * aireForme(Fu) / Math.max(1e-12, F.B * F.B) * expo;
         val = function () { return E; };
       } else {
+        // Forme dessinée au canvas (couverture de chaque pixel), puis flou gaussien calculé en flottants : trois flous en
+        // boîte successifs (lignes puis colonnes). Pas de blur() du canvas : sa sortie est sur 8 bits, et un grand flou
+        // (lampe sans lentille devant la feuille, plus de 100 px) étale la lumière en 0 à 3 niveaux sur 255 — marches
+        // pixelisées, puis noir.
         var m = Math.ceil(Math.min(n, 3 * sig)) + 2, N = n + 2 * m;
-        FA.width = FA.height = FB.width = FB.height = N;
-        var a = FA.getContext("2d"), b = FB.getContext("2d");
+        FA.width = FA.height = N;
+        var a = FA.getContext("2d");
         a.clearRect(0, 0, N, N); a.save();
-        a.translate(N / 2, N / 2); a.scale(F.A * k, -F.A * k);   // y vers le haut ; A < 0 : image renversée
+        // y vers le haut ; A < 0 : image renversée ; x de la vue = sens du dessin le long du miroir (−x du moteur,
+        // comme le bord de la feuille et de la lamelle)
+        a.translate(N / 2, N / 2); a.scale(-F.A * k, -F.A * k);
         a.beginPath(); a.arc(0, 0, F.rayon, 0, 2 * Math.PI); a.clip();
         a.fillStyle = "#fff";
         F.forme.forEach(function (f) {
@@ -2670,11 +2745,17 @@
           a.fill();
         });
         a.restore();
-        b.clearRect(0, 0, N, N);
-        b.filter = sig > 0.35 ? "blur(" + sig.toFixed(2) + "px)" : "none";
-        b.drawImage(FA, 0, 0); b.filter = "none";
-        var px = b.getImageData(m, m, n, n).data, E0 = F.E * expo;
-        val = function (p) { return px[4 * p + 3] / 255 * E0; };
+        var A8 = a.getImageData(0, 0, N, N).data, G = new Float32Array(N * N), E0 = F.E * expo, V = F.vig;
+        for (p = 0; p < N * N; p++) G[p] = A8[4 * p + 3] / 255;
+        if (V) {     // iris devant la lampe : part du cône (demi-angle th, axé vers le centre de la pupille à dl) de chaque point source qui le passe
+          var rc = Math.max(1e-6, V.th * V.D), ac = Math.PI * rc * rc, fc = isFinite(V.dl) ? 1 - V.D / V.dl : 1;
+          for (p = 0; p < N * N; p++) if (G[p] > 0) {
+            var xs = -((p % N) + 0.5 - N / 2) / (k * F.A), ys = -(Math.floor(p / N) + 0.5 - N / 2) / (k * F.A);   // point source (repère de la lampe)
+            G[p] *= MI_.lentille(rc, V.R, Math.hypot(xs, ys) * Math.abs(fc)) / ac;
+          }
+        }
+        if (sig > 0.35) flouGauss(G, N, sig);
+        val = function (q) { return G[(Math.floor(q / n) + m) * N + (q % n) + m] * E0; };
       }
       img2.width = img2.height = n;
       var ic = img2.getContext("2d"), id = ic.createImageData(n, n), Dd = id.data, fond = 0.006, p, Ev = new Float64Array(n * n);
@@ -2696,7 +2777,14 @@
         Dd[4 * p] = c[0]; Dd[4 * p + 1] = c[1]; Dd[4 * p + 2] = c[2]; Dd[4 * p + 3] = 255;
       }
       ic.putImageData(id, 0, 0);
-      ctx2.save(); ctx2.imageSmoothingEnabled = true; ctx2.drawImage(img2, 0, 0, 440, 440); ctx2.restore();
+      ctx2.save(); ctx2.imageSmoothingEnabled = true; ctx2.drawImage(img2, 0, 0, 440, 440);
+      // feuille en partie sur le miroir : elle s'étend de son bord vers la droite de la vue (sens du dessin) ; en deçà,
+      // plus de papier, le miroir renvoie la lumière sans la diffuser vers l'observateur : noir
+      if (!feuilleEntiere(st)) { var xb = 220 + fbord(st) * 1e-3 * 440 / (2 * W); ctx2.fillStyle = "#050607"; ctx2.fillRect(0, 0, Math.max(0, xb), 440); }
+      // bord du miroir sous la feuille (plus grande que lui), en pointillés, centré sur l'axe
+      ctx2.beginPath(); ctx2.arc(220, 220, R_MIROIR * 440 / (2 * W), 0, 2 * Math.PI);
+      ctx2.setLineDash([7, 6]); ctx2.lineWidth = 1.3; ctx2.strokeStyle = "rgba(150, 170, 190, .75)"; ctx2.stroke();
+      ctx2.restore();
     }
 
     // ---- la face de l'iris, côté appareil (rendu 2D, optique géométrique : irisRetour) ----
@@ -3211,7 +3299,8 @@
         OE.info = el("span", "pl-obs-n pl-oeil-info", Pd, texteOeil());
       } else if (v === "ecran") el("span", "pl-obs-n", Pd, st.capteur ? TRAD("Glisser le capteur à la souris{0}", [st.capteur.type === "barrette" ? TRAD(" ; molette sur la barrette : la tourner.") : "."]) : "");
       else if (v === "iris") el("span", "pl-obs-n", Pd, TRAD("Au centre, le trou de l'iris ; autour, sur ses lames, la lumière renvoyée par les miroirs."));
-      else el("span", "pl-obs-n", Pd, TRAD("La feuille cache ce miroir : un seul faisceau revient vers la sortie."));
+      else el("span", "pl-obs-n", Pd, feuilleEntiere(st) ? TRAD("La feuille cache ce miroir : un seul faisceau revient vers la sortie.")
+        : TRAD("La feuille cache une partie de ce miroir : derrière son bord, un seul faisceau revient vers la sortie."));
       if (!MOT) el("span", "pl-alerte", Pd, TRAD("Ce navigateur n'a pas WebGL2 : calcul sur le processeur, image grossière."));
       dessinerSurc(); CAP.sync(); OE.sync();
     }
@@ -3298,7 +3387,7 @@
     function texteEl(id) {
       var nm = K.esc(nomEl(id)), b = bancDe(id), R2 = reglage(id);
       if (id === "comp") return TRAD("<b>Compensatrice</b> — clic : la choisir (au bandeau, « Régler la compensatrice ») · B₁ l'oriente, B₂ règle son excentricité");
-      if (id === "feuille") return TRAD("<b>Feuille</b> sur {0} — elle cache ce miroir · clic : la choisir (bandeau : sur M₁ · sur M₂, Retirer) · glisser hors du miroir, {1} : la retirer · sa vue : pastille « Feuille » au-dessus de l'image", [(st.feuille === "M1" ? "M₁" : "M₂"), k_(TRAD("Suppr"))]);
+      if (id === "feuille") return TRAD("<b>Feuille</b> sur {0} — elle cache ce miroir · clic : la choisir (bandeau : sur M₁ · sur M₂, Retirer) · glisser le long du miroir : n'en couvrir qu'une partie · tirer loin du miroir, {1} : la retirer · sa vue : pastille « Feuille » au-dessus de l'image", [(st.feuille === "M1" ? "M₁" : "M₂"), k_(TRAD("Suppr"))]);
       if (id === "lamelle") return TRAD("<b>Lamelle</b> — glisser : son bord le long du miroir · clic : la choisir (bandeau : miroir, épaisseur au palmer, Retirer) · {0} : la retirer", [k_(TRAD("Suppr"))]);
       if (!b) return null;
       var dep = b === "ent" ? k_("↑ ↓") : k_("← →"), reg = b === "ent" ? k_("← →") : k_("↑ ↓");
@@ -3608,7 +3697,7 @@
           [TRAD("Lamelle"), TRAD("ε {0} µm ; (n−1)ε {1} µm, (n_g−1)ε {2} µm (D 263 M, 570 nm)", [f(ep * 1e6, 0), f((n - 1) * ep * 1e6, 1), f((ng - 1) * ep * 1e6, 1)])],
           [TRAD("Anticoïncidences vues"), st.anti.length ? st.anti.map(function (x) { return f(x, 2); }).join(" ; ") + " mm" : TRAD("aucune")]
         ];
-        if (G) L.push([TRAD("Observation"), TRAD("plan {0} ({1}), entrée {2}, θs {3} mrad, 2α {4}, fantôme {5} mrad", [G.plan, (Math.abs(G.zo) < 100 ? f(G.zo * 100, 1) + " cm" : "∞"),
+        if (G) L.push([TRAD("Observation"), TRAD("plan {0} ({1}), entrée {2}, θs {3} mrad, 2α {4}, fantôme {5} mrad", [({ infini: TRAD("infini"), miroirs: TRAD("miroirs"), autre: TRAD("autre") })[G.plan] || G.plan, (Math.abs(G.zo) < 100 ? f(G.zo * 100, 1) + " cm" : "∞"),
           (G.collimate ? TRAD("collimatée") : TRAD("non collimatée")), f(G.thetaS * 1e3, 2), f(G.sep * 1e3, 2), f(G.fantome * 1e3, 2)])]);
         if (m) L.push([TRAD("Mesure du champ"), TRAD("V {0} (max {1}), éclairé {2} %, {3} franges, courbure {4}, circularité {5}{6}", [f(m.V, 2), f(m.Vmax, 2), Math.round(m.part * 100),
           f(m.nfr, 1), f(m.quad, 2), f(m.ratio, 2), (m.centreDedans ? TRAD(", centre dans le champ") : "")])]);

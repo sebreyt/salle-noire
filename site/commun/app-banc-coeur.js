@@ -82,7 +82,10 @@
  *    Plan diffractant = élément des tiroirs Young et Fourier, objet de phase, dépoli sous le laser, toute forme autre
  *    qu'un disque ou un rectangle ; une ouverture ordinaire (iris, fente source, monture) seulement si elle diffracte
  *    vraiment : détail × angle sous lequel on voit la source < λ pour la première, bord atteint par la lumière
- *    diffractée pour les suivantes ; laser : ouverture < 2,5 w. Un objet ordinaire placé avant le premier plan
+ *    diffractée pour les suivantes ; laser : ouverture < 2,5 w. Une ouverture ordinaire derrière le premier plan qui
+ *    ne coupe que l'étalement dû à la taille de la source (pas la lumière diffractée) est une coupure géométrique
+ *    (`plan.coupes`, `coupeOnde` : facteur par pixel du détecteur), pas un plan : un plan de plus ferait passer en somme
+ *    brute ; s'il reste plusieurs vrais plans, elle en redevient un. Un objet ordinaire placé avant le premier plan
  *    (fente source, trou source) DEVIENT la source (`plan.src`), limitée à ce que la lampe éclaire (`eclaire`).
  *    Refusés, rendus au moteur géométrique (`raison`) : miroir, dépoli hors laser, source conjuguée du premier plan,
  *    deux réseaux ou un plan derrière le réseau, rien de diffractant. Ignorés : réticules, décentrement des lentilles.
@@ -1053,6 +1056,11 @@
     var d = [r.d[0] * ex[0] + r.d[1] * ex[1] + r.d[2] * ex[2], r.d[0] * ey[0] + r.d[1] * ey[1] + r.d[2] * ey[2], r.d[0] * ez[0] + r.d[1] * ez[1] + r.d[2] * ez[2]];
     var t, m, dLab = null;
     if (pr.k === K.SURF) {
+      // À côté de la monture (testée dans le plan du sommet) : le rayon passe intact, SANS avancer. Avancé jusqu'à la
+      // sphère prolongée hors du verre, il dépassait le sommet du dioptre suivant (biconvexe : z > sommet arrière dès
+      // r ≈ 35 mm), qui le tuait : la lumière passée autour d'une lentille faisait un anneau, différent selon la forme.
+      var tp = (pr.dz - q[2]) / d[2];
+      if (tp > -EPS_T && tp < TMAX && monture(pr, q[0] + tp * d[0], q[1] + tp * d[1]) === 2) { r.hors = true; return 0; }
       t = interConique(q, d, pr.dz, P[0], P[1]);
       var touche = t > -EPS_T && t < TMAX;
       if (!touche) t = (pr.dz - q[2]) / d[2];
@@ -1584,7 +1592,7 @@
     var lm = lref * 1e-6;
     var src = { i: -1, forme: em.forme, O: [Oe[0], Oe[1]], ang: angRepere(S.fr), g: em.forme === "rect" ? [0, 0, em.a / 2, em.b / 2] : [0, 0, em.a, em.a] };
     function wLaser(q) { return Math.sqrt(lm / (Math.PI * invQ(chaine(seq, lref, -1, q), Math.PI * em.a * em.a / lm)[1])); }
-    var planes = [], ouv = [], reseau = null, i1 = -1, z1 = 0, th = 0, rw = GRAND, ang0 = 0, N = [0, 0], d = [0, 0], limite = false, pl;
+    var planes = [], ouv = [], coupes = [], reseau = null, i1 = -1, z1 = 0, th = 0, thD = 0, rw = GRAND, ang0 = 0, N = [0, 0], d = [0, 0], limite = false, pl;
     for (i = 0; i < nd; i++) {
       var pr = P[i], k = pr.k;
       if (k === K.AIRY || (k === K.MASQUE && pr.p[0] === F.RETICULE)) continue;
@@ -1629,17 +1637,31 @@
           if (N[axr] * d[axr] < 3 * zone[axr]) { d[axr] = 3 * zone[axr] / N[axr]; limite = true; }
         }
         z1 = Math.max(zone[0], zone[1]);
-        th += 2 * lm / Math.min(g[4], g[5], z1 / 4);
+        thD = 2 * lm / Math.min(g[4], g[5], z1 / 4); th += thD;
         planes.push(pl);
       } else {
         var Mt = mul(chaine(seq, lref, i1, i), abcdPrim(P[i1], lref));
-        if (structure || a < Math.abs(Mt[0]) * z1 + Math.abs(Mt[1]) * th) planes.push(planOnde(pr, i));
+        // ouverture ordinaire qui ne coupe que l'étalement dû à la taille de la source (thD : diffraction seule) :
+        // coupure géométrique (`coupeOnde`), pas un plan (qui ferait passer en somme brute)
+        if (structure || a < Math.abs(Mt[0]) * z1 + Math.abs(Mt[1]) * thD) planes.push(planOnde(pr, i));
+        else if (a < Math.abs(Mt[0]) * z1 + Math.abs(Mt[1]) * th) coupes.push(i);
       }
+    }
+    // Coupures géométriques : seulement derrière un plan unique et un détecteur qui n'en est pas l'image (B ≠ 0) ;
+    // sinon elles redeviennent des plans, comme avant.
+    var cps = [];
+    if (coupes.length) {
+      var Md = planes.length ? mul(chaine(seq, lref, i1, nd), abcdPrim(P[i1], lref)) : null;
+      if (planes.length === 1 && Math.abs(Md[1]) > 1e-9) coupes.forEach(function (ic) {
+        var Ma = mul(chaine(seq, lref, i1, ic), abcdPrim(P[i1], lref));
+        cps.push({ i: ic, A1: Ma[0], B1: Ma[1], A2: Md[0], B2: Md[1] });
+      });
+      else { coupes.forEach(function (ic) { planes.push(planOnde(P[ic], ic)); }); planes.sort(function (x, y) { return x.i - y.i; }); }
     }
     if (reseau !== null && planes.length && planes[planes.length - 1].i > reseau) return non("reseau");
     if (!planes.length && !laser) return non("geometrique");
     var plan = { ok: true, seq: seq, laser: laser, src: src, planes: planes, reseau: reseau, lref: lref, opt: opt, ang: planes.length ? ang0 : 0,
-      N: N, d: d, rw: rw, limite: planes.length ? limite : false, pasSource: 1, cache: {} };
+      N: N, d: d, rw: rw, limite: planes.length ? limite : false, pasSource: 1, cache: {}, coupes: cps };
     if (planes.length > 1 && !laser) {
       var Ba = Math.abs(chaine(seq, lref, src.i, i1)[1]), bb = boiteVue(src.g.concat([GRAND, GRAND]), src.ang - ang0);
       var np = (2 * bb[0] * N[0] * d[0] / (lm * Ba) + 1) * (2 * bb[1] * N[1] * d[1] / (lm * Ba) + 1);
@@ -1983,12 +2005,36 @@
       }
     return out;
   }
+  // Coupure géométrique d'une ouverture ordinaire derrière le plan unique (`plan.coupes`) : toute la lumière passe par
+  // la petite zone éclairée du premier plan, centre c ; le point X du détecteur reçoit la lumière si la droite c → X
+  // (paraxial : y = A1 c + B1 (X − A2 c) / B2 au plan de l'ouverture) y passe dans l'ouverture utile ou à côté de la
+  // monture (même règle que les rayons : `monture`, `forme` d'un masque). Pénombre (largeur de la zone éclairée) et
+  // diffraction par le bord ignorées. Facteur par pixel, ligne 0 en bas, mis en cache ; null sans coupure.
+  function coupeOnde(plan, rendu) {
+    var cps = plan.coupes;
+    if (!cps || !cps.length) return null;
+    var res = rendu.res, W = rendu.W, h = 2 * W / res, cx0 = rendu.cx || 0, cy0 = rendu.cy || 0, key = "C|" + res + "|" + W + "|" + cx0 + "|" + cy0;
+    if (plan.cache[key]) return plan.cache[key];
+    var seq = plan.seq, det = seq.prims[seq.iDet], c = plan.planes[0].O, out = new Float64Array(res * res), i, j, k;
+    for (j = 0; j < res; j++) for (i = 0; i < res; i++) {
+      var X = cx0 - W + (i + 0.5) * h, Y = cy0 - W + (j + 0.5) * h, t = 1;
+      var xl = det.O[0] + X * det.ex[0] + Y * det.ey[0], yl = det.O[1] + X * det.ex[1] + Y * det.ey[1];
+      for (k = 0; k < cps.length && t > 0; k++) {
+        var cp = cps[k], pr = seq.prims[cp.i];
+        var dx = cp.A1 * c[0] + cp.B1 * (xl - cp.A2 * c[0]) / cp.B2 - pr.O[0], dy = cp.A1 * c[1] + cp.B1 * (yl - cp.A2 * c[1]) / cp.B2 - pr.O[1];
+        var xa = dx * pr.ex[0] + dy * pr.ex[1], ya = dx * pr.ey[0] + dy * pr.ey[1], m = monture(pr, xa, ya);
+        t *= m === 1 ? 0 : m === 2 ? 1 : pr.k === K.MASQUE ? forme(pr.p[0], pr.p.slice(1), xa, ya) : 1;
+      }
+      out[j * res + i] = t;
+    }
+    return (plan.cache[key] = out);
+  }
   // Éclairement XYZ par pixel de la fenêtre (cx ± W, cy ± W) du détecteur, ligne 0 en bas : mêmes unités que le moteur
   // géométrique (Σ poids × XYZ / (rayons × aire du pixel)). rendu = {res, W, cx, cy, ns (strates de la source par axe),
   // passe, graine (strates décalées au hasard dès la passe 1), np (somme brute : couples point source × λ par passe)}.
   function ondePasse(plan, rendu) {
     var seq = plan.seq, res = rendu.res, W = rendu.W, det = seq.prims[seq.iDet], prog = ondeProgramme(plan, rendu), h = prog.h;
-    var c0 = Math.cos(plan.ang), s0 = Math.sin(plan.ang), img = new Float64Array(res * res * 3), GX = new Float64Array(res * res), GY = new Float64Array(res * res), i, j, q;
+    var c0 = Math.cos(plan.ang), s0 = Math.sin(plan.ang), img = new Float64Array(res * res * 3), GX = new Float64Array(res * res), GY = new Float64Array(res * res), i, j, q, CP = coupeOnde(plan, rendu);
     for (j = 0; j < res; j++) for (i = 0; i < res; i++) {
       var X = (rendu.cx || 0) - W + (i + 0.5) * h, Y = (rendu.cy || 0) - W + (j + 0.5) * h;
       var xl = det.O[0] + X * det.ex[0] + Y * det.ey[0], yl = det.O[1] + X * det.ex[1] + Y * det.ey[1];
@@ -2009,7 +2055,7 @@
         for (q = 0; q < res * res; q++) {
           var s = 0;
           for (var m = 0; m < ord.length; m++) s += ord[m][2] * lireNatif(nat, GX[q] - st[0] - ord[m][0], GY[q] - st[1] - ord[m][1], lot.boite, h);
-          s *= st[2]; img[3 * q] += f[0] * s; img[3 * q + 1] += f[1] * s; img[3 * q + 2] += f[2] * s;
+          s *= CP ? st[2] * CP[q] : st[2]; img[3 * q] += f[0] * s; img[3 * q + 1] += f[1] * s; img[3 * q + 2] += f[2] * s;
         }
       });
     });
@@ -2263,6 +2309,7 @@
     "  vec3 v = p - O, q = vec3(dot(v, ex), dot(v, ey), dot(v, ez)), dl = vec3(dot(d, ex), dot(d, ey), dot(d, ez));",
     "  float t; int m; bool dLab = false;",
     "  if (kind == 1) {",
+    "    if (dl.z != 0.0) { float tp = (dzp - q.z) / dl.z; if (tp > -EPS && tp < TMAX && monture(q.xy + tp * dl.xy, R, Sm) == 2) { hors = true; return 0; } }",
     "    t = interConique(q, dl, dzp, P0, P1);",
     "    bool touche = t > -EPS && t < TMAX;",
     "    if (!touche) { if (dl.z == 0.0) return 1; t = (dzp - q.z) / dl.z; }",
@@ -2587,8 +2634,8 @@
   // uNat : grille native réduite (uDim texels, pas uD, décalage uOff) ; uMx : 1 × Ny (marge le long de x) ; uMy :
   // Nx × 1 ; uTot : 1 × 1 ; uStr : strates (n × 1 : dx, dy, k) ; uOrd : ordres (ox, oy, eta) ; uG* : G du programme.
   var FS_ONDE_LECTURE = "#version 300 es\nprecision highp float; precision highp int;\n" + [
-    "uniform highp sampler2D uAcc; uniform highp sampler2D uNat; uniform highp sampler2D uMx; uniform highp sampler2D uMy; uniform highp sampler2D uTot; uniform highp sampler2D uStr;",
-    "uniform vec2 uGo, uGu, uGv, uD, uOff, uBoite, uC; uniform ivec2 uDim; uniform int uNs, uNord, uGauss; uniform vec3 uOrd[7]; uniform vec3 uF; uniform float uH, uW2, uAlpha; out vec4 o;",
+    "uniform highp sampler2D uAcc; uniform highp sampler2D uNat; uniform highp sampler2D uMx; uniform highp sampler2D uMy; uniform highp sampler2D uTot; uniform highp sampler2D uStr; uniform highp sampler2D uCoupe;",
+    "uniform vec2 uGo, uGu, uGv, uD, uOff, uBoite, uC; uniform ivec2 uDim; uniform int uNs, uNord, uGauss, uCp; uniform vec3 uOrd[7]; uniform vec3 uF; uniform float uH, uW2, uAlpha; out vec4 o;",
     "float rampe(float t) { t = clamp(t, -1.0, 1.0); return t < 0.0 ? 0.5 * (1.0 + t) * (1.0 + t) : 1.0 - 0.5 * (1.0 - t) * (1.0 - t); }",
     "float c1(float c, float w, float x, float d) { return rampe((c + w / 2.0 - x) / d) - rampe((c - w / 2.0 - x) / d); }",
     "float I(int x, int y) { return (x >= 0 && x < uDim.x && y >= 0 && y < uDim.y) ? texelFetch(uNat, ivec2(x, y), 0).r : 0.0; }",
@@ -2611,6 +2658,7 @@
     "    for (int m = 0; m < uNord; m++) t += uOrd[m].z * lire(g - st.xy - uOrd[m].xy);",
     "    s += st.z * t;",
     "  }",
+    "  if (uCp == 1) s *= texelFetch(uCoupe, ivec2(gl_FragCoord.xy), 0).r;",
     "  o = texelFetch(uAcc, ivec2(gl_FragCoord.xy), 0) + vec4(uF * s, uAlpha);",
     "}"].join("\n");
   // Départ d'une propagation : u = uK · E(p) · rx[(mx (i + Nx/2)) mod Nx] · ry[(my (j + Ny/2)) mod Ny] (inclinaison de la
@@ -3148,17 +3196,17 @@
       }
       return n;
     }
-    function lecture(pr, lot, nat, alpha) {
+    function lecture(pr, lot, nat, alpha, tC) {
       var n = lot.strates.length, st = new Float32Array(4 * n), od = new Float32Array(21), no = lot.ordres.length, i, gm = nat.g, ga = lot.gauss;
       for (i = 0; i < n; i++) { st[4 * i] = lot.strates[i][0]; st[4 * i + 1] = lot.strates[i][1]; st[4 * i + 2] = lot.strates[i][2]; }
       for (i = 0; i < no; i++) { od[3 * i] = lot.ordres[i][0]; od[3 * i + 1] = lot.ordres[i][1]; od[3 * i + 2] = lot.ordres[i][2]; }
       var tS = texF(4, n, 1, st), bo = lot.boite || [0, 0], G = pr.G;
-      dessiner(PO.lec, { fb: acc[1 - cour].fb, w: res, h: res }, { uAcc: acc[cour].t, uNat: nat.I && nat.I.t, uMx: nat.mx && nat.mx.t, uMy: nat.my && nat.my.t, uTot: nat.tot && nat.tot.t, uStr: tS }, function (U) {
+      dessiner(PO.lec, { fb: acc[1 - cour].fb, w: res, h: res }, { uAcc: acc[cour].t, uNat: nat.I && nat.I.t, uMx: nat.mx && nat.mx.t, uMy: nat.my && nat.my.t, uTot: nat.tot && nat.tot.t, uStr: tS, uCoupe: tC }, function (U) {
         gl.uniform2f(U.uGo, G.o[0], G.o[1]); gl.uniform2f(U.uGu, G.u[0], G.u[1]); gl.uniform2f(U.uGv, G.v[0], G.v[1]);
         gl.uniform2f(U.uD, gm ? gm.d[0] : 1, gm ? gm.d[1] : 1); gl.uniform2f(U.uOff, gm ? gm.off[0] : 0, gm ? gm.off[1] : 0); gl.uniform2f(U.uBoite, bo[0], bo[1]);
         gl.uniform2i(U.uDim, gm ? gm.Nx : 0, gm ? gm.Ny : 0); gl.uniform1i(U.uNs, n); gl.uniform1i(U.uNord, no); gl.uniform3fv(U.uOrd, od);
         gl.uniform1i(U.uGauss, ga ? 1 : 0); gl.uniform1f(U.uW2, ga ? ga.w2 : 1); gl.uniform2f(U.uC, ga ? ga.c[0] : 0, ga ? ga.c[1] : 0);
-        gl.uniform3f(U.uF, lot.f[0], lot.f[1], lot.f[2]); gl.uniform1f(U.uH, pr.h); gl.uniform1f(U.uAlpha, alpha);
+        gl.uniform3f(U.uF, lot.f[0], lot.f[1], lot.f[2]); gl.uniform1f(U.uH, pr.h); gl.uniform1f(U.uAlpha, alpha); gl.uniform1i(U.uCp, tC ? 1 : 0);
       });
       gl.deleteTexture(tS); cour = 1 - cour;
     }
@@ -3166,7 +3214,8 @@
     // rendu.jetable : figures par longueur d'onde non gardées (spectromètre : une longueur d'onde par appel, des centaines).
     function onde(plan, rendu) {
       dimensionner(rendu.res); etatPlan(plan);
-      var G = plan.gl, pr = ondeProgramme(plan, rendu), h = pr.h, premier = true;
+      var G = plan.gl, pr = ondeProgramme(plan, rendu), h = pr.h, premier = true, CP = coupeOnde(plan, rendu);
+      var tC = CP ? texPlan(G, "C|" + rendu.res + "|" + rendu.W + "|" + (rendu.cx || 0) + "|" + (rendu.cy || 0), function () { return texF(1, rendu.res, rendu.res, new Float32Array(CP)); }) : null;
       pr.lots.forEach(function (lot) {
         if (!lot.strates.length) return;
         var nat, temp = false, mg = !!(lot.boite && (lot.boite[0] || lot.boite[1]));
@@ -3175,7 +3224,7 @@
           var key = lot.l + "|" + h + "|" + lot.cible[0] + "|" + lot.cible[1] + "|" + mg;
           nat = G.nat[key] || (G.nat[key] = natifGL(plan, champGL(plan, lot.l, 0, 0), h, lot.cible, mg));
         } else { nat = natifGL(plan, champGL(plan, lot.l, lot.mx, lot.my), h, lot.cache ? lot.cible : null, mg); temp = true; }
-        lecture(pr, lot, nat, premier ? 1e6 : 0); premier = false;
+        lecture(pr, lot, nat, premier ? 1e6 : 0, tC); premier = false;
         if (temp) rendreNat(nat);
       });
       npasses++;

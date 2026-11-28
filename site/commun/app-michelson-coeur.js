@@ -67,6 +67,10 @@
  *    demi-plan nx x + ny y > c (coordonnées transverses dépliées au plan du miroir), traversée deux fois. Chaque point
  *    source donne deux lignes, sans et avec la lamelle, bornées par la droite du détecteur conjuguée du bord
  *    (demi-plan = disque de très grand rayon).
+ *  - cfg.cache = { bras, nx, ny, c } : écran opaque (feuille de papier) posé sur le miroir du bras, couvrant le même
+ *    demi-plan (au plan du miroir) : le rayon du bras qui y tombe est arrêté (son terme et l'interférence disparaissent ;
+ *    bras 1 : l'image fantôme aussi, elle passe par M1). Même sélection que la lamelle, d'où un bord net au détecteur
+ *    conjugué des miroirs et flou ailleurs ; derrière lui ne reste que l'autre bras (moitié de l'éclairement).
  *  - rendu.pose (m) : flou de mouvement. Pendant un chariotage, δ balaie `pose` pendant l'image ; l'éclairement est
  *    la moyenne sur ce balayage (persistance de l'œil) : terme d'interférence × sinc(π pose / λ), à l'ordre du
  *    milieu du balayage. Au-delà d'une frange par image, les franges se brouillent au lieu de paraître défiler à
@@ -562,7 +566,7 @@
   // texture (R8). Le shader lit ces nombres ; `contributions` et `evaluer` lisent les mêmes, l'en-tête dans `donnees`,
   // le spectre dans `prep.lam` et `prep.somme`, le masque dans `prep.masque`.
   var NDMAX = 8, NCMAX = 4, MMAX = 24, LARG = 128, BLK = 2 + 3 * NDMAX + NCMAX, NMASQ = 1024;
-  var H = { GEN: 0, SRC: 1, K: 2, TIR: 3, POLY: 6, POLYL: 10, SEL: 14, SEL2: 15, BRAS: 16, MASQ: 16 + 3 * BLK };
+  var H = { GEN: 0, SRC: 1, K: 2, TIR: 3, POLY: 6, POLYL: 10, SEL: 14, SEL2: 15, CACHE: 16, CACHE2: 17, BRAS: 18, MASQ: 18 + 3 * BLK };
   function rayonSource(cfg) { return cfg.source.rayon > 0 ? cfg.source.rayon : 0; }
   // Forme lumineuse de la source (lampe sans dépoli : tube d'une lampe spectrale, filament) : union de rectangles
   // {t: "rect", x0, y0, x1, y1}, d'ellipses {t: "ell", cx, cy, a, b} et de secteurs d'anneau {t: "anneau", cx, cy, r0,
@@ -698,12 +702,15 @@
     }
     poly(H.POLY, q0); poly(H.POLYL, qL);
     // lamelle : n·ρ_miroir − c > 0, ρ_miroir = q_M(ρs) + B_M s (X − Q_d(ρs)) (rayon du bras de la lamelle)
-    var sel = [0, 0, 0, 0, -1];
-    if (LL) {
-      var Tb = B[LL.bras - 1].t, rm = Tb.rep.miroir, s = bras(Tb, ro).s, Bs = rm.B * s, nx = LL.nx, ny = LL.ny;
-      sel = [(rm.A - Bs * Tb.A) * nx, (rm.A - Bs * Tb.A) * ny, Bs * nx, Bs * ny, nx * rm.qx + ny * rm.qy - LL.c - Bs * (nx * Tb.qx + ny * Tb.qy)];
+    function selecteur(P) {
+      if (!P) return [0, 0, 0, 0, -1];
+      var Tb = B[P.bras - 1].t, rm = Tb.rep.miroir, s = bras(Tb, ro).s, Bs = rm.B * s, nx = P.nx, ny = P.ny;
+      return [(rm.A - Bs * Tb.A) * nx, (rm.A - Bs * Tb.A) * ny, Bs * nx, Bs * ny, nx * rm.qx + ny * rm.qy - P.c - Bs * (nx * Tb.qx + ny * Tb.qy)];
     }
+    var sel = selecteur(LL), CC = cfg.cache && (cfg.cache.bras === 1 || cfg.cache.bras === 2) ? cfg.cache : null, sc = selecteur(CC);
     ecr(tx(0, H.SEL), sel[0], sel[1], sel[2], sel[3]); ecr(tx(0, H.SEL2), sel[4], q0.c00, qL.c00, 0);
+    // feuille (cache) : même forme affine, et son bras (0 : pas de feuille)
+    ecr(tx(0, H.CACHE), sc[0], sc[1], sc[2], sc[3]); ecr(tx(0, H.CACHE2), sc[4], CC ? CC.bras : 0, 0, 0);
     for (c = 0; c < B.length; c++) {
       var b = B[c], o = H.BRAS + c * BLK;
       ecr(tx(0, o), b.D.length, b.C.length, b.conj ? 1 : 0, b.Bd !== 0 ? 1 / (b.Bd * b.Bd) : 0);
@@ -811,6 +818,7 @@
       }
       var f1 = appartenance(D, H.BRAS * 4, x, y, X, Y, s2) * v[0] * W, f2 = appartenance(D, (H.BRAS + BLK) * 4, x, y, X, Y, s2) * v[1] * W;
       var fG = nb > 2 ? appartenance(D, (H.BRAS + 2 * BLK) * 4, x, y, X, Y, s2) * v[2] * W * fan : 0;
+      if (D[69] > 0 && D[64] * x + D[65] * y + D[66] * X + D[67] * Y + D[68] > 0) { if (D[69] < 1.5) { f1 = 0; fG = 0; } else f2 = 0; }   // feuille
       if (!(f1 + f2 + fG > 0)) continue;
       var t = lam && D[56] * x + D[57] * y + D[58] * X + D[59] * Y + D[60] > 0 ? 1 : 0, b = P + 16 * t;
       var Cx = D[b + 5] + D[b + 6] * x + D[b + 7] * y, Cy = D[b + 8] + D[b + 9] * x + D[b + 10] * y;
@@ -1278,7 +1286,7 @@
     "void main(){\n" +
     "  ivec2 pix = ivec2(gl_FragCoord.xy);\n" +
     "  vec2 X = uX0 + vec2(gl_FragCoord.xy) * uH;\n" +           // uX0 = coin bas gauche ; gl_FragCoord au centre du pixel
-    "  vec4 g = T(0), sr = T(1), kk = T(2), se = T(14), se2 = T(15), mq = T(" + H.MASQ + "), mq2 = T(" + (H.MASQ + 1) + ");\n" +
+    "  vec4 g = T(0), sr = T(1), kk = T(2), se = T(14), se2 = T(15), sc = T(16), sc2 = T(17), mq = T(" + H.MASQ + "), mq2 = T(" + (H.MASQ + 1) + ");\n" +
     "  int nb = int(g.x + 0.5); bool ponct = g.y > 0.5, lam = g.z > 0.5, masq = sr.x > 0.5; float Rs = g.w; ivec2 nm = ivec2(int(mq.w + 0.5), int(mq2.x + 0.5));\n" +
     "  vec3 som = S(LG - 1).xyz;\n" +
     "  vec3 tc[3]; float v[3];\n" +
@@ -1298,6 +1306,7 @@
     "      W = sr.y / den; s2 = 1.0 / den;\n" +
     "    }\n" +
     "    float f1 = app(OB, p, X, s2) * v[0] * W, f2 = app(OB + BLK, p, X, s2) * v[1] * W, fG = nb > 2 ? app(OB + 2 * BLK, p, X, s2) * v[2] * W * sr.w : 0.0;\n" +
+    "    if (sc2.y > 0.5 && dot(sc, vec4(p, X)) + sc2.x > 0.0) { if (sc2.y < 1.5) { f1 = 0.0; fG = 0.0; } else f2 = 0.0; }\n" +   // feuille
     "    float sm = f1 + f2 + fG;\n" +
     "    if (!(sm > 0.0)) continue;\n" +
     "    acc += som * sm;\n" +

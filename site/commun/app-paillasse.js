@@ -91,16 +91,10 @@
       '<linearGradient id="bcMiroir" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#eef4f8"/><stop offset=".45" stop-color="#8c9aa6"/><stop offset=".55" stop-color="#dfe7ec"/><stop offset="1" stop-color="#68747e"/></linearGradient>' +
       '<radialGradient id="bcVerreM" cx=".35" cy=".3" r=".8"><stop offset="0" stop-color="#e6f4ff" stop-opacity=".9"/><stop offset=".5" stop-color="#8fc0ea" stop-opacity=".45"/><stop offset="1" stop-color="#4f86b8" stop-opacity=".55"/></radialGradient>' +
       '<radialGradient id="bcLueur"><stop offset="0" stop-color="#fffbe8"/><stop offset=".25" stop-color="#ffd98a"/><stop offset="1" stop-color="#ffb347" stop-opacity="0"/></radialGradient>' +
-      '<radialGradient id="bcNa"><stop offset="0" stop-color="#fff6c2"/><stop offset=".3" stop-color="#ffc21f"/><stop offset="1" stop-color="#ff9d00" stop-opacity="0"/></radialGradient>' +
-      '<radialGradient id="bcHg"><stop offset="0" stop-color="#ffffff"/><stop offset=".3" stop-color="#9fe6ff"/><stop offset="1" stop-color="#4aa8ff" stop-opacity="0"/></radialGradient>' +
       '<linearGradient id="bcArc" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#7a2cff"/><stop offset=".25" stop-color="#2c7bff"/><stop offset=".5" stop-color="#27d34a"/><stop offset=".72" stop-color="#ffe02b"/><stop offset="1" stop-color="#ff2b2b"/></linearGradient>' +
       '<clipPath id="bcCM"><circle cx="20" cy="20" r="17.2"/></clipPath>' +
       '<linearGradient id="bcRailD" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2a3038"/><stop offset=".5" stop-color="#3a424d"/><stop offset="1" stop-color="#1c2027"/></linearGradient>' +
-      '<pattern id="bcMolette" width="2.4" height="10" patternUnits="userSpaceOnUse"><rect width="2.4" height="10" fill="#2a3038"/><rect width="1.1" height="10" fill="#566070"/></pattern>' +
-      // lampes du Michelson et du goniomètre : mercure filtré, cadmium, inconnue
-      '<radialGradient id="bcHgV"><stop offset="0" stop-color="#f4ffe8"/><stop offset=".3" stop-color="#8cff6a"/><stop offset="1" stop-color="#3fbf2a" stop-opacity="0"/></radialGradient>' +
-      '<radialGradient id="bcCd"><stop offset="0" stop-color="#fff"/><stop offset=".3" stop-color="#f2a6d6"/><stop offset="1" stop-color="#c04aa0" stop-opacity="0"/></radialGradient>' +
-      '<radialGradient id="bcX"><stop offset="0" stop-color="#fff4ea"/><stop offset=".3" stop-color="#ffb38a"/><stop offset="1" stop-color="#ff7a3a" stop-opacity="0"/></radialGradient>';
+      '<pattern id="bcMolette" width="2.4" height="10" patternUnits="userSpaceOnUse"><rect width="2.4" height="10" fill="#2a3038"/><rect width="1.1" height="10" fill="#566070"/></pattern>';
     function n(v) { return (Math.round(v * 10) / 10).toString(); }
     function lignes(k, f) { var s = ""; for (var i = 0; i < k; i++) s += f(i); return s; }
 
@@ -112,14 +106,11 @@
       var L = "#ffe9b0", g = '<g clip-path="url(#bcCM)">', r, s, k, a;
       switch (f.med) {
         case "lanterne": return noir + '<circle cx="20" cy="20" r="15" fill="url(#bcLueur)"/>';
-        case "sodium": return noir + '<circle cx="20" cy="20" r="15" fill="url(#bcNa)"/>';
-        case "mercure": return noir + '<circle cx="20" cy="20" r="15" fill="url(#bcHg)"/>';
-        // Michelson et goniomètre : mercure filtré (raie verte), cadmium, lampe inconnue,
-        // lampe éteinte (f.inconnue : « ? » gris), feuille, lamelle, prisme, diaphragme (f.l : largeur en mm), lentille courte
-        case "hgv": return noir + '<circle cx="20" cy="20" r="15" fill="url(#bcHgV)"/>';
-        case "cadmium": return noir + '<circle cx="20" cy="20" r="15" fill="url(#bcCd)"/>';
-        case "inconnue": return noir + '<circle cx="20" cy="20" r="15" fill="url(#bcX)"/><text x="20" y="25" text-anchor="middle" font-size="15" font-weight="700" fill="#2a1408">?</text>';
-        case "eteinte": return noir + '<circle cx="20" cy="20" r="9" fill="#2a3038"/>' + (f.inconnue ? '<text x="20" y="25" text-anchor="middle" font-size="14" font-weight="700" fill="#566070">?</text>' : "");
+        // Ampoules vues dans l'axe (le tube est vertical) : le verre, la tache lumineuse et son cœur.
+        case "sodium": case "mercure": case "hgv": case "cadmium": case "inconnue":
+          return noir + ampouleDessus(20, 20, 13, coulAmpoule(f)) +
+            (f.med === "inconnue" ? '<text x="20" y="25" text-anchor="middle" font-size="15" font-weight="700" fill="#2a1408">?</text>' : "");
+        case "eteinte": return noir + '<circle cx="20" cy="20" r="13" fill="#1b222a" stroke="#4a5560" stroke-width=".9"/><path d="M14 15a7 7 0 0 1 4-3" fill="none" stroke="#3d4854" stroke-width="1.3" stroke-linecap="round"/>' + (f.inconnue ? '<text x="20" y="25" text-anchor="middle" font-size="14" font-weight="700" fill="#566070">?</text>' : "");
         case "feuille": return '<path d="M9 5h17l6 6v24H9z" fill="#f2efe6" stroke="#8b877b" stroke-width="1.2"/><path d="M26 5v6h6" fill="none" stroke="#8b877b" stroke-width="1.2"/><path d="M13 17h14M13 21h14M13 25h10" stroke="#c9c4b4" stroke-width="1"/>';
         case "lamelle": return '<rect x="8" y="8" width="24" height="24" rx="1" fill="url(#bcVerreM)" stroke="#9fd3e8" stroke-width="1"/><path d="M11 12l7-3" stroke="#fff" stroke-width="1.6" opacity=".8"/>';
         case "prisme": return '<path d="M20 5 35 32H5z" fill="url(#bcVerreM)" stroke="#9fd3e8" stroke-width="1.4"/><path d="M14 22l6-10" stroke="#fff" stroke-width="1.6" opacity=".7"/>';
@@ -177,6 +168,25 @@
     function grad() { return lignes(12, function (i) { var a = i * Math.PI / 6, c = Math.cos(a), s = Math.sin(a), r0 = i % 3 ? 16.2 : 14.8; return '<path d="M' + n(20 + r0 * c) + " " + n(20 + r0 * s) + "L" + n(20 + 18 * c) + " " + n(20 + 18 * s) + '" stroke="#9aa3ae" stroke-width=".7"/>'; }); }
     function tourne(f) { return f.rot ? ' transform="rotate(' + n(-f.rot * 180 / Math.PI) + ' 20 20)"' : ""; }
     function svgMini(f, cls) { return '<svg viewBox="0 0 40 40" aria-hidden="true"' + (cls ? ' class="' + cls + '"' : "") + ">" + miniature(f) + "</svg>"; }
+    // ================= ampoules des lampes à spectre =================
+    // Couleur de la décharge par médium (elle seule distingue les lampes : verre, halo et colonne en dérivent).
+    var COUL_AMPOULE = { sodium: "#ffc21f", mercure: "#9fe6ff", hgv: "#8cff6a", cadmium: "#f2a6d6", inconnue: "#ffb38a", x: "#bfe9ff", lanterne: "#ffd98a" };
+    var GAMP = 0;   // numéro du dégradé de l'ampoule : sa couleur est libre, il voyage donc avec son dessin
+    function coulAmpoule(f) { return f.coul || COUL_AMPOULE[f.med] || COUL_AMPOULE.mercure; }
+    // Ampoule d'une lampe spectrale vue de dessus : le tube est vertical, on ne voit que son cercle de verre, la tache
+    // lumineuse au centre (l'axe) et le halo.
+    function ampouleDessus(x, y, r, coul) {
+      var g = "bcAmp" + (++GAMP), s = "";
+      s += '<radialGradient id="' + g + '"><stop offset="0" stop-color="' + coul + '"/><stop offset=".5" stop-color="' + coul + '" stop-opacity=".3"/><stop offset="1" stop-color="' + coul + '" stop-opacity="0"/></radialGradient>';
+      s += '<circle cx="' + n(x) + '" cy="' + n(y) + '" r="' + n(r * 2.1) + '" fill="url(#' + g + ')" opacity=".5"/>';
+      s += '<circle cx="' + n(x) + '" cy="' + n(y) + '" r="' + n(r) + '" fill="#e8f5ff" fill-opacity=".08" stroke="#cfe9ff" stroke-opacity=".6" stroke-width=".9"/>';
+      s += '<circle cx="' + n(x) + '" cy="' + n(y) + '" r="' + n(r * 0.7) + '" fill="' + coul + '" fill-opacity=".45"/>';
+      s += '<circle cx="' + n(x) + '" cy="' + n(y) + '" r="' + n(r * 0.42) + '" fill="' + coul + '"/>';
+      s += '<circle cx="' + n(x) + '" cy="' + n(y) + '" r="' + n(r * 0.18) + '" fill="#fff"/>';
+      s += '<path d="M' + n(x - r * 0.72) + " " + n(y - r * 0.2) + "a" + n(r * 0.8) + " " + n(r * 0.8) + " 0 0 1 " + n(r * 0.45) + " " + n(-r * 0.5) +
+        '" fill="none" stroke="#fff" stroke-opacity=".35" stroke-width="1.3" stroke-linecap="round"/>';
+      return s;
+    }
     // Demi-hauteur dessinée (mm).
     function demiHaut(f) {
       return { lentille: (f.diam || 40) / 2 + 7, plaque: 30, iris: 30, ecran: 100, capteur: 26, oeil: 15, viseur: 15, lanterne: 46, lampe: 42, laser: 20, miroir: 30 }[f.genre] || 30;
@@ -257,16 +267,25 @@
                  '<rect x="' + n(x + w - 3) + '" y="' + n(y0 - H * 0.7) + '" width="13" height="' + n(1.4 * H) + '" rx="2" fill="url(#bcBoite)" stroke="#59626d" stroke-width=".8"/>' +
                  '<path d="M' + n(x) + " " + n(y0 - H + 2) + "Q" + n(x - 4) + " " + n(y0) + " " + n(x) + " " + n(y0 + H - 2) + '" fill="#bfe2ff" fill-opacity=".5" stroke="#bfe2ff" stroke-width="1"/>' +
                  '<rect x="' + n(x + w * 0.35) + '" y="' + n(y0 - H - 3) + '" width="8" height="' + n(2 * H + 6) + '" rx="1.5" fill="#3a4049"/>';
-        case "lanterne": case "lampe":
-          H = (f.genre === "lanterne" ? 46 : 42) * sy; w = 50;
-          var gl = f.genre === "lanterne" ? "bcLueur" : f.med === "sodium" ? "bcNa" : "bcHg";
+        case "lanterne":
+          H = 46 * sy; w = 50;
           s += '<rect x="' + n(x - w + 8) + '" y="' + n(y0 - H) + '" width="' + (w - 8) + '" height="' + n(2 * H) + '" rx="7" fill="url(#bcBoite)" stroke="#59626d" stroke-width=".8"/>';
           for (i = 0; i < 5; i++) s += '<path d="M' + n(x - w + 15) + " " + n(y0 - H + 9 + i * 5) + "h" + (w - 24) + '" stroke="#0c0e11" stroke-width="1.6" stroke-linecap="round"/>';
           // tube du condenseur : plus long quand le tirage augmente
-          s += '<rect x="' + n(x - 1) + '" y="' + n(y0 - 20 * sy) + '" width="' + n(f.genre === "lanterne" ? (f.cond === "rien" ? 5 : 16 + clamp(((f.tirage || 70) - (f.tirages || TIRAGE)[0]) / ((f.tirages || TIRAGE)[1] - (f.tirages || TIRAGE)[0]), 0, 1) * 12) : 5) + '" height="' + n(40 * sy) + '" rx="2" fill="url(#bcNoir)" stroke="#59626d" stroke-width=".7"/>';
-          s += '<circle cx="' + n(x - w / 2 + 4) + '" cy="' + n(y0) + '" r="' + n(Math.min(19, H * 0.42)) + '" fill="url(#' + gl + ')"/>';
-          if (f.genre === "lanterne" && f.cond === "depoli") s += '<rect x="' + n(x + 14) + '" y="' + n(y0 - 20 * sy) + '" width="3" height="' + n(40 * sy) + '" fill="#e9ecef" fill-opacity=".75" stroke="#9aa3ad" stroke-width=".6"/>';
+          s += '<rect x="' + n(x - 1) + '" y="' + n(y0 - 20 * sy) + '" width="' + n(f.cond === "rien" ? 5 : 16 + clamp(((f.tirage || 70) - (f.tirages || TIRAGE)[0]) / ((f.tirages || TIRAGE)[1] - (f.tirages || TIRAGE)[0]), 0, 1) * 12) + '" height="' + n(40 * sy) + '" rx="2" fill="url(#bcNoir)" stroke="#59626d" stroke-width=".7"/>';
+          s += '<circle cx="' + n(x - w / 2 + 4) + '" cy="' + n(y0) + '" r="' + n(Math.min(19, H * 0.42)) + '" fill="url(#bcLueur)"/>';
+          if (f.cond === "depoli") s += '<rect x="' + n(x + 14) + '" y="' + n(y0 - 20 * sy) + '" width="3" height="' + n(40 * sy) + '" fill="#e9ecef" fill-opacity=".75" stroke="#9aa3ad" stroke-width=".6"/>';
           return s;
+        case "lampe": {
+          // Lampe spectrale de profil : boîtier à cheminée, lueur de la couleur de la décharge sur l'axe (y0).
+          var gp = "bcAmp" + (++GAMP), cp = coulAmpoule(f);
+          H = 42 * sy; w = 50;
+          s += '<radialGradient id="' + gp + '"><stop offset="0" stop-color="#fff"/><stop offset=".3" stop-color="' + cp + '"/><stop offset="1" stop-color="' + cp + '" stop-opacity="0"/></radialGradient>';
+          s += '<rect x="' + n(x - w + 8) + '" y="' + n(y0 - H) + '" width="' + (w - 8) + '" height="' + n(2 * H) + '" rx="7" fill="url(#bcBoite)" stroke="#59626d" stroke-width=".8"/>';
+          for (i = 0; i < 5; i++) s += '<path d="M' + n(x - w + 15) + " " + n(y0 - H + 9 + i * 5) + "h" + (w - 24) + '" stroke="#0c0e11" stroke-width="1.6" stroke-linecap="round"/>';
+          s += '<rect x="' + n(x - 1) + '" y="' + n(y0 - 20 * sy) + '" width="5" height="' + n(40 * sy) + '" rx="2" fill="url(#bcNoir)" stroke="#59626d" stroke-width=".7"/>';
+          return s + '<circle cx="' + n(x - w / 2 + 4) + '" cy="' + n(y0) + '" r="' + n(Math.min(19, H * 0.42)) + '" fill="url(#' + gp + ')"/>';
+        }
         case "laser":
           H = 14 * sy;
           return '<rect x="' + n(x - 78) + '" y="' + n(y0 - H) + '" width="78" height="' + n(2 * H) + '" rx="4" fill="url(#bcBoite)" stroke="#59626d" stroke-width=".8"/>' +
@@ -328,18 +347,20 @@
       s += '<path d="M' + n(X(0) - 30) + " " + n(y0) + "H" + n(X(long) + 30) + '" stroke="#39424d" stroke-width="1" stroke-dasharray="7 6" opacity=".7"/>';
       return s;
     }
-    // Lanterne (boîtier, tube du condenseur) et lampe spectrale (cheminée ronde) vues de dessus, lueur à la sortie.
+    // Lanterne (boîtier, tube du condenseur) et lampe spectrale (ampoule au bout de sa cheminée) vues de dessus.
     function lampeDessus(f, x, y) {
-      var s = "";
+      var s = "", i;
       if (f.genre === "lanterne") {
         s += '<rect x="' + n(x - 58) + '" y="' + n(y - 24) + '" width="46" height="48" rx="5" fill="url(#bcNoir)" stroke="#5b6471" stroke-width=".8"/>';
         s += '<circle cx="' + n(x - 35) + '" cy="' + n(y) + '" r="13" fill="#15181c" stroke="#3a424d"/><path d="M' + n(x - 44) + " " + n(y) + "h18M" + n(x - 35) + " " + n(y - 9) + 'v18" stroke="#2a3038" stroke-width="2"/>';
         s += '<rect x="' + n(x - 12) + '" y="' + n(y - 15) + '" width="' + n(Math.max(12, (f.tirage || 70) * 0.3)) + '" height="30" rx="2" fill="url(#bcNoir)" stroke="#5b6471" stroke-width=".8"/>';
         s += '<circle cx="' + n(x - 35) + '" cy="' + n(y) + '" r="5" fill="#ffd27a" opacity=".85"/>';
       } else {
-        s += '<circle cx="' + n(x - 30) + '" cy="' + n(y) + '" r="26" fill="url(#bcNoir)" stroke="#5b6471" stroke-width=".8"/><circle cx="' + n(x - 30) + '" cy="' + n(y) + '" r="17" fill="#15181c" stroke="#3a424d"/>';
-        s += '<circle cx="' + n(x - 30) + '" cy="' + n(y) + '" r="7" fill="' + (f.med === "sodium" ? "#ffcf4a" : "#bfe9ff") + '" opacity=".8"/>';
-        s += '<rect x="' + n(x - 6) + '" y="' + n(y - 8) + '" width="8" height="16" rx="1.5" fill="url(#bcNoir)" stroke="#5b6471" stroke-width=".8"/>';
+        // ampoule ronde (son tube est vertical) au bout de la cheminée, centrée sur l'axe
+        s += '<rect x="' + n(x - 46) + '" y="' + n(y - 15) + '" width="33" height="30" rx="6" fill="url(#bcNoir)" stroke="#5b6471" stroke-width=".8"/>';
+        for (i = 0; i < 3; i++) s += '<path d="M' + n(x - 41) + " " + n(y - 8 + i * 8) + 'h22" stroke="#0c0e11" stroke-width="1.4" stroke-linecap="round"/>';
+        s += '<rect x="' + n(x - 16) + '" y="' + n(y - 7) + '" width="7" height="14" rx="2" fill="url(#bcNoir)" stroke="#5b6471" stroke-width=".7"/>';
+        s += ampouleDessus(x, y, 11, coulAmpoule(f));
       }
       return s;
     }
